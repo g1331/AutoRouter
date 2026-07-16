@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { errorResponse, getTzOffsetParam, requireAdmin } from "@/lib/utils/api-auth";
-import { getLeaderboardStats, type TimeRange } from "@/lib/services/stats-service";
-import { transformStatsLeaderboardToApi } from "@/lib/utils/api-transformers";
+import {
+  getLeaderboardStats,
+  getRankings,
+  LEADERBOARD_DIMENSIONS,
+  LEADERBOARD_SORT_FIELDS,
+  type LeaderboardDimension,
+  type LeaderboardSortBy,
+  type LeaderboardSortOrder,
+  type TimeRange,
+} from "@/lib/services/stats-service";
+import {
+  transformStatsLeaderboardToApi,
+  transformStatsRankingsToApi,
+} from "@/lib/utils/api-transformers";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("admin-stats");
@@ -16,6 +28,12 @@ const log = createLogger("admin-stats");
  * - end_date: ISO 8601 string (required when range=custom, exclusive upper bound)
  * - tz_offset: caller timezone offset in minutes east of UTC (aligns "today"
  *   to the caller's local midnight; defaults to UTC)
+ * - dimension: "upstreams" | "models" | "api_keys" | "users" — when present,
+ *   returns a single-dimension ranking instead of the four-dimension payload
+ * - sort_by: "requests" | "tokens" | "cost" | "ttft" | "tps" | "cache_hit" | "error_rate"
+ *   (single-dimension only; default "requests")
+ * - order: "asc" | "desc" (single-dimension only; default "desc")
+ * - compare: "true" to attach previous-period comparison (single-dimension only)
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -45,6 +63,40 @@ export async function GET(request: NextRequest) {
       if (customStart >= customEnd) {
         return errorResponse("start_date must be before end_date", 400);
       }
+    }
+
+    const dimensionParam = url.searchParams.get("dimension");
+    if (dimensionParam !== null) {
+      if (!LEADERBOARD_DIMENSIONS.includes(dimensionParam as LeaderboardDimension)) {
+        return errorResponse(
+          `Invalid dimension: must be one of ${LEADERBOARD_DIMENSIONS.join(", ")}`,
+          400
+        );
+      }
+      const sortByParam = url.searchParams.get("sort_by") || "requests";
+      if (!LEADERBOARD_SORT_FIELDS.includes(sortByParam as LeaderboardSortBy)) {
+        return errorResponse(
+          `Invalid sort_by: must be one of ${LEADERBOARD_SORT_FIELDS.join(", ")}`,
+          400
+        );
+      }
+      const orderParam = url.searchParams.get("order") || "desc";
+      if (orderParam !== "asc" && orderParam !== "desc") {
+        return errorResponse("Invalid order: must be asc or desc", 400);
+      }
+
+      const rankings = await getRankings({
+        dimension: dimensionParam as LeaderboardDimension,
+        sortBy: sortByParam as LeaderboardSortBy,
+        order: orderParam as LeaderboardSortOrder,
+        rangeType: range,
+        limit,
+        customStart,
+        customEnd,
+        tzOffsetMinutes: getTzOffsetParam(request),
+        compare: url.searchParams.get("compare") === "true",
+      });
+      return NextResponse.json(transformStatsRankingsToApi(rankings));
     }
 
     const stats = await getLeaderboardStats(

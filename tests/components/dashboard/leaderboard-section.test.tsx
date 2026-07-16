@@ -28,6 +28,7 @@ vi.mock("@/i18n/navigation", () => ({
 
 // Mock lucide-react icons
 vi.mock("lucide-react", () => ({
+  ArrowRight: () => <svg data-testid="arrow-right-icon" />,
   Key: () => <svg data-testid="key-icon" />,
   Server: () => <svg data-testid="server-icon" />,
   Cpu: () => <svg data-testid="cpu-icon" />,

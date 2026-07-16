@@ -1218,46 +1218,51 @@ export interface StatsTimeseriesResponse {
   period_summary: TimeseriesPeriodSummary;
 }
 
-export interface LeaderboardAPIKeyItem {
-  id: string; // UUID
-  name: string;
-  key_prefix: string;
+/** The seven aggregate metrics shared by every leaderboard dimension. */
+export interface LeaderboardMetricFields {
   request_count: number;
   total_tokens: number;
   total_cost_usd: number;
-  model_distribution: DistributionItem[];
-}
-
-export interface LeaderboardUpstreamItem {
-  id: string; // UUID
-  name: string;
-  provider_type: string;
-  request_count: number;
-  total_tokens: number;
   avg_ttft_ms: number;
   avg_tps: number;
   cache_hit_rate: number;
-  total_cost_usd: number;
+  error_rate: number;
+}
+
+/** Previous-period standing; null prev_rank means newly ranked. */
+export interface LeaderboardComparison {
+  prev_rank: number | null;
+  prev_request_count: number | null;
+}
+
+export interface LeaderboardAPIKeyItem extends LeaderboardMetricFields {
+  id: string; // UUID
+  name: string;
+  key_prefix: string;
   model_distribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
 }
 
-export interface LeaderboardModelItem {
+export interface LeaderboardUpstreamItem extends LeaderboardMetricFields {
+  id: string; // UUID
+  name: string;
+  provider_type: string;
+  model_distribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
+}
+
+export interface LeaderboardModelItem extends LeaderboardMetricFields {
   model: string;
-  request_count: number;
-  total_tokens: number;
-  avg_ttft_ms: number;
-  avg_tps: number;
   upstream_distribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
 }
 
-export interface LeaderboardUserItem {
+export interface LeaderboardUserItem extends LeaderboardMetricFields {
   id: string; // UUID
   username: string;
   display_name: string;
-  request_count: number;
-  total_tokens: number;
-  total_cost_usd: number;
   model_distribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
 }
 
 export interface StatsLeaderboardResponse {
@@ -1266,6 +1271,31 @@ export interface StatsLeaderboardResponse {
   upstreams: LeaderboardUpstreamItem[];
   models: LeaderboardModelItem[];
   users: LeaderboardUserItem[];
+}
+
+export type RankingsDimension = "upstreams" | "models" | "api_keys" | "users";
+
+export type RankingsSortField =
+  | "requests"
+  | "tokens"
+  | "cost"
+  | "ttft"
+  | "tps"
+  | "cache_hit"
+  | "error_rate";
+
+export type RankingsItem =
+  | LeaderboardAPIKeyItem
+  | LeaderboardUpstreamItem
+  | LeaderboardModelItem
+  | LeaderboardUserItem;
+
+export interface StatsRankingsResponse {
+  range: string;
+  dimension: RankingsDimension;
+  sort_by: RankingsSortField;
+  order: "asc" | "desc";
+  items: RankingsItem[];
 }
 
 // ========== Portal (member self-service) Types ==========

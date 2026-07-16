@@ -628,23 +628,50 @@ describe("stats-service", () => {
     });
   });
 
+  // Ranking main query chain: select().from().leftJoin().where().groupBy().orderBy().limit()
+  function rankingMainQueryMock(rows: unknown[], limitFn?: ReturnType<typeof vi.fn>) {
+    // The orderBy() result is awaited directly by the unlimited prev-window
+    // query and chained through .limit() by the capped main query, so the
+    // tail must be both thenable and limit-able.
+    const tail = {
+      limit: limitFn ?? vi.fn().mockResolvedValue(rows),
+      then: (
+        onFulfilled?: (value: unknown[]) => unknown,
+        onRejected?: (reason: unknown) => unknown
+      ) => Promise.resolve(rows).then(onFulfilled, onRejected),
+    };
+    return {
+      from: vi.fn().mockReturnValue({
+        leftJoin: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue(tail),
+            }),
+          }),
+        }),
+      }),
+    };
+  }
+
+  // Distribution query chain: select().from().where().groupBy()
+  function rankingDistQueryMock(rows: unknown[]) {
+    return {
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockResolvedValue(rows),
+        }),
+      }),
+    };
+  }
+
   describe("getLeaderboardStats", () => {
     it("should return leaderboard data structure with correct range", async () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      // Mock all three queries to return empty data
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
@@ -664,46 +691,20 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyDistQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      // API keys (empty), upstreams (empty), models (with data), model upstream dist (empty)
+      // Order: api keys (empty), upstreams (empty), models (with data),
+      // model upstream dist, users (empty). Empty dimensions skip their
+      // distribution query entirely.
       vi.mocked(db.select)
-        .mockReturnValueOnce(emptyMainQuery) // api keys
-        .mockReturnValueOnce(emptyMainQuery) // upstreams
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    { model: "gpt-4", requestCount: 150, totalTokens: "15000" },
-                    { model: "claude-3", requestCount: 100, totalTokens: "10000" },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyDistQuery) // model upstream dist
-        .mockReturnValueOnce(emptyMainQuery); // users
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "gpt-4", requestCount: 150, totalTokens: "15000" },
+            { key: "claude-3", requestCount: 100, totalTokens: "10000" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
@@ -723,17 +724,9 @@ describe("stats-service", () => {
 
       const mockLimitFn = vi.fn().mockResolvedValue([]);
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: mockLimitFn,
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        rankingMainQueryMock([], mockLimitFn) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
@@ -747,81 +740,23 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyCostQuery = {
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyDistQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      // Order: api keys, api key cost, api key dist, upstreams, upstream cost, upstream dist, models
+      // Order: api keys main, api key dist, upstreams main, upstream dist,
+      // models main (empty), users main (empty)
       vi.mocked(db.select)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi
-                    .fn()
-                    .mockResolvedValue([
-                      { apiKeyId: "unknown-key", requestCount: 10, totalTokens: "1000" },
-                    ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyCostQuery) // api key cost
-        .mockReturnValueOnce(emptyDistQuery) // api key model dist
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    {
-                      upstreamId: "unknown-upstream",
-                      requestCount: 20,
-                      totalTokens: "2000",
-                      avgTtft: null,
-                      totalCompletionTokens: 0,
-                      totalDurationMs: 0,
-                      totalCacheReadTokens: null,
-                      totalEffectivePromptTokens: 0,
-                    },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyCostQuery) // upstream cost
-        .mockReturnValueOnce(emptyDistQuery) // upstream model dist
-        .mockReturnValueOnce(emptyMainQuery) // models
-        .mockReturnValueOnce(emptyMainQuery); // users
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "unknown-key", requestCount: 10, totalTokens: "1000" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "unknown-upstream", requestCount: 20, totalTokens: "2000", avgTtft: null },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       // Return empty arrays - simulating deleted keys/upstreams
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
@@ -839,65 +774,16 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyCostQuery = {
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyDistQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      // Order: api keys (empty), upstreams (with data), upstream cost, upstream dist, models (empty)
       vi.mocked(db.select)
-        .mockReturnValueOnce(emptyMainQuery) // api keys
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    {
-                      upstreamId: "upstream-openai",
-                      requestCount: 20,
-                      totalTokens: "2000",
-                      avgTtft: null,
-                      totalCompletionTokens: 0,
-                      totalDurationMs: 0,
-                      totalCacheReadTokens: null,
-                      totalEffectivePromptTokens: 0,
-                    },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyCostQuery) // upstream cost
-        .mockReturnValueOnce(emptyDistQuery) // upstream model dist
-        .mockReturnValueOnce(emptyMainQuery) // models
-        .mockReturnValueOnce(emptyMainQuery); // users
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "upstream-openai", requestCount: 20, totalTokens: "2000", avgTtft: null },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockReset();
       vi.mocked(db.query.upstreams.findMany).mockReset();
@@ -920,58 +806,16 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyCostQuery = {
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyDistQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      // Order: api keys (with data), api key cost, api key dist, upstreams (empty), models (empty)
       vi.mocked(db.select)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi
-                    .fn()
-                    .mockResolvedValue([
-                      { apiKeyId: "key-1", requestCount: 10, totalTokens: null },
-                    ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyCostQuery) // api key cost
-        .mockReturnValueOnce(emptyDistQuery) // api key model dist
-        .mockReturnValueOnce(emptyMainQuery) // upstreams
-        .mockReturnValueOnce(emptyMainQuery) // models
-        .mockReturnValueOnce(emptyMainQuery); // users
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "key-1", requestCount: 10, totalTokens: null },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
         { id: "key-1", name: "Test Key", keyPrefix: "sk-test-" },
@@ -987,94 +831,29 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
       vi.mocked(db.select)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi
-                    .fn()
-                    .mockResolvedValue([
-                      { apiKeyId: "key-1", requestCount: 3, totalTokens: "100" },
-                    ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockResolvedValue([{ apiKeyId: "key-1", totalCost: "1.25" }]),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([{ groupKey: "key-1", name: "gpt-4o", cnt: 2 }]),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    {
-                      upstreamId: "upstream-1",
-                      requestCount: 2,
-                      totalTokens: "80",
-                      avgTtft: null,
-                      totalCompletionTokens: 0,
-                      totalDurationMs: 0,
-                      totalCacheReadTokens: null,
-                      totalEffectivePromptTokens: 0,
-                    },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                groupBy: vi
-                  .fn()
-                  .mockResolvedValue([{ upstreamId: "upstream-1", totalCost: "1.25" }]),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi
-                .fn()
-                .mockResolvedValue([{ groupKey: "upstream-1", name: "gpt-4o", cnt: 2 }]),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyMainQuery) // models
-        .mockReturnValueOnce(emptyMainQuery); // users
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "key-1", requestCount: 3, totalTokens: "100", totalCost: "1.25" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          rankingDistQueryMock([
+            { groupKey: "key-1", name: "gpt-4o", cnt: 2 },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "upstream-1", requestCount: 2, totalTokens: "80", totalCost: "1.25" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          rankingDistQueryMock([
+            { groupKey: "upstream-1", name: "gpt-4o", cnt: 2 },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
         { id: "key-1", name: "Quota Key", keyPrefix: "sk-quota-" },
@@ -1112,65 +891,23 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyCostQuery = {
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyDistQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
-      // Order: api keys (empty), upstreams (with data), upstream cost, upstream dist, models (empty)
       vi.mocked(db.select)
-        .mockReturnValueOnce(emptyMainQuery) // api keys
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    {
-                      upstreamId: "upstream-openai",
-                      requestCount: 10,
-                      totalTokens: "5000",
-                      avgTtft: "1200",
-                      totalCompletionTokens: "600",
-                      totalDurationMs: "10000",
-                      totalCacheReadTokens: null,
-                      totalEffectivePromptTokens: 0,
-                    },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyCostQuery) // upstream cost
-        .mockReturnValueOnce(emptyDistQuery) // upstream model dist
-        .mockReturnValueOnce(emptyMainQuery) // models
-        .mockReturnValueOnce(emptyMainQuery); // users
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            {
+              key: "upstream-openai",
+              requestCount: 10,
+              totalTokens: "5000",
+              avgTtft: "1200",
+              tpsCompletionTokens: "600",
+              tpsDurationMs: "10000",
+            },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
@@ -1188,64 +925,50 @@ describe("stats-service", () => {
       expect(result.upstreams[0].avgTps).toBe(60);
     });
 
-    it("should handle null model as Unknown", async () => {
+    it("should compute error rate from completed requests only", async () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
       vi.mocked(db.select)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi
-                    .fn()
-                    .mockResolvedValue([{ model: null, requestCount: 5, totalTokens: "500" }]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>); // users
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            {
+              key: "upstream-1",
+              // 11 total = 10 completed (8 ok + 2 errors) + 1 in-progress
+              requestCount: 11,
+              totalTokens: "1000",
+              completedCount: 10,
+              errorCount: 2,
+            },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await getLeaderboardStats("7d", 5);
+
+      expect(result.upstreams[0].errorRate).toBe(20);
+    });
+
+    it("should handle null model as Unknown", async () => {
+      const { db } = await import("@/lib/db");
+      const { getLeaderboardStats } = await import("@/lib/services/stats-service");
+
+      // A null model key skips the distribution query entirely.
+      vi.mocked(db.select)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: null, requestCount: 5, totalTokens: "500" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
@@ -1259,17 +982,9 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
@@ -1286,54 +1001,23 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");
 
-      const emptyMainQuery = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>;
-
       // Order: api keys (empty), upstreams (empty), models (empty),
-      // users (with data), user cost, user model dist.
+      // users (with data), user model dist.
       vi.mocked(db.select)
-        .mockReturnValueOnce(emptyMainQuery) // api keys
-        .mockReturnValueOnce(emptyMainQuery) // upstreams
-        .mockReturnValueOnce(emptyMainQuery) // models
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    { userId: "user-1", requestCount: 12, totalTokens: "3400" },
-                    { userId: "user-deleted", requestCount: 5, totalTokens: "900" },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockResolvedValue([{ userId: "user-1", totalCost: "2.5" }]),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockResolvedValue([{ groupKey: "user-1", name: "gpt-4o", cnt: 7 }]),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>);
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "user-1", requestCount: 12, totalTokens: "3400", totalCost: "2.5" },
+            { key: "user-deleted", requestCount: 5, totalTokens: "900" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          rankingDistQueryMock([
+            { groupKey: "user-1", name: "gpt-4o", cnt: 7 },
+          ]) as unknown as ReturnType<typeof db.select>
+        );
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
@@ -1364,6 +1048,86 @@ describe("stats-service", () => {
         totalCostUsd: 0,
         modelDistribution: [],
       });
+    });
+  });
+
+  describe("getRankings", () => {
+    it("queries a single dimension and defaults to limit 50", async () => {
+      const { db } = await import("@/lib/db");
+      const { getRankings } = await import("@/lib/services/stats-service");
+
+      const mockLimitFn = vi
+        .fn()
+        .mockResolvedValue([{ key: "upstream-1", requestCount: 10, totalTokens: "1000" }]);
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([], mockLimitFn) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await getRankings({ dimension: "upstreams", sortBy: "cost" });
+
+      expect(mockLimitFn).toHaveBeenCalledWith(50);
+      expect(vi.mocked(db.select)).toHaveBeenCalledTimes(2);
+      expect(result.dimension).toBe("upstreams");
+      expect(result.sortBy).toBe("cost");
+      expect(result.order).toBe("desc");
+      expect(result.items).toHaveLength(1);
+    });
+
+    it("attaches previous-period comparison when compare is enabled", async () => {
+      const { db } = await import("@/lib/db");
+      const { getRankings } = await import("@/lib/services/stats-service");
+
+      // Current period: model-a rank 1, model-b rank 2.
+      // Previous period: model-b rank 1, model-a rank 2. model-c newly ranked? no —
+      // current has model-c absent from prev to exercise the "newly ranked" branch.
+      // The current and previous windows are dispatched together via
+      // Promise.all, so the prev-window select fires before the distribution.
+      vi.mocked(db.select)
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "model-a", requestCount: 100, totalTokens: "1" },
+            { key: "model-b", requestCount: 80, totalTokens: "1" },
+            { key: "model-c", requestCount: 60, totalTokens: "1" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          rankingMainQueryMock([
+            { key: "model-b", requestCount: 120, totalTokens: "1" },
+            { key: "model-a", requestCount: 50, totalTokens: "1" },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await getRankings({ dimension: "models", compare: true });
+
+      expect(result.items[0].comparison).toEqual({ prevRank: 2, prevRequestCount: 50 });
+      expect(result.items[1].comparison).toEqual({ prevRank: 1, prevRequestCount: 120 });
+      expect(result.items[2].comparison).toEqual({ prevRank: null, prevRequestCount: null });
+    });
+
+    it("marks range as custom when a custom window is provided", async () => {
+      const { db } = await import("@/lib/db");
+      const { getRankings } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue(
+        rankingMainQueryMock([]) as unknown as ReturnType<typeof db.select>
+      );
+
+      const result = await getRankings({
+        dimension: "users",
+        customStart: new Date("2024-06-01T00:00:00Z"),
+        customEnd: new Date("2024-06-08T00:00:00Z"),
+      });
+
+      expect(result.range).toBe("custom");
+      expect(result.items).toHaveLength(0);
     });
   });
 
