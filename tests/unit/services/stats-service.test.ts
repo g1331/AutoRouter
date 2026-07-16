@@ -630,14 +630,22 @@ describe("stats-service", () => {
 
   // Ranking main query chain: select().from().leftJoin().where().groupBy().orderBy().limit()
   function rankingMainQueryMock(rows: unknown[], limitFn?: ReturnType<typeof vi.fn>) {
+    // The orderBy() result is awaited directly by the unlimited prev-window
+    // query and chained through .limit() by the capped main query, so the
+    // tail must be both thenable and limit-able.
+    const tail = {
+      limit: limitFn ?? vi.fn().mockResolvedValue(rows),
+      then: (
+        onFulfilled?: (value: unknown[]) => unknown,
+        onRejected?: (reason: unknown) => unknown
+      ) => Promise.resolve(rows).then(onFulfilled, onRejected),
+    };
     return {
       from: vi.fn().mockReturnValue({
         leftJoin: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
             groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: limitFn ?? vi.fn().mockResolvedValue(rows),
-              }),
+              orderBy: vi.fn().mockReturnValue(tail),
             }),
           }),
         }),
@@ -1077,6 +1085,8 @@ describe("stats-service", () => {
       // Current period: model-a rank 1, model-b rank 2.
       // Previous period: model-b rank 1, model-a rank 2. model-c newly ranked? no —
       // current has model-c absent from prev to exercise the "newly ranked" branch.
+      // The current and previous windows are dispatched together via
+      // Promise.all, so the prev-window select fires before the distribution.
       vi.mocked(db.select)
         .mockReturnValueOnce(
           rankingMainQueryMock([
@@ -1085,13 +1095,13 @@ describe("stats-service", () => {
             { key: "model-c", requestCount: 60, totalTokens: "1" },
           ]) as unknown as ReturnType<typeof db.select>
         )
-        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>)
         .mockReturnValueOnce(
           rankingMainQueryMock([
             { key: "model-b", requestCount: 120, totalTokens: "1" },
             { key: "model-a", requestCount: 50, totalTokens: "1" },
           ]) as unknown as ReturnType<typeof db.select>
-        );
+        )
+        .mockReturnValueOnce(rankingDistQueryMock([]) as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
 

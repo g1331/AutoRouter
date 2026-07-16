@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
-import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
+import { browserTzOffsetMinutes, type CustomDateRange } from "@/hooks/use-dashboard-stats";
 import type {
   RankingsDimension,
   RankingsSortField,
@@ -16,12 +16,6 @@ export interface RankingsParams {
   sortBy: RankingsSortField;
   order: "asc" | "desc";
   customRange?: CustomDateRange;
-}
-
-// Minutes east of UTC (getTimezoneOffset is west-positive), matching the
-// dashboard stats hooks so "today" aligns to the browser's local midnight.
-function browserTzOffsetMinutes(): number {
-  return -new Date().getTimezoneOffset();
 }
 
 export function useRankings({ dimension, range, sortBy, order, customRange }: RankingsParams) {

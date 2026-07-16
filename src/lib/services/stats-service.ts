@@ -724,8 +724,20 @@ function buildRankingOrderBy(sortBy: LeaderboardSortBy, order: LeaderboardSortOr
     cache_hit: sql`case when ${effectivePromptExpr} > 0 then sum(${requestLogs.cacheReadTokens}) * 1.0 / ${effectivePromptExpr} else 0 end`,
     error_rate: sql`case when ${completedCountExpr} > 0 then ${errorCountExpr} * 1.0 / ${completedCountExpr} else 0 end`,
   };
-  const expr = sortExprs[sortBy];
-  return order === "asc" ? sql`${expr} asc` : sql`${expr} desc`;
+  // For rate/latency metrics a group can have requests yet no samples (e.g.
+  // all requests failed → no TTFT). Their defaulted 0 must not beat real low
+  // values under asc, so sample-less groups sink to the bottom either way.
+  const noSampleExprs: Partial<Record<LeaderboardSortBy, ReturnType<typeof sql>>> = {
+    ttft: sql`${avgTtftExpr} is null`,
+    tps: sql`${tpsDurationExpr} <= 0`,
+    cache_hit: sql`${effectivePromptExpr} <= 0`,
+    error_rate: sql`${completedCountExpr} <= 0`,
+  };
+  const keys: ReturnType<typeof sql>[] = [];
+  const noSample = noSampleExprs[sortBy];
+  if (noSample) keys.push(sql`case when ${noSample} then 1 else 0 end asc`);
+  keys.push(order === "asc" ? sql`${sortExprs[sortBy]} asc` : sql`${sortExprs[sortBy]} desc`);
+  return keys;
 }
 
 async function queryRankingRows(
@@ -733,12 +745,12 @@ async function queryRankingRows(
   timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
   sortBy: LeaderboardSortBy,
   order: LeaderboardSortOrder,
-  limit: number
+  limit?: number
 ): Promise<RankingRow[]> {
   const config = rankingDimensionConfigs[dimension];
   const groupCol = config.groupCol();
 
-  const rows = await db
+  const query = db
     .select({
       key: groupCol,
       requestCount: count(requestLogs.id),
@@ -756,8 +768,12 @@ async function queryRankingRows(
     .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
     .where(and(timeFilter, config.extraWhere()))
     .groupBy(groupCol)
-    .orderBy(buildRankingOrderBy(sortBy, order))
-    .limit(limit);
+    // Deterministic tiebreaker on the group key: ties would otherwise land in
+    // DB-defined order, flipping between the current and comparison windows
+    // (phantom rank arrows) and across the limit cutoff.
+    .orderBy(...buildRankingOrderBy(sortBy, order), sql`${groupCol} asc`);
+
+  const rows = await (limit === undefined ? query : query.limit(limit));
 
   return rows as RankingRow[];
 }
@@ -866,21 +882,22 @@ async function queryUpstreamRanking(
   const rows = await queryRankingRows("upstreams", timeFilter, sortBy, order, limit);
   const ids = rows.map((r) => r.key!).filter(Boolean);
 
+  const [details, distMap] = await Promise.all([
+    ids.length > 0
+      ? db.query.upstreams.findMany({
+          where: inArray(upstreams.id, ids),
+          columns: { id: true, name: true, routeCapabilities: true },
+        })
+      : Promise.resolve([]),
+    queryModelDistribution("upstreams", timeFilter, ids),
+  ]);
   const detailMap = new Map<string, { name: string; providerType: string }>();
-  if (ids.length > 0) {
-    const details = await db.query.upstreams.findMany({
-      where: inArray(upstreams.id, ids),
-      columns: { id: true, name: true, routeCapabilities: true },
+  for (const u of details) {
+    detailMap.set(u.id, {
+      name: u.name,
+      providerType: getPrimaryProviderByCapabilities(u.routeCapabilities) ?? "unknown",
     });
-    for (const u of details) {
-      detailMap.set(u.id, {
-        name: u.name,
-        providerType: getPrimaryProviderByCapabilities(u.routeCapabilities) ?? "unknown",
-      });
-    }
   }
-
-  const distMap = await queryModelDistribution("upstreams", timeFilter, ids);
 
   return rows.map((row) => ({
     id: row.key!,
@@ -918,18 +935,19 @@ async function queryApiKeyRanking(
   const rows = await queryRankingRows("api_keys", timeFilter, sortBy, order, limit);
   const ids = rows.map((r) => r.key!).filter(Boolean);
 
+  const [details, distMap] = await Promise.all([
+    ids.length > 0
+      ? db.query.apiKeys.findMany({
+          where: inArray(apiKeys.id, ids),
+          columns: { id: true, name: true, keyPrefix: true },
+        })
+      : Promise.resolve([]),
+    queryModelDistribution("api_keys", timeFilter, ids),
+  ]);
   const detailMap = new Map<string, { name: string; keyPrefix: string }>();
-  if (ids.length > 0) {
-    const details = await db.query.apiKeys.findMany({
-      where: inArray(apiKeys.id, ids),
-      columns: { id: true, name: true, keyPrefix: true },
-    });
-    for (const key of details) {
-      detailMap.set(key.id, { name: key.name, keyPrefix: key.keyPrefix });
-    }
+  for (const key of details) {
+    detailMap.set(key.id, { name: key.name, keyPrefix: key.keyPrefix });
   }
-
-  const distMap = await queryModelDistribution("api_keys", timeFilter, ids);
 
   return rows.map((row) => ({
     id: row.key!,
@@ -952,18 +970,19 @@ async function queryUserRanking(
   const rows = await queryRankingRows("users", timeFilter, sortBy, order, limit);
   const ids = rows.map((r) => r.key!).filter(Boolean);
 
+  const [details, distMap] = await Promise.all([
+    ids.length > 0
+      ? db.query.users.findMany({
+          where: inArray(users.id, ids),
+          columns: { id: true, username: true, displayName: true },
+        })
+      : Promise.resolve([]),
+    queryModelDistribution("users", timeFilter, ids),
+  ]);
   const detailMap = new Map<string, { username: string; displayName: string }>();
-  if (ids.length > 0) {
-    const details = await db.query.users.findMany({
-      where: inArray(users.id, ids),
-      columns: { id: true, username: true, displayName: true },
-    });
-    for (const u of details) {
-      detailMap.set(u.id, { username: u.username, displayName: u.displayName });
-    }
+  for (const u of details) {
+    detailMap.set(u.id, { username: u.username, displayName: u.displayName });
   }
-
-  const distMap = await queryModelDistribution("users", timeFilter, ids);
 
   return rows.map((row) => ({
     id: row.key!,
@@ -1030,17 +1049,22 @@ export async function getRankings(query: RankingsQuery): Promise<StatsRankings> 
   const endTime = customEnd ?? null;
   const timeFilter = buildLeaderboardTimeFilter(startTime, endTime);
 
-  const items = await queryDimensionRanking(dimension, timeFilter, sortBy, order, limit);
+  // Previous window of equal length, ending where the current one starts.
+  // Unlimited on purpose: truncating it at `limit` would mislabel entities
+  // that merely ranked below the cutoff last period as brand-new entries.
+  const effectiveEnd = endTime ?? new Date();
+  const windowMs = effectiveEnd.getTime() - startTime.getTime();
+  const prevFilter = buildLeaderboardTimeFilter(
+    new Date(startTime.getTime() - windowMs),
+    startTime
+  );
 
-  if (compare) {
-    // Previous window of equal length, ending where the current one starts.
-    const effectiveEnd = endTime ?? new Date();
-    const windowMs = effectiveEnd.getTime() - startTime.getTime();
-    const prevFilter = buildLeaderboardTimeFilter(
-      new Date(startTime.getTime() - windowMs),
-      startTime
-    );
-    const prevRows = await queryRankingRows(dimension, prevFilter, sortBy, order, limit);
+  const [items, prevRows] = await Promise.all([
+    queryDimensionRanking(dimension, timeFilter, sortBy, order, limit),
+    compare ? queryRankingRows(dimension, prevFilter, sortBy, order) : Promise.resolve(null),
+  ]);
+
+  if (prevRows) {
     const prevMap = new Map<string, { rank: number; requestCount: number }>();
     prevRows.forEach((row, index) => {
       if (row.key) prevMap.set(row.key, { rank: index + 1, requestCount: row.requestCount });

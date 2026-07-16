@@ -12,7 +12,7 @@ import type {
 // Minutes east of UTC (getTimezoneOffset is west-positive). Sent as tz_offset
 // so preset windows ("today") align to the browser's local midnight, matching
 // the request-logs list semantics.
-function browserTzOffsetMinutes(): number {
+export function browserTzOffsetMinutes(): number {
   return -new Date().getTimezoneOffset();
 }
 

@@ -11,7 +11,7 @@ import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse, DistributionItem } from "@/types/api";
 
-import { formatCost, formatNumber, getUpstreamColor } from "./chart-theme";
+import { formatCost, formatNumber, formatTtft, getUpstreamColor } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface LeaderboardSectionProps {
@@ -30,11 +30,6 @@ const RANK_COLORS = [
 const MINI_PIE_CHART_SIZE = 40;
 
 const RANK_LEFT_BORDERS = ["border-l-amber-500", "border-l-status-info", "border-l-status-success"];
-
-function formatTtft(ttftMs: number): string {
-  if (ttftMs >= 1000) return `${(ttftMs / 1000).toFixed(3)}s`;
-  return `${Math.round(ttftMs)}ms`;
-}
 
 function getTtftClass(ttftMs: number): string {
   if (ttftMs >= 1000) return "text-status-error";

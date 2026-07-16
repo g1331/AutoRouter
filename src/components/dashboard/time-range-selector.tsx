@@ -16,7 +16,7 @@ import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
 
 export type TimeRangeOrCustom = TimeRange | "custom";
 
-const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
+export const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
 
 interface TimeRangeSelectorProps {
   value: TimeRangeOrCustom | "all";

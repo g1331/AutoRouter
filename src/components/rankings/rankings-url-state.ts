@@ -1,23 +1,30 @@
 import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
-import type { TimeRangeOrCustom } from "@/components/dashboard/time-range-selector";
-import type { RankingsDimension, RankingsSortField } from "@/types/api";
+import { PRESET_RANGES, type TimeRangeOrCustom } from "@/components/dashboard/time-range-selector";
+import type { RankingsDimension, RankingsSortField, TimeRange } from "@/types/api";
 
-export const RANKINGS_DIMENSIONS: RankingsDimension[] = [
-  "upstreams",
-  "models",
-  "api_keys",
-  "users",
-];
+// Derived from Record keys so the compiler errors here whenever the unions in
+// types/api.ts gain or lose a member — a plain literal array would silently
+// drift and make readStateFromUrl reject valid shared URLs.
+const DIMENSION_FLAGS: Record<RankingsDimension, true> = {
+  upstreams: true,
+  models: true,
+  api_keys: true,
+  users: true,
+};
 
-export const RANKINGS_SORT_FIELDS: RankingsSortField[] = [
-  "requests",
-  "tokens",
-  "cost",
-  "ttft",
-  "tps",
-  "cache_hit",
-  "error_rate",
-];
+const SORT_FIELD_FLAGS: Record<RankingsSortField, true> = {
+  requests: true,
+  tokens: true,
+  cost: true,
+  ttft: true,
+  tps: true,
+  cache_hit: true,
+  error_rate: true,
+};
+
+export const RANKINGS_DIMENSIONS = Object.keys(DIMENSION_FLAGS) as RankingsDimension[];
+
+export const RANKINGS_SORT_FIELDS = Object.keys(SORT_FIELD_FLAGS) as RankingsSortField[];
 
 export interface RankingsViewState {
   dimension: RankingsDimension;
@@ -58,8 +65,8 @@ export function readStateFromUrl(params: URLSearchParams): RankingsViewState {
         ? customRange
           ? "custom"
           : DEFAULT_RANKINGS_STATE.range
-        : range === "today" || range === "7d" || range === "30d"
-          ? range
+        : range && PRESET_RANGES.includes(range as TimeRange)
+          ? (range as TimeRange)
           : DEFAULT_RANKINGS_STATE.range,
     sortBy: sort && RANKINGS_SORT_FIELDS.includes(sort) ? sort : DEFAULT_RANKINGS_STATE.sortBy,
     order: order === "asc" ? "asc" : "desc",

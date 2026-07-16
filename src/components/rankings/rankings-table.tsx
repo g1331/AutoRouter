@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp, ChevronDown, ExternalLink, Minus, Trophy } from "lucide-react";
 
-import { formatCost, formatNumber } from "@/components/dashboard/chart-theme";
+import { formatCost, formatNumber, formatTtft } from "@/components/dashboard/chart-theme";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -39,60 +39,67 @@ interface RankingsTableProps {
   logsWindow: RankingsLogsWindow;
 }
 
-const METRIC_COLUMNS: Array<{ field: RankingsSortField; labelKey: string }> = [
-  { field: "requests", labelKey: "columns.requests" },
-  { field: "tokens", labelKey: "columns.tokens" },
-  { field: "cost", labelKey: "columns.cost" },
-  { field: "ttft", labelKey: "columns.ttft" },
-  { field: "tps", labelKey: "columns.tps" },
-  { field: "cache_hit", labelKey: "columns.cacheHit" },
-  { field: "error_rate", labelKey: "columns.errorRate" },
+// One entry per metric: header label, raw value (ratio bar / sorting), and
+// display formatting live together so a new metric can't be half-wired.
+interface MetricColumn {
+  field: RankingsSortField;
+  labelKey: string;
+  value: (item: RankingsItem) => number;
+  format: (item: RankingsItem) => string;
+}
+
+const METRIC_COLUMNS: MetricColumn[] = [
+  {
+    field: "requests",
+    labelKey: "columns.requests",
+    value: (item) => item.request_count,
+    format: (item) => formatNumber(item.request_count),
+  },
+  {
+    field: "tokens",
+    labelKey: "columns.tokens",
+    value: (item) => item.total_tokens,
+    format: (item) => `${formatNumber(item.total_tokens)} tok`,
+  },
+  {
+    field: "cost",
+    labelKey: "columns.cost",
+    value: (item) => item.total_cost_usd,
+    format: (item) => formatCost(item.total_cost_usd),
+  },
+  {
+    field: "ttft",
+    labelKey: "columns.ttft",
+    value: (item) => item.avg_ttft_ms,
+    format: (item) => (item.avg_ttft_ms > 0 ? formatTtft(item.avg_ttft_ms) : "—"),
+  },
+  {
+    field: "tps",
+    labelKey: "columns.tps",
+    value: (item) => item.avg_tps,
+    format: (item) => (item.avg_tps > 0 ? `${formatNumber(item.avg_tps)} tok/s` : "—"),
+  },
+  {
+    field: "cache_hit",
+    labelKey: "columns.cacheHit",
+    value: (item) => item.cache_hit_rate,
+    format: (item) => `${item.cache_hit_rate.toFixed(1)}%`,
+  },
+  {
+    field: "error_rate",
+    labelKey: "columns.errorRate",
+    value: (item) => item.error_rate,
+    format: (item) => `${item.error_rate.toFixed(1)}%`,
+  },
 ];
 
-const RANK_COLORS = ["text-amber-500", "text-status-info", "text-status-success"];
+const COLUMN_BY_FIELD = new Map(METRIC_COLUMNS.map((column) => [column.field, column]));
 
 function metricValue(item: RankingsItem, field: RankingsSortField): number {
-  switch (field) {
-    case "requests":
-      return item.request_count;
-    case "tokens":
-      return item.total_tokens;
-    case "cost":
-      return item.total_cost_usd;
-    case "ttft":
-      return item.avg_ttft_ms;
-    case "tps":
-      return item.avg_tps;
-    case "cache_hit":
-      return item.cache_hit_rate;
-    case "error_rate":
-      return item.error_rate;
-  }
+  return COLUMN_BY_FIELD.get(field)?.value(item) ?? 0;
 }
 
-function formatTtft(ttftMs: number): string {
-  if (ttftMs >= 1000) return `${(ttftMs / 1000).toFixed(3)}s`;
-  return `${Math.round(ttftMs)}ms`;
-}
-
-function formatMetric(item: RankingsItem, field: RankingsSortField): string {
-  switch (field) {
-    case "requests":
-      return formatNumber(item.request_count);
-    case "tokens":
-      return `${formatNumber(item.total_tokens)} tok`;
-    case "cost":
-      return formatCost(item.total_cost_usd);
-    case "ttft":
-      return item.avg_ttft_ms > 0 ? formatTtft(item.avg_ttft_ms) : "—";
-    case "tps":
-      return item.avg_tps > 0 ? `${formatNumber(item.avg_tps)} tok/s` : "—";
-    case "cache_hit":
-      return `${item.cache_hit_rate.toFixed(1)}%`;
-    case "error_rate":
-      return `${item.error_rate.toFixed(1)}%`;
-  }
-}
+const RANK_COLORS = ["text-amber-500", "text-status-info", "text-status-success"];
 
 function itemKey(dimension: RankingsDimension, item: RankingsItem): string {
   return dimension === "models" && "model" in item ? item.model : (item as { id: string }).id;
@@ -343,7 +350,7 @@ export function RankingsTable({
                         </div>
                       </div>
                     </TableCell>
-                    {METRIC_COLUMNS.map(({ field }) => (
+                    {METRIC_COLUMNS.map(({ field, format }) => (
                       <TableCell
                         key={field}
                         className={cn(
@@ -352,7 +359,7 @@ export function RankingsTable({
                           field === "error_rate" && errorRateClass(item.error_rate)
                         )}
                       >
-                        {formatMetric(item, field)}
+                        {format(item)}
                       </TableCell>
                     ))}
                     <TableCell className="px-2 py-2">

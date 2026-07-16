@@ -18,7 +18,7 @@ import { useStatsTimeseries, type TimeseriesMetric } from "@/hooks/use-dashboard
 import { cn } from "@/lib/utils";
 import type { TimeseriesDataPoint } from "@/types/api";
 
-import { formatCost, formatDuration, formatNumber } from "./chart-theme";
+import { formatCost, formatDuration, formatNumber, formatTtft } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface StatsCardsProps {
@@ -35,13 +35,6 @@ interface StatsCardsProps {
   yesterdayAvgTtftMs: number;
   yesterdayCacheHitRate: number;
   isLoading: boolean;
-}
-
-function formatTtft(ttftMs: number): string {
-  if (ttftMs >= 1000) {
-    return `${(ttftMs / 1000).toFixed(3)}s`;
-  }
-  return `${Math.round(ttftMs)}ms`;
 }
 
 function getTtftPerformanceClass(ttftMs: number): string {

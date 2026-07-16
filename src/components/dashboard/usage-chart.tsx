@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import type { StatsTimeseriesResponse } from "@/types/api";
 import type { TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 
-import { formatNumber, getChartTheme, getUpstreamColor } from "./chart-theme";
+import { formatNumber, formatTtft, getChartTheme, getUpstreamColor } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface UsageChartProps {
@@ -60,13 +60,6 @@ const DISPLAY_MODE_META = {
 } as const;
 
 const METRIC_OPTIONS = ["requests", "tokens", "cost", "ttft", "tps", "duration"] as const;
-
-function formatTtft(ttftMs: number): string {
-  if (ttftMs >= 1000) {
-    return `${(ttftMs / 1000).toFixed(3)}s`;
-  }
-  return `${Math.round(ttftMs)}ms`;
-}
 
 function formatMetricValue(value: number, metric: TimeseriesMetric): string {
   if (metric === "ttft" || metric === "duration") {
