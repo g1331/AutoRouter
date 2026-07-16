@@ -76,47 +76,71 @@ interface TimeseriesAggregationRow {
   totalDurationMs?: number | string | null;
 }
 
-export interface LeaderboardApiKeyItem {
-  id: string;
-  name: string;
-  keyPrefix: string;
+export type LeaderboardDimension = "upstreams" | "models" | "api_keys" | "users";
+
+export type LeaderboardSortBy =
+  | "requests"
+  | "tokens"
+  | "cost"
+  | "ttft"
+  | "tps"
+  | "cache_hit"
+  | "error_rate";
+
+export type LeaderboardSortOrder = "asc" | "desc";
+
+/** Previous-period standing for a ranked entry; null prevRank means newly ranked. */
+export interface LeaderboardComparison {
+  prevRank: number | null;
+  prevRequestCount: number | null;
+}
+
+/** The seven aggregate metrics shared by every ranking dimension. */
+export interface LeaderboardMetrics {
   requestCount: number;
   totalTokens: number;
   totalCostUsd: number;
-  modelDistribution: DistributionItem[];
-}
-
-export interface LeaderboardUpstreamItem {
-  id: string;
-  name: string;
-  providerType: string;
-  requestCount: number;
-  totalTokens: number;
   avgTtftMs: number;
   avgTps: number;
   cacheHitRate: number;
-  totalCostUsd: number;
+  errorRate: number;
+}
+
+export interface LeaderboardApiKeyItem extends LeaderboardMetrics {
+  id: string;
+  name: string;
+  keyPrefix: string;
   modelDistribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
 }
 
-export interface LeaderboardModelItem {
+export interface LeaderboardUpstreamItem extends LeaderboardMetrics {
+  id: string;
+  name: string;
+  providerType: string;
+  modelDistribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
+}
+
+export interface LeaderboardModelItem extends LeaderboardMetrics {
   model: string;
-  requestCount: number;
-  totalTokens: number;
-  avgTtftMs: number;
-  avgTps: number;
   upstreamDistribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
 }
 
-export interface LeaderboardUserItem {
+export interface LeaderboardUserItem extends LeaderboardMetrics {
   id: string;
   username: string;
   displayName: string;
-  requestCount: number;
-  totalTokens: number;
-  totalCostUsd: number;
   modelDistribution: DistributionItem[];
+  comparison?: LeaderboardComparison;
 }
+
+export type LeaderboardItem =
+  | LeaderboardApiKeyItem
+  | LeaderboardUpstreamItem
+  | LeaderboardModelItem
+  | LeaderboardUserItem;
 
 export interface StatsLeaderboard {
   range: TimeRange;
@@ -124,6 +148,26 @@ export interface StatsLeaderboard {
   upstreams: LeaderboardUpstreamItem[];
   models: LeaderboardModelItem[];
   users: LeaderboardUserItem[];
+}
+
+export interface RankingsQuery {
+  dimension: LeaderboardDimension;
+  sortBy?: LeaderboardSortBy;
+  order?: LeaderboardSortOrder;
+  rangeType?: TimeRange;
+  limit?: number;
+  customStart?: Date;
+  customEnd?: Date;
+  tzOffsetMinutes?: number;
+  compare?: boolean;
+}
+
+export interface StatsRankings {
+  range: TimeRange | "custom";
+  dimension: LeaderboardDimension;
+  sortBy: LeaderboardSortBy;
+  order: LeaderboardSortOrder;
+  items: LeaderboardItem[];
 }
 
 const MIN_TPS_COMPLETION_TOKENS = 10;
@@ -599,8 +643,429 @@ export async function getTimeseriesStats(
   };
 }
 
+// ===========================================================================
+// Rankings / leaderboard
+// ===========================================================================
+
+// Shared aggregate SQL fragments. Billing snapshots join 1:1 on the unique
+// request_log_id, so aggregating over the joined rows never inflates counts.
+const totalCostExpr = sql`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`;
+const avgTtftExpr = sql`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`;
+const tpsCompletionExpr = sql`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`;
+const tpsDurationExpr = sql`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`;
+const effectivePromptExpr = sql`
+  sum(
+    case
+      when ${requestLogs.promptTokens} >= ${requestLogs.cacheReadTokens}
+        then ${requestLogs.promptTokens}
+      else ${requestLogs.promptTokens} + ${requestLogs.cacheReadTokens}
+    end
+  )
+`;
+// A request is "completed" once it has a status code; in-progress rows
+// (status_code IS NULL) stay out of both sides of the error rate.
+const completedCountExpr = sql`count(case when ${requestLogs.statusCode} is not null then 1 end)`;
+const errorCountExpr = sql`count(case when ${requestLogs.statusCode} is not null and ${requestLogs.statusCode} not between 200 and 299 then 1 end)`;
+
+interface RankingRow {
+  key: string | null;
+  requestCount: number;
+  totalTokens: string | number | null;
+  totalCost: string | null;
+  avgTtft: string | null;
+  tpsCompletionTokens: string | number | null;
+  tpsDurationMs: string | number | null;
+  cacheReadTokens: string | number | null;
+  effectivePromptTokens: string | number | null;
+  completedCount: string | number | null;
+  errorCount: string | number | null;
+}
+
+const rankingDimensionConfigs = {
+  upstreams: {
+    groupCol: () => requestLogs.upstreamId,
+    extraWhere: () => isNotNull(requestLogs.upstreamId),
+  },
+  models: {
+    groupCol: () => requestLogs.model,
+    extraWhere: () => and(isNotNull(requestLogs.model), ne(requestLogs.model, "")),
+  },
+  api_keys: {
+    groupCol: () => requestLogs.apiKeyId,
+    extraWhere: () => isNotNull(requestLogs.apiKeyId),
+  },
+  users: {
+    groupCol: () => requestLogs.userId,
+    extraWhere: () => isNotNull(requestLogs.userId),
+  },
+} as const;
+
+export const LEADERBOARD_DIMENSIONS = Object.keys(
+  rankingDimensionConfigs
+) as LeaderboardDimension[];
+
+export const LEADERBOARD_SORT_FIELDS: LeaderboardSortBy[] = [
+  "requests",
+  "tokens",
+  "cost",
+  "ttft",
+  "tps",
+  "cache_hit",
+  "error_rate",
+];
+
+function buildRankingOrderBy(sortBy: LeaderboardSortBy, order: LeaderboardSortOrder) {
+  const sortExprs: Record<LeaderboardSortBy, ReturnType<typeof sql>> = {
+    requests: sql`count(${requestLogs.id})`,
+    tokens: sql`coalesce(sum(${requestLogs.totalTokens}), 0)`,
+    cost: sql`coalesce(${totalCostExpr}, 0)`,
+    ttft: sql`coalesce(${avgTtftExpr}, 0)`,
+    tps: sql`case when ${tpsDurationExpr} > 0 then ${tpsCompletionExpr} * 1000.0 / ${tpsDurationExpr} else 0 end`,
+    cache_hit: sql`case when ${effectivePromptExpr} > 0 then sum(${requestLogs.cacheReadTokens}) * 1.0 / ${effectivePromptExpr} else 0 end`,
+    error_rate: sql`case when ${completedCountExpr} > 0 then ${errorCountExpr} * 1.0 / ${completedCountExpr} else 0 end`,
+  };
+  const expr = sortExprs[sortBy];
+  return order === "asc" ? sql`${expr} asc` : sql`${expr} desc`;
+}
+
+async function queryRankingRows(
+  dimension: LeaderboardDimension,
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  sortBy: LeaderboardSortBy,
+  order: LeaderboardSortOrder,
+  limit: number
+): Promise<RankingRow[]> {
+  const config = rankingDimensionConfigs[dimension];
+  const groupCol = config.groupCol();
+
+  const rows = await db
+    .select({
+      key: groupCol,
+      requestCount: count(requestLogs.id),
+      totalTokens: sum(requestLogs.totalTokens),
+      totalCost: sql<string | null>`${totalCostExpr}`,
+      avgTtft: sql<string | null>`${avgTtftExpr}`,
+      tpsCompletionTokens: sql<number>`${tpsCompletionExpr}`,
+      tpsDurationMs: sql<number>`${tpsDurationExpr}`,
+      cacheReadTokens: sum(requestLogs.cacheReadTokens),
+      effectivePromptTokens: sql<number>`${effectivePromptExpr}`,
+      completedCount: sql<number>`${completedCountExpr}`,
+      errorCount: sql<number>`${errorCountExpr}`,
+    })
+    .from(requestLogs)
+    .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
+    .where(and(timeFilter, config.extraWhere()))
+    .groupBy(groupCol)
+    .orderBy(buildRankingOrderBy(sortBy, order))
+    .limit(limit);
+
+  return rows as RankingRow[];
+}
+
+function buildRankingMetrics(row: RankingRow): LeaderboardMetrics {
+  const tpsCompletion = row.tpsCompletionTokens != null ? Number(row.tpsCompletionTokens) : 0;
+  const tpsDuration = row.tpsDurationMs != null ? Number(row.tpsDurationMs) : 0;
+  const cacheRead = row.cacheReadTokens != null ? Number(row.cacheReadTokens) : 0;
+  const effectivePrompt = row.effectivePromptTokens != null ? Number(row.effectivePromptTokens) : 0;
+  const completed = row.completedCount != null ? Number(row.completedCount) : 0;
+  const errors = row.errorCount != null ? Number(row.errorCount) : 0;
+  const rawCacheHit = effectivePrompt > 0 ? (cacheRead / effectivePrompt) * 100 : 0;
+
+  return {
+    requestCount: row.requestCount,
+    totalTokens: row.totalTokens != null ? Number(row.totalTokens) : 0,
+    totalCostUsd: row.totalCost != null ? Number(row.totalCost) : 0,
+    avgTtftMs: row.avgTtft != null ? Math.round(Number(row.avgTtft) * 10) / 10 : 0,
+    avgTps: tpsDuration > 0 ? Math.round((tpsCompletion / tpsDuration) * 1000 * 10) / 10 : 0,
+    cacheHitRate: Math.round(Math.min(Math.max(rawCacheHit, 0), 100) * 10) / 10,
+    errorRate: completed > 0 ? Math.round((errors / completed) * 100 * 10) / 10 : 0,
+  };
+}
+
 /**
- * Get leaderboard statistics for top performers.
+ * Per-group model distribution for upstream/api-key/user rankings.
+ */
+async function queryModelDistribution(
+  dimension: "upstreams" | "api_keys" | "users",
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  keys: string[]
+): Promise<Map<string, DistributionItem[]>> {
+  if (keys.length === 0) return new Map();
+  const groupCol = rankingDimensionConfigs[dimension].groupCol();
+
+  const distRows = await db
+    .select({
+      groupKey: groupCol,
+      name: requestLogs.model,
+      cnt: count(requestLogs.id),
+    })
+    .from(requestLogs)
+    .where(
+      and(
+        timeFilter,
+        inArray(groupCol, keys),
+        isNotNull(requestLogs.model),
+        ne(requestLogs.model, "")
+      )
+    )
+    .groupBy(groupCol, requestLogs.model);
+
+  return buildDistributionMap(
+    distRows.map((r) => ({ groupKey: r.groupKey, name: r.name, cnt: r.cnt }))
+  );
+}
+
+/**
+ * Per-model upstream distribution (model dimension only; resolves upstream names).
+ */
+async function queryUpstreamDistributionForModels(
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  modelNames: string[]
+): Promise<Map<string, DistributionItem[]>> {
+  if (modelNames.length === 0) return new Map();
+
+  const distRows = await db
+    .select({
+      groupKey: requestLogs.model,
+      upstreamIdRaw: requestLogs.upstreamId,
+      cnt: count(requestLogs.id),
+    })
+    .from(requestLogs)
+    .where(
+      and(timeFilter, inArray(requestLogs.model, modelNames), isNotNull(requestLogs.upstreamId))
+    )
+    .groupBy(requestLogs.model, requestLogs.upstreamId);
+
+  const distUpstreamIds = [
+    ...new Set(distRows.map((r) => r.upstreamIdRaw).filter(Boolean)),
+  ] as string[];
+  const distUpstreamNameMap = new Map<string, string>();
+  if (distUpstreamIds.length > 0) {
+    const details = await db.query.upstreams.findMany({
+      where: inArray(upstreams.id, distUpstreamIds),
+      columns: { id: true, name: true },
+    });
+    for (const u of details) distUpstreamNameMap.set(u.id, u.name);
+  }
+
+  return buildDistributionMap(
+    distRows.map((r) => ({
+      groupKey: r.groupKey,
+      name: r.upstreamIdRaw ? (distUpstreamNameMap.get(r.upstreamIdRaw) ?? null) : null,
+      cnt: r.cnt,
+    }))
+  );
+}
+
+async function queryUpstreamRanking(
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  sortBy: LeaderboardSortBy,
+  order: LeaderboardSortOrder,
+  limit: number
+): Promise<LeaderboardUpstreamItem[]> {
+  const rows = await queryRankingRows("upstreams", timeFilter, sortBy, order, limit);
+  const ids = rows.map((r) => r.key!).filter(Boolean);
+
+  const detailMap = new Map<string, { name: string; providerType: string }>();
+  if (ids.length > 0) {
+    const details = await db.query.upstreams.findMany({
+      where: inArray(upstreams.id, ids),
+      columns: { id: true, name: true, routeCapabilities: true },
+    });
+    for (const u of details) {
+      detailMap.set(u.id, {
+        name: u.name,
+        providerType: getPrimaryProviderByCapabilities(u.routeCapabilities) ?? "unknown",
+      });
+    }
+  }
+
+  const distMap = await queryModelDistribution("upstreams", timeFilter, ids);
+
+  return rows.map((row) => ({
+    id: row.key!,
+    name: detailMap.get(row.key!)?.name || "Unknown",
+    providerType: detailMap.get(row.key!)?.providerType || "unknown",
+    ...buildRankingMetrics(row),
+    modelDistribution: distMap.get(row.key!) ?? [],
+  }));
+}
+
+async function queryModelRanking(
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  sortBy: LeaderboardSortBy,
+  order: LeaderboardSortOrder,
+  limit: number
+): Promise<LeaderboardModelItem[]> {
+  const rows = await queryRankingRows("models", timeFilter, sortBy, order, limit);
+  const names = rows.map((r) => r.key!).filter(Boolean);
+
+  const distMap = await queryUpstreamDistributionForModels(timeFilter, names);
+
+  return rows.map((row) => ({
+    model: row.key || "Unknown",
+    ...buildRankingMetrics(row),
+    upstreamDistribution: distMap.get(row.key!) ?? [],
+  }));
+}
+
+async function queryApiKeyRanking(
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  sortBy: LeaderboardSortBy,
+  order: LeaderboardSortOrder,
+  limit: number
+): Promise<LeaderboardApiKeyItem[]> {
+  const rows = await queryRankingRows("api_keys", timeFilter, sortBy, order, limit);
+  const ids = rows.map((r) => r.key!).filter(Boolean);
+
+  const detailMap = new Map<string, { name: string; keyPrefix: string }>();
+  if (ids.length > 0) {
+    const details = await db.query.apiKeys.findMany({
+      where: inArray(apiKeys.id, ids),
+      columns: { id: true, name: true, keyPrefix: true },
+    });
+    for (const key of details) {
+      detailMap.set(key.id, { name: key.name, keyPrefix: key.keyPrefix });
+    }
+  }
+
+  const distMap = await queryModelDistribution("api_keys", timeFilter, ids);
+
+  return rows.map((row) => ({
+    id: row.key!,
+    name: detailMap.get(row.key!)?.name || "Unknown",
+    keyPrefix: detailMap.get(row.key!)?.keyPrefix || "sk-****",
+    ...buildRankingMetrics(row),
+    modelDistribution: distMap.get(row.key!) ?? [],
+  }));
+}
+
+async function queryUserRanking(
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  sortBy: LeaderboardSortBy,
+  order: LeaderboardSortOrder,
+  limit: number
+): Promise<LeaderboardUserItem[]> {
+  // Owner-level usage attributed through the redundant request_logs.user_id
+  // snapshot. Requests without an owner (user_id is null, e.g. admin-token
+  // traffic) are excluded so the board only ranks real member accounts.
+  const rows = await queryRankingRows("users", timeFilter, sortBy, order, limit);
+  const ids = rows.map((r) => r.key!).filter(Boolean);
+
+  const detailMap = new Map<string, { username: string; displayName: string }>();
+  if (ids.length > 0) {
+    const details = await db.query.users.findMany({
+      where: inArray(users.id, ids),
+      columns: { id: true, username: true, displayName: true },
+    });
+    for (const u of details) {
+      detailMap.set(u.id, { username: u.username, displayName: u.displayName });
+    }
+  }
+
+  const distMap = await queryModelDistribution("users", timeFilter, ids);
+
+  return rows.map((row) => ({
+    id: row.key!,
+    username: detailMap.get(row.key!)?.username || "Unknown",
+    displayName: detailMap.get(row.key!)?.displayName || "Unknown",
+    ...buildRankingMetrics(row),
+    modelDistribution: distMap.get(row.key!) ?? [],
+  }));
+}
+
+function buildLeaderboardTimeFilter(startTime: Date, endTime: Date | null) {
+  return endTime
+    ? and(gte(requestLogs.createdAt, startTime), lt(requestLogs.createdAt, endTime))
+    : gte(requestLogs.createdAt, startTime);
+}
+
+async function queryDimensionRanking(
+  dimension: LeaderboardDimension,
+  timeFilter: ReturnType<typeof gte> | ReturnType<typeof and>,
+  sortBy: LeaderboardSortBy,
+  order: LeaderboardSortOrder,
+  limit: number
+): Promise<LeaderboardItem[]> {
+  switch (dimension) {
+    case "upstreams":
+      return queryUpstreamRanking(timeFilter, sortBy, order, limit);
+    case "models":
+      return queryModelRanking(timeFilter, sortBy, order, limit);
+    case "api_keys":
+      return queryApiKeyRanking(timeFilter, sortBy, order, limit);
+    case "users":
+      return queryUserRanking(timeFilter, sortBy, order, limit);
+  }
+}
+
+function rankingItemKey(dimension: LeaderboardDimension, item: LeaderboardItem): string {
+  return dimension === "models"
+    ? (item as LeaderboardModelItem).model
+    : (item as LeaderboardUpstreamItem | LeaderboardApiKeyItem | LeaderboardUserItem).id;
+}
+
+/**
+ * Single-dimension ranking with configurable sort and optional
+ * previous-period comparison (rank movement + request-count delta).
+ */
+export async function getRankings(query: RankingsQuery): Promise<StatsRankings> {
+  if (process.env.NODE_ENV !== "test") {
+    await reconcileStaleInProgressRequestLogs().catch(() => undefined);
+  }
+
+  const {
+    dimension,
+    sortBy = "requests",
+    order = "desc",
+    rangeType = "7d",
+    customStart,
+    customEnd,
+    tzOffsetMinutes = 0,
+    compare = false,
+  } = query;
+  const limit = Math.min(50, Math.max(1, query.limit ?? 50));
+
+  const startTime = customStart ?? getTimeRangeStart(rangeType, tzOffsetMinutes);
+  const endTime = customEnd ?? null;
+  const timeFilter = buildLeaderboardTimeFilter(startTime, endTime);
+
+  const items = await queryDimensionRanking(dimension, timeFilter, sortBy, order, limit);
+
+  if (compare) {
+    // Previous window of equal length, ending where the current one starts.
+    const effectiveEnd = endTime ?? new Date();
+    const windowMs = effectiveEnd.getTime() - startTime.getTime();
+    const prevFilter = buildLeaderboardTimeFilter(
+      new Date(startTime.getTime() - windowMs),
+      startTime
+    );
+    const prevRows = await queryRankingRows(dimension, prevFilter, sortBy, order, limit);
+    const prevMap = new Map<string, { rank: number; requestCount: number }>();
+    prevRows.forEach((row, index) => {
+      if (row.key) prevMap.set(row.key, { rank: index + 1, requestCount: row.requestCount });
+    });
+
+    for (const item of items) {
+      const prev = prevMap.get(rankingItemKey(dimension, item));
+      item.comparison = prev
+        ? { prevRank: prev.rank, prevRequestCount: prev.requestCount }
+        : { prevRank: null, prevRequestCount: null };
+    }
+  }
+
+  return {
+    range: customStart ? "custom" : rangeType,
+    dimension,
+    sortBy,
+    order,
+    items,
+  };
+}
+
+/**
+ * Get leaderboard statistics for top performers (all four dimensions,
+ * request-count order). Kept for the dashboard overview section.
  */
 export async function getLeaderboardStats(
   rangeType: TimeRange = "7d",
@@ -615,365 +1080,15 @@ export async function getLeaderboardStats(
 
   const startTime = customStart ?? getTimeRangeStart(rangeType, tzOffsetMinutes);
   const endTime = customEnd ?? null;
-  const timeFilter = endTime
-    ? and(gte(requestLogs.createdAt, startTime), lt(requestLogs.createdAt, endTime))
-    : gte(requestLogs.createdAt, startTime);
+  const timeFilter = buildLeaderboardTimeFilter(startTime, endTime);
   limit = Math.min(50, Math.max(1, limit));
 
-  // === API Keys Leaderboard ===
-  const apiKeysResult = await db
-    .select({
-      apiKeyId: requestLogs.apiKeyId,
-      requestCount: count(requestLogs.id),
-      totalTokens: sum(requestLogs.totalTokens),
-    })
-    .from(requestLogs)
-    .where(and(timeFilter, isNotNull(requestLogs.apiKeyId)))
-    .groupBy(requestLogs.apiKeyId)
-    .orderBy(sql`count(${requestLogs.id}) DESC`)
-    .limit(limit);
-
-  const apiKeyIds = apiKeysResult.map((r) => r.apiKeyId!);
-  const apiKeyMap = new Map<string, { name: string; keyPrefix: string }>();
-
-  if (apiKeyIds.length > 0) {
-    const keyDetails = await db.query.apiKeys.findMany({
-      where: inArray(apiKeys.id, apiKeyIds),
-      columns: { id: true, name: true, keyPrefix: true },
-    });
-    for (const key of keyDetails) {
-      apiKeyMap.set(key.id, { name: key.name, keyPrefix: key.keyPrefix });
-    }
-  }
-
-  // API key costs
-  const apiKeyCostMap = new Map<string, number>();
-  if (apiKeyIds.length > 0) {
-    const costRows = await db
-      .select({
-        apiKeyId: requestLogs.apiKeyId,
-        totalCost: sql<
-          string | null
-        >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
-      })
-      .from(requestLogs)
-      .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
-      .where(and(timeFilter, inArray(requestLogs.apiKeyId, apiKeyIds)))
-      .groupBy(requestLogs.apiKeyId);
-    for (const row of costRows) {
-      if (row.apiKeyId) {
-        apiKeyCostMap.set(row.apiKeyId, row.totalCost ? Number(row.totalCost) : 0);
-      }
-    }
-  }
-
-  // API key model distributions
-  const apiKeyModelDistMap = new Map<string, DistributionItem[]>();
-  if (apiKeyIds.length > 0) {
-    const distRows = await db
-      .select({
-        groupKey: requestLogs.apiKeyId,
-        name: requestLogs.model,
-        cnt: count(requestLogs.id),
-      })
-      .from(requestLogs)
-      .where(
-        and(
-          timeFilter,
-          inArray(requestLogs.apiKeyId, apiKeyIds),
-          isNotNull(requestLogs.model),
-          ne(requestLogs.model, "")
-        )
-      )
-      .groupBy(requestLogs.apiKeyId, requestLogs.model);
-
-    const mapped = buildDistributionMap(
-      distRows.map((r) => ({ groupKey: r.groupKey, name: r.name, cnt: r.cnt }))
-    );
-    for (const [k, v] of mapped) apiKeyModelDistMap.set(k, v);
-  }
-
-  const apiKeysLeaderboard: LeaderboardApiKeyItem[] = apiKeysResult.map((row) => ({
-    id: row.apiKeyId!,
-    name: apiKeyMap.get(row.apiKeyId!)?.name || "Unknown",
-    keyPrefix: apiKeyMap.get(row.apiKeyId!)?.keyPrefix || "sk-****",
-    requestCount: row.requestCount,
-    totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
-    totalCostUsd: apiKeyCostMap.get(row.apiKeyId!) ?? 0,
-    modelDistribution: apiKeyModelDistMap.get(row.apiKeyId!) ?? [],
-  }));
-
-  // === Upstreams Leaderboard ===
-  const upstreamsResult = await db
-    .select({
-      upstreamId: requestLogs.upstreamId,
-      requestCount: count(requestLogs.id),
-      totalTokens: sum(requestLogs.totalTokens),
-      avgTtft: sql<
-        string | null
-      >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
-      totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
-      totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
-      totalCacheReadTokens: sum(requestLogs.cacheReadTokens),
-      totalEffectivePromptTokens: sql<number>`
-        sum(
-          case
-            when ${requestLogs.promptTokens} >= ${requestLogs.cacheReadTokens}
-              then ${requestLogs.promptTokens}
-            else ${requestLogs.promptTokens} + ${requestLogs.cacheReadTokens}
-          end
-        )
-      `,
-    })
-    .from(requestLogs)
-    .where(and(timeFilter, isNotNull(requestLogs.upstreamId)))
-    .groupBy(requestLogs.upstreamId)
-    .orderBy(sql`count(${requestLogs.id}) DESC`)
-    .limit(limit);
-
-  const upstreamIds = upstreamsResult.map((r) => r.upstreamId!);
-  const upstreamMap = new Map<string, { name: string; providerType: string }>();
-
-  if (upstreamIds.length > 0) {
-    const upstreamDetails = await db.query.upstreams.findMany({
-      where: inArray(upstreams.id, upstreamIds),
-      columns: { id: true, name: true, routeCapabilities: true },
-    });
-    for (const u of upstreamDetails) {
-      upstreamMap.set(u.id, {
-        name: u.name,
-        providerType: getPrimaryProviderByCapabilities(u.routeCapabilities) ?? "unknown",
-      });
-    }
-  }
-
-  // Upstream costs
-  const upstreamCostMap = new Map<string, number>();
-  if (upstreamIds.length > 0) {
-    const costRows = await db
-      .select({
-        upstreamId: requestLogs.upstreamId,
-        totalCost: sql<
-          string | null
-        >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
-      })
-      .from(requestLogs)
-      .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
-      .where(and(timeFilter, inArray(requestLogs.upstreamId, upstreamIds)))
-      .groupBy(requestLogs.upstreamId);
-    for (const row of costRows) {
-      if (row.upstreamId) {
-        upstreamCostMap.set(row.upstreamId, row.totalCost ? Number(row.totalCost) : 0);
-      }
-    }
-  }
-
-  // Upstream model distributions
-  const upstreamModelDistMap = new Map<string, DistributionItem[]>();
-  if (upstreamIds.length > 0) {
-    const distRows = await db
-      .select({
-        groupKey: requestLogs.upstreamId,
-        name: requestLogs.model,
-        cnt: count(requestLogs.id),
-      })
-      .from(requestLogs)
-      .where(
-        and(
-          timeFilter,
-          inArray(requestLogs.upstreamId, upstreamIds),
-          isNotNull(requestLogs.model),
-          ne(requestLogs.model, "")
-        )
-      )
-      .groupBy(requestLogs.upstreamId, requestLogs.model);
-
-    const mapped = buildDistributionMap(
-      distRows.map((r) => ({ groupKey: r.groupKey, name: r.name, cnt: r.cnt }))
-    );
-    for (const [k, v] of mapped) upstreamModelDistMap.set(k, v);
-  }
-
-  const upstreamsLeaderboard: LeaderboardUpstreamItem[] = upstreamsResult.map((row) => {
-    const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
-    const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
-    const cacheRead = row.totalCacheReadTokens ? Number(row.totalCacheReadTokens) : 0;
-    const effectivePrompt = row.totalEffectivePromptTokens
-      ? Number(row.totalEffectivePromptTokens)
-      : 0;
-    const rawCacheHit = effectivePrompt > 0 ? (cacheRead / effectivePrompt) * 100 : 0;
-
-    return {
-      id: row.upstreamId!,
-      name: upstreamMap.get(row.upstreamId!)?.name || "Unknown",
-      providerType: upstreamMap.get(row.upstreamId!)?.providerType || "unknown",
-      requestCount: row.requestCount,
-      totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
-      avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0,
-      avgTps: dur > 0 ? Math.round((compTokens / dur) * 1000 * 10) / 10 : 0,
-      cacheHitRate: Math.round(Math.min(Math.max(rawCacheHit, 0), 100) * 10) / 10,
-      totalCostUsd: upstreamCostMap.get(row.upstreamId!) ?? 0,
-      modelDistribution: upstreamModelDistMap.get(row.upstreamId!) ?? [],
-    };
-  });
-
-  // === Models Leaderboard ===
-  const modelsResult = await db
-    .select({
-      model: requestLogs.model,
-      requestCount: count(requestLogs.id),
-      totalTokens: sum(requestLogs.totalTokens),
-      avgTtft: sql<
-        string | null
-      >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
-      totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
-      totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
-    })
-    .from(requestLogs)
-    .where(and(timeFilter, isNotNull(requestLogs.model), ne(requestLogs.model, "")))
-    .groupBy(requestLogs.model)
-    .orderBy(sql`count(${requestLogs.id}) DESC`)
-    .limit(limit);
-
-  const modelNames = modelsResult.map((r) => r.model!);
-
-  // Model upstream distributions
-  const modelUpstreamDistMap = new Map<string, DistributionItem[]>();
-  if (modelNames.length > 0) {
-    const distRows = await db
-      .select({
-        groupKey: requestLogs.model,
-        upstreamIdRaw: requestLogs.upstreamId,
-        cnt: count(requestLogs.id),
-      })
-      .from(requestLogs)
-      .where(
-        and(timeFilter, inArray(requestLogs.model, modelNames), isNotNull(requestLogs.upstreamId))
-      )
-      .groupBy(requestLogs.model, requestLogs.upstreamId);
-
-    // Map upstream IDs to names
-    const distUpstreamIds = [
-      ...new Set(distRows.map((r) => r.upstreamIdRaw).filter(Boolean)),
-    ] as string[];
-    const distUpstreamNameMap = new Map<string, string>();
-    if (distUpstreamIds.length > 0) {
-      const details = await db.query.upstreams.findMany({
-        where: inArray(upstreams.id, distUpstreamIds),
-        columns: { id: true, name: true },
-      });
-      for (const u of details) distUpstreamNameMap.set(u.id, u.name);
-    }
-
-    const mapped = buildDistributionMap(
-      distRows.map((r) => ({
-        groupKey: r.groupKey,
-        name: r.upstreamIdRaw ? (distUpstreamNameMap.get(r.upstreamIdRaw) ?? null) : null,
-        cnt: r.cnt,
-      }))
-    );
-    for (const [k, v] of mapped) modelUpstreamDistMap.set(k, v);
-  }
-
-  const modelsLeaderboard: LeaderboardModelItem[] = modelsResult.map((row) => {
-    const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
-    const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
-
-    return {
-      model: row.model || "Unknown",
-      requestCount: row.requestCount,
-      totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
-      avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0,
-      avgTps: dur > 0 ? Math.round((compTokens / dur) * 1000 * 10) / 10 : 0,
-      upstreamDistribution: modelUpstreamDistMap.get(row.model!) ?? [],
-    };
-  });
-
-  // === Users Leaderboard ===
-  // Owner-level usage attributed through the redundant request_logs.user_id
-  // snapshot. Requests without an owner (user_id is null, e.g. admin-token
-  // traffic) are excluded so the board only ranks real member accounts.
-  const usersResult = await db
-    .select({
-      userId: requestLogs.userId,
-      requestCount: count(requestLogs.id),
-      totalTokens: sum(requestLogs.totalTokens),
-    })
-    .from(requestLogs)
-    .where(and(timeFilter, isNotNull(requestLogs.userId)))
-    .groupBy(requestLogs.userId)
-    .orderBy(sql`count(${requestLogs.id}) DESC`)
-    .limit(limit);
-
-  const userIds = usersResult.map((r) => r.userId!);
-  const userMap = new Map<string, { username: string; displayName: string }>();
-
-  if (userIds.length > 0) {
-    const userDetails = await db.query.users.findMany({
-      where: inArray(users.id, userIds),
-      columns: { id: true, username: true, displayName: true },
-    });
-    for (const u of userDetails) {
-      userMap.set(u.id, { username: u.username, displayName: u.displayName });
-    }
-  }
-
-  // User costs
-  const userCostMap = new Map<string, number>();
-  if (userIds.length > 0) {
-    const costRows = await db
-      .select({
-        userId: requestLogs.userId,
-        totalCost: sql<
-          string | null
-        >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
-      })
-      .from(requestLogs)
-      .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
-      .where(and(timeFilter, inArray(requestLogs.userId, userIds)))
-      .groupBy(requestLogs.userId);
-    for (const row of costRows) {
-      if (row.userId) {
-        userCostMap.set(row.userId, row.totalCost ? Number(row.totalCost) : 0);
-      }
-    }
-  }
-
-  // User model distributions
-  const userModelDistMap = new Map<string, DistributionItem[]>();
-  if (userIds.length > 0) {
-    const distRows = await db
-      .select({
-        groupKey: requestLogs.userId,
-        name: requestLogs.model,
-        cnt: count(requestLogs.id),
-      })
-      .from(requestLogs)
-      .where(
-        and(
-          timeFilter,
-          inArray(requestLogs.userId, userIds),
-          isNotNull(requestLogs.model),
-          ne(requestLogs.model, "")
-        )
-      )
-      .groupBy(requestLogs.userId, requestLogs.model);
-
-    const mapped = buildDistributionMap(
-      distRows.map((r) => ({ groupKey: r.groupKey, name: r.name, cnt: r.cnt }))
-    );
-    for (const [k, v] of mapped) userModelDistMap.set(k, v);
-  }
-
-  const usersLeaderboard: LeaderboardUserItem[] = usersResult.map((row) => ({
-    id: row.userId!,
-    username: userMap.get(row.userId!)?.username || "Unknown",
-    displayName: userMap.get(row.userId!)?.displayName || "Unknown",
-    requestCount: row.requestCount,
-    totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
-    totalCostUsd: userCostMap.get(row.userId!) ?? 0,
-    modelDistribution: userModelDistMap.get(row.userId!) ?? [],
-  }));
+  // Sequential on purpose: keeps query order deterministic for tests and
+  // avoids bursting the connection pool with 8 concurrent aggregations.
+  const apiKeysLeaderboard = await queryApiKeyRanking(timeFilter, "requests", "desc", limit);
+  const upstreamsLeaderboard = await queryUpstreamRanking(timeFilter, "requests", "desc", limit);
+  const modelsLeaderboard = await queryModelRanking(timeFilter, "requests", "desc", limit);
+  const usersLeaderboard = await queryUserRanking(timeFilter, "requests", "desc", limit);
 
   return {
     range: rangeType,
