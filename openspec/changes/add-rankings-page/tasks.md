@@ -11,9 +11,9 @@
 
 ## 2. 后端：API 路由与类型
 
-- [ ] 2.1 leaderboard route 解析并校验 `dimension` / `sort_by` / `compare` 参数，非法值 400
-- [ ] 2.2 api-transformers 与 `src/types/api.ts` 增补单维度响应、错误率、环比字段
-- [ ] 2.3 route 单测：参数校验、单维度响应形态、向后兼容路径
+- [x] 2.1 leaderboard route 解析并校验 `dimension` / `sort_by` / `compare` 参数，非法值 400
+- [x] 2.2 api-transformers 与 `src/types/api.ts` 增补单维度响应、错误率、环比字段
+- [x] 2.3 route 单测：参数校验、单维度响应形态、向后兼容路径
 
 ## 3. 前端：排行榜页面
 
