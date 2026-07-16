@@ -443,3 +443,93 @@ describe("LogsPage server filter mapping", () => {
     expect(lastLogsTableProps?.windowStats).toBeUndefined();
   });
 });
+
+describe("LogsPage URL filter initialization", () => {
+  beforeEach(() => {
+    useSearchParamsMock.mockReset();
+    useRequestLogsMock.mockReset();
+    useRequestLogLiveMock.mockReset();
+    useRequestLogStatsMock.mockReset();
+    useLivePulseContextMock.mockReset();
+    lastLogsTableProps = null;
+    useRequestLogLiveMock.mockReturnValue({
+      connectionState: "fallback",
+      fallbackRefetchIntervalMs: 5000,
+    });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+    useLivePulseContextMock.mockReturnValue(null);
+    useRequestLogsMock.mockReturnValue({
+      isLoading: false,
+      data: { items: [], total: 0, total_pages: 1, page: 1, page_size: 20 },
+      refetch: vi.fn(),
+    });
+  });
+
+  function setParams(params: Record<string, string>) {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => params[key] ?? null,
+    });
+  }
+
+  it("seeds upstream, api key, model and a custom time window from URL params", () => {
+    setParams({
+      upstream_id: "up-1",
+      api_key_id: "key-1",
+      model: "gpt-5",
+      start_time: "2024-06-08T12:00:00.000Z",
+      end_time: "2024-06-15T12:00:00.000Z",
+    });
+
+    render(<LogsPage />);
+
+    expect(useRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      20,
+      {
+        upstream_id: "up-1",
+        api_key_id: "key-1",
+        model: "gpt-5",
+        start_time: "2024-06-08T12:00:00.000Z",
+        end_time: "2024-06-15T12:00:00.000Z",
+      },
+      expect.objectContaining({ refetchInterval: 5000 })
+    );
+  });
+
+  it("defaults the window end to now when only start_time is provided", () => {
+    setParams({ upstream_id: "up-1", start_time: "2024-06-08T12:00:00.000Z" });
+
+    render(<LogsPage />);
+
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as Record<string, string>;
+    expect(filters.upstream_id).toBe("up-1");
+    expect(filters.start_time).toBe("2024-06-08T12:00:00.000Z");
+    expect(new Date(filters.end_time).getTime()).toBeGreaterThan(
+      new Date(filters.start_time).getTime()
+    );
+    expect(filters.time_range).toBeUndefined();
+  });
+
+  it("ignores an invalid time window and falls back to the default range", () => {
+    setParams({ start_time: "not-a-date", end_time: "2024-06-15T12:00:00.000Z" });
+
+    render(<LogsPage />);
+
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as Record<string, string>;
+    expect(filters.start_time).toBeUndefined();
+    expect(filters.time_range).toBe("30d");
+  });
+
+  it("does not lock later filter interactions to the URL seed", () => {
+    setParams({ upstream_id: "up-1" });
+
+    render(<LogsPage />);
+
+    act(() => {
+      lastLogsTableProps?.onServerFiltersChange?.({ upstreamId: "" });
+    });
+
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as Record<string, string>;
+    expect(filters.upstream_id).toBeUndefined();
+  });
+});

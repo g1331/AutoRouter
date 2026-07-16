@@ -27,8 +27,8 @@
 
 ## 4. logs 页 URL 过滤初始化
 
-- [ ] 4.1 `logs/page.tsx` 从 URL 初始化 `upstream_id` / `api_key_id` / `model` / `start_time` / `end_time`（照 `user_id` 模式；时间对初始化为 custom 范围）
-- [ ] 4.2 测试：带参进入初始过滤生效、初始化后交互不被锁定
+- [x] 4.1 `logs/page.tsx` 从 URL 初始化 `upstream_id` / `api_key_id` / `model` / `start_time` / `end_time`（照 `user_id` 模式；时间对初始化为 custom 范围）
+- [x] 4.2 测试：带参进入初始过滤生效、初始化后交互不被锁定
 
 ## 5. E2E 与收尾
 
