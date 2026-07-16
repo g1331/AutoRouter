@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { Cpu, Key, Server, Trophy, Users } from "lucide-react";
+import { ArrowRight, Cpu, Key, Server, Trophy, Users } from "lucide-react";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -195,9 +195,18 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Trophy className="h-4 w-4 text-amber-500" />
-        <h3 className="type-title-medium text-foreground">{t("stats.leaderboard")}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-amber-500" />
+          <h3 className="type-title-medium text-foreground">{t("stats.leaderboard")}</h3>
+        </div>
+        <Link
+          href="/rankings"
+          className="inline-flex items-center gap-1 type-label-medium text-muted-foreground transition-colors hover:text-amber-500"
+        >
+          {t("stats.viewFullRankings")}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
       {/* Upstream Ranking */}

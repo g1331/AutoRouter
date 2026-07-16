@@ -101,6 +101,7 @@
   },
   "nav": {
     "dashboard": "仪表盘",
+    "rankings": "排行榜",
     "apiKeys": "密钥管理",
     "upstreams": "上游管理",
     "logs": "请求日志",
@@ -115,6 +116,36 @@
     "billing": "计费",
     "cliproxy": "CLIProxyAPI",
     "users": "用户管理"
+  },
+  "rankings": {
+    "pageTitle": "排行榜",
+    "title": "排行榜",
+    "description": "上游、模型、API Key 与用户的完整排行",
+    "dimensions": {
+      "upstreams": "上游",
+      "models": "模型",
+      "apiKeys": "API Key",
+      "users": "用户"
+    },
+    "columns": {
+      "name": "名称",
+      "requests": "请求数",
+      "tokens": "Tokens",
+      "cost": "费用",
+      "ttft": "平均 TTFT",
+      "tps": "平均 TPS",
+      "cacheHit": "缓存命中",
+      "errorRate": "错误率",
+      "change": "环比"
+    },
+    "newEntry": "新上榜",
+    "viewLogs": "查看日志",
+    "empty": "该时间范围内暂无数据",
+    "noDistribution": "暂无构成数据",
+    "distribution": {
+      "models": "模型构成",
+      "upstreams": "上游构成"
+    }
   },
   "users": {
     "pageTitle": "用户管理",
@@ -300,7 +331,8 @@
       "upstreamDistribution": "上游分布",
       "others": "其他",
       "vsYesterday": "较昨日",
-      "noChange": "与昨日持平"
+      "noChange": "与昨日持平",
+      "viewFullRankings": "查看完整排行"
     },
     "timeRange": {
       "all": "全部",

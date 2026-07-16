@@ -17,13 +17,13 @@
 
 ## 3. 前端：排行榜页面
 
-- [ ] 3.1 新增 `use-rankings` 查询 hook（dimension/range/sort/compare 参数化）
-- [ ] 3.2 新增 `/rankings` 页面骨架：维度 tab、TimeRangeSelector 复用、视图状态 URL 化（router.replace 同步，useSearchParams 初始化）
-- [ ] 3.3 排行表格组件：7 项指标列、列头排序交互、行内比例条（纯 CSS）、错误率与环比（↑↓/新上榜）渲染、空状态
-- [ ] 3.4 行展开构成明细 + 「查看日志」链接（拼对象过滤与当前时间窗）
-- [ ] 3.5 sidebar 主导航加「排行榜」入口；dashboard `LeaderboardSection` 加「查看完整排行」链接
-- [ ] 3.6 `en.json` / `zh-CN.json` 双语文案
-- [ ] 3.7 组件测试：表格渲染与排序交互、比例条、展开明细、URL 状态初始化与恢复
+- [x] 3.1 新增 `use-rankings` 查询 hook（dimension/range/sort/compare 参数化）
+- [x] 3.2 新增 `/rankings` 页面骨架：维度 tab、TimeRangeSelector 复用、视图状态 URL 化（router.replace 同步，useSearchParams 初始化）
+- [x] 3.3 排行表格组件：7 项指标列、列头排序交互、行内比例条（纯 CSS）、错误率与环比（↑↓/新上榜）渲染、空状态
+- [x] 3.4 行展开构成明细 + 「查看日志」链接（拼对象过滤与当前时间窗）
+- [x] 3.5 sidebar 主导航加「排行榜」入口；dashboard `LeaderboardSection` 加「查看完整排行」链接
+- [x] 3.6 `en.json` / `zh-CN.json` 双语文案
+- [x] 3.7 组件测试：表格渲染与排序交互、比例条、展开明细、URL 状态初始化与恢复
 
 ## 4. logs 页 URL 过滤初始化
 
