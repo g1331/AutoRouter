@@ -6,7 +6,11 @@ import { useTranslations } from "next-intl";
 import { Cpu, Key, RotateCcw, Search, Server, Trophy, Users } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
-import { RankingsTable, type RankingsLogsWindow } from "@/components/rankings/rankings-table";
+import {
+  itemKey,
+  RankingsTable,
+  type RankingsLogsWindow,
+} from "@/components/rankings/rankings-table";
 import {
   buildQuery,
   filterRankingsItems,
@@ -31,6 +35,11 @@ import { usePathname, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import type { RankingsDimension, RankingsSortField } from "@/types/api";
 
+// Radix Select forbids empty item values, and a NUL byte can never appear in a
+// real upstream name — unlike a literal "all", which a user could name an
+// upstream after and make it unselectable.
+const ALL_UPSTREAMS = "\u0000all";
+
 const DIMENSIONS: Array<{ key: RankingsDimension; icon: typeof Server; labelKey: string }> = [
   { key: "upstreams", icon: Server, labelKey: "dimensions.upstreams" },
   { key: "models", icon: Cpu, labelKey: "dimensions.models" },
@@ -47,42 +56,26 @@ export default function RankingsPage() {
   const [state, setState] = useState<RankingsViewState>(() =>
     readStateFromUrl(new URLSearchParams(searchParams.toString()))
   );
-  // Local echo for the search input so typing stays responsive while the URL
-  // commit is debounced (same pattern as users-table).
-  const [searchInput, setSearchInput] = useState(state.query);
-  const searchDebounceRef = useRef<number | null>(null);
-  // Latest state for the debounced commit — a 300ms-old closure must not
-  // clobber a sort/dimension change made in between.
-  const stateRef = useRef(state);
+  // State updates immediately (typing filters the table live); only the URL
+  // write is debounced, in one place, so text/number keystrokes don't spam
+  // router.replace and a stale closure can never clobber a newer change.
+  const urlSyncRef = useRef<number | null>(null);
   useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-  useEffect(() => {
+    if (urlSyncRef.current != null) window.clearTimeout(urlSyncRef.current);
+    urlSyncRef.current = window.setTimeout(() => {
+      const query = buildQuery(state);
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }, 300);
     return () => {
-      if (searchDebounceRef.current != null) window.clearTimeout(searchDebounceRef.current);
+      if (urlSyncRef.current != null) window.clearTimeout(urlSyncRef.current);
     };
-  }, []);
+  }, [state, pathname, router]);
 
   function applyState(next: RankingsViewState) {
     setState(next);
-    const query = buildQuery(next);
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }
-
-  function handleSearchInputChange(value: string) {
-    setSearchInput(value);
-    if (searchDebounceRef.current != null) window.clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = window.setTimeout(() => {
-      const trimmed = value.trim();
-      if (trimmed !== stateRef.current.query) {
-        applyState({ ...stateRef.current, query: trimmed });
-      }
-    }, 300);
   }
 
   function handleResetFilters() {
-    if (searchDebounceRef.current != null) window.clearTimeout(searchDebounceRef.current);
-    setSearchInput("");
     applyState({ ...state, query: "", minRequests: 0, errorsOnly: false, upstream: "" });
   }
 
@@ -109,6 +102,14 @@ export default function RankingsPage() {
   const items = useMemo(() => data?.items ?? [], [data]);
   const filteredItems = useMemo(() => filterRankingsItems(items, state), [items, state]);
   const filtersActive = hasActiveFilters(state);
+
+  // Ranks computed over the unfiltered set so a filtered view keeps the true
+  // leaderboard positions (rank numbers, medals, prev_rank comparison).
+  const globalRanks = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach((item, index) => map.set(itemKey(state.dimension, item), index + 1));
+    return map;
+  }, [items, state.dimension]);
 
   // Upstream filter options come from the current dataset itself (the
   // leaderboard returns the full aggregated set, no extra endpoint needed).
@@ -198,8 +199,8 @@ export default function RankingsPage() {
                 type="text"
                 aria-label={t("filters.searchPlaceholder")}
                 placeholder={t("filters.searchPlaceholder")}
-                value={searchInput}
-                onChange={(e) => handleSearchInputChange(e.target.value)}
+                value={state.query}
+                onChange={(e) => applyState({ ...state, query: e.target.value })}
                 className="pl-8"
               />
             </div>
@@ -220,21 +221,27 @@ export default function RankingsPage() {
             />
             {state.dimension === "models" && (
               <Select
-                value={state.upstream || "all"}
+                value={state.upstream || ALL_UPSTREAMS}
                 onValueChange={(value) =>
-                  applyState({ ...state, upstream: value === "all" ? "" : value })
+                  applyState({ ...state, upstream: value === ALL_UPSTREAMS ? "" : value })
                 }
               >
                 <SelectTrigger aria-label={t("filters.upstream")} className="w-full sm:w-[170px]">
                   <SelectValue placeholder={t("filters.upstream")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t("filters.allUpstreams")}</SelectItem>
+                  <SelectItem value={ALL_UPSTREAMS}>{t("filters.allUpstreams")}</SelectItem>
                   {upstreamOptions.map((name) => (
                     <SelectItem key={name} value={name}>
                       {name}
                     </SelectItem>
                   ))}
+                  {/* A URL-provided upstream absent from the current data still
+                      renders as an option, so the active filter stays visible
+                      (and clearable) instead of hiding behind the placeholder. */}
+                  {state.upstream && !upstreamOptions.includes(state.upstream) && (
+                    <SelectItem value={state.upstream}>{state.upstream}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             )}
@@ -273,6 +280,7 @@ export default function RankingsPage() {
           onSortChange={handleSortChange}
           logsWindow={logsWindow}
           emptyLabel={filtersActive && items.length > 0 ? t("noMatch") : undefined}
+          ranks={globalRanks}
         />
       </div>
     </>

@@ -39,6 +39,13 @@ interface RankingsTableProps {
   logsWindow: RankingsLogsWindow;
   /** Overrides the default empty-state text (e.g. "no match" while filters are active). */
   emptyLabel?: string;
+  /**
+   * Global leaderboard rank per itemKey. When the caller filters `items`, pass
+   * the ranks computed over the unfiltered set so #rank, medals, and the
+   * prev_rank comparison keep their true positions instead of renumbering the
+   * filtered subset. Falls back to the list index when absent.
+   */
+  ranks?: ReadonlyMap<string, number>;
 }
 
 // One entry per metric: header label, raw value (ratio bar / sorting), and
@@ -103,7 +110,7 @@ function metricValue(item: RankingsItem, field: RankingsSortField): number {
 
 const RANK_COLORS = ["text-amber-500", "text-status-info", "text-status-success"];
 
-function itemKey(dimension: RankingsDimension, item: RankingsItem): string {
+export function itemKey(dimension: RankingsDimension, item: RankingsItem): string {
   return dimension === "models" && "model" in item ? item.model : (item as { id: string }).id;
 }
 
@@ -139,6 +146,8 @@ function errorRateClass(rate: number): string | undefined {
   return undefined;
 }
 
+// Keep in sync with itemSearchTexts in rankings-url-state.ts: whatever text
+// this cell renders must stay searchable there.
 function ItemName({ dimension, item }: { dimension: RankingsDimension; item: RankingsItem }) {
   if (dimension === "models" && "model" in item) {
     return <p className="type-body-small truncate text-foreground">{item.model}</p>;
@@ -249,6 +258,7 @@ export function RankingsTable({
   onSortChange,
   logsWindow,
   emptyLabel,
+  ranks,
 }: RankingsTableProps) {
   const t = useTranslations("rankings");
   const tCommon = useTranslations("common");
@@ -313,7 +323,7 @@ export function RankingsTable({
           ) : (
             items.map((item, index) => {
               const key = itemKey(dimension, item);
-              const rank = index + 1;
+              const rank = ranks?.get(key) ?? index + 1;
               const expanded = expandedKey === key;
               const sortValue = metricValue(item, sortBy);
               const barPct = maxSortValue > 0 ? (sortValue / maxSortValue) * 100 : 0;

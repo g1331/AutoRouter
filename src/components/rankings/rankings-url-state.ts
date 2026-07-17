@@ -74,9 +74,11 @@ export function readStateFromUrl(params: URLSearchParams): RankingsViewState {
   }
 
   const minRaw = Number.parseInt(params.get("min") ?? "", 10);
+  const dimension =
+    dim && RANKINGS_DIMENSIONS.includes(dim) ? dim : DEFAULT_RANKINGS_STATE.dimension;
 
   return {
-    dimension: dim && RANKINGS_DIMENSIONS.includes(dim) ? dim : DEFAULT_RANKINGS_STATE.dimension,
+    dimension,
     range:
       range === "custom"
         ? customRange
@@ -91,7 +93,10 @@ export function readStateFromUrl(params: URLSearchParams): RankingsViewState {
     query: params.get("q") ?? "",
     minRequests: Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 0,
     errorsOnly: params.get("errors") === "1",
-    upstream: params.get("upstream") ?? "",
+    // The upstream filter only exists on the models dimension; dropping it here
+    // keeps a stale ?upstream= on other dimensions from becoming a ghost filter
+    // (Reset button shown with no visible control, dead param re-serialized).
+    upstream: dimension === "models" ? (params.get("upstream") ?? "") : "",
   };
 }
 
@@ -112,6 +117,8 @@ export function buildQuery(state: RankingsViewState): string {
   return params.toString();
 }
 
+// Keep in sync with ItemName in rankings-table.tsx: search must match exactly
+// the fields the name cell renders, or users can search visible text and miss.
 function itemSearchTexts(item: RankingsItem): string[] {
   if ("model" in item) return [item.model];
   if ("provider_type" in item) return [item.name, item.provider_type];

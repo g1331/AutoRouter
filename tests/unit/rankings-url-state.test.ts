@@ -59,6 +59,12 @@ describe("rankings URL view state", () => {
     });
   });
 
+  it("drops the upstream param outside the models dimension", () => {
+    expect(readStateFromUrl(new URLSearchParams("dim=users&upstream=foo")).upstream).toBe("");
+    expect(readStateFromUrl(new URLSearchParams("upstream=foo")).upstream).toBe("");
+    expect(readStateFromUrl(new URLSearchParams("dim=models&upstream=foo")).upstream).toBe("foo");
+  });
+
   it("ignores invalid min values", () => {
     expect(readStateFromUrl(new URLSearchParams("min=-5")).minRequests).toBe(0);
     expect(readStateFromUrl(new URLSearchParams("min=abc")).minRequests).toBe(0);

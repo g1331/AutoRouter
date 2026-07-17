@@ -88,6 +88,8 @@ test.describe("Rankings page", () => {
     await expect(page).toHaveURL(/q=/);
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(UPSTREAM_COSTLY.name);
+    // 过滤视图保留全局排名：该上游是全量第 2 名，不因过滤变成 #1。
+    await expect(rows.first()).toContainText("#2");
 
     // 叠加请求数下限，超过唯一匹配项的请求数 → 空态显示「无匹配条目」。
     await page.getByRole("spinbutton", { name: "最少请求数" }).fill("999999");
