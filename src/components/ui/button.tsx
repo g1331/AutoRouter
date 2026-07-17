@@ -11,8 +11,10 @@ const buttonVariants = cva(
     "transition-all duration-cf-normal ease-cf-standard",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     "focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    // disabled 时 pointer-events-none 已阻断 hover 上浮，无需 translate-y-0 兜底；
+    // 该规则会覆盖绝对定位按钮（如 PasswordInput 眼睛）的 -translate-y-1/2 垂直居中
     "disabled:pointer-events-none disabled:cursor-not-allowed",
-    "disabled:opacity-45 disabled:shadow-none disabled:translate-y-0",
+    "disabled:opacity-45 disabled:shadow-none",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   ].join(" "),
   {
