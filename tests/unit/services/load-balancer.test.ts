@@ -260,6 +260,53 @@ describe("load-balancer", () => {
       await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
     });
 
+    it("should attach circuitBlockedCandidates when all candidates are blocked by open breakers", async () => {
+      const u1 = makeUpstream({ id: "u1", name: "primary" });
+      const u2 = makeUpstream({ id: "u2", name: "backup" });
+      mockFindMany.mockResolvedValue([u1, u2]);
+      setCBOpen("u1", "u2");
+
+      const error = await selectFromProviderType("openai").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(NoHealthyUpstreamsError);
+      const blocked = (error as NoHealthyUpstreamsError).circuitBlockedCandidates ?? [];
+      expect(blocked).toHaveLength(2);
+      expect(blocked.map((c) => c.upstreamId).sort()).toEqual(["u1", "u2"]);
+      const primary = blocked.find((c) => c.upstreamId === "u1")!;
+      expect(primary.upstreamName).toBe("primary");
+      expect(primary.circuitState).toBe("open");
+      // openedAt is "now" in setCBOpen, so remaining ≈ full openDuration (300s)
+      expect(primary.remainingSeconds).toBeGreaterThan(0);
+      expect(primary.remainingSeconds).toBeLessThanOrEqual(300);
+    });
+
+    it("should attach circuitBlockedCandidates when the permit acquisition rejects", async () => {
+      const u1 = makeUpstream({ id: "u1", name: "only" });
+      mockFindMany.mockResolvedValue([u1]);
+      const { CircuitBreakerOpenError } = await import("@/lib/services/circuit-breaker");
+      mockAcquireCircuitBreakerPermit.mockRejectedValue(new CircuitBreakerOpenError("u1", 42));
+
+      const error = await selectFromProviderType("openai").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(NoHealthyUpstreamsError);
+      const blocked = (error as NoHealthyUpstreamsError).circuitBlockedCandidates ?? [];
+      expect(blocked).toHaveLength(1);
+      expect(blocked[0]).toMatchObject({
+        upstreamId: "u1",
+        upstreamName: "only",
+        remainingSeconds: 42,
+      });
+    });
+
+    it("should not attach circuitBlockedCandidates when no upstreams exist", async () => {
+      mockFindMany.mockResolvedValue([]);
+
+      const error = await selectFromProviderType("openai").catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(NoHealthyUpstreamsError);
+      expect((error as NoHealthyUpstreamsError).circuitBlockedCandidates).toBeUndefined();
+    });
+
     // =========================================================================
     // Tiered routing (priority-based)
     // =========================================================================

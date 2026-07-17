@@ -37,6 +37,12 @@ import type {
   LeaderboardUpstreamItem,
   LeaderboardModelItem,
   LeaderboardUserItem,
+  LeaderboardMetrics,
+  LeaderboardComparison,
+  LeaderboardDimension,
+  LeaderboardSortBy,
+  LeaderboardSortOrder,
+  StatsRankings,
 } from "@/lib/services/stats-service";
 import type {
   BillingOverviewStats,
@@ -1461,57 +1467,66 @@ export interface DistributionItemApiResponse {
 }
 
 /**
- * API response format for leaderboard API key item (snake_case).
+ * The seven aggregate metrics shared by every leaderboard dimension (snake_case).
  */
-export interface LeaderboardApiKeyApiResponse {
-  id: string;
-  name: string;
-  key_prefix: string;
+export interface LeaderboardMetricsApiResponse {
   request_count: number;
   total_tokens: number;
   total_cost_usd: number;
+  avg_ttft_ms: number;
+  avg_tps: number;
+  cache_hit_rate: number;
+  error_rate: number;
+}
+
+/**
+ * Previous-period standing (snake_case); null prev_rank means newly ranked.
+ */
+export interface LeaderboardComparisonApiResponse {
+  prev_rank: number | null;
+  prev_request_count: number | null;
+}
+
+/**
+ * API response format for leaderboard API key item (snake_case).
+ */
+export interface LeaderboardApiKeyApiResponse extends LeaderboardMetricsApiResponse {
+  id: string;
+  name: string;
+  key_prefix: string;
   model_distribution: DistributionItemApiResponse[];
+  comparison?: LeaderboardComparisonApiResponse;
 }
 
 /**
  * API response format for leaderboard upstream item (snake_case).
  */
-export interface LeaderboardUpstreamApiResponse {
+export interface LeaderboardUpstreamApiResponse extends LeaderboardMetricsApiResponse {
   id: string;
   name: string;
   provider_type: string;
-  request_count: number;
-  total_tokens: number;
-  avg_ttft_ms: number;
-  avg_tps: number;
-  cache_hit_rate: number;
-  total_cost_usd: number;
   model_distribution: DistributionItemApiResponse[];
+  comparison?: LeaderboardComparisonApiResponse;
 }
 
 /**
  * API response format for leaderboard model item (snake_case).
  */
-export interface LeaderboardModelApiResponse {
+export interface LeaderboardModelApiResponse extends LeaderboardMetricsApiResponse {
   model: string;
-  request_count: number;
-  total_tokens: number;
-  avg_ttft_ms: number;
-  avg_tps: number;
   upstream_distribution: DistributionItemApiResponse[];
+  comparison?: LeaderboardComparisonApiResponse;
 }
 
 /**
  * API response format for leaderboard user item (snake_case).
  */
-export interface LeaderboardUserApiResponse {
+export interface LeaderboardUserApiResponse extends LeaderboardMetricsApiResponse {
   id: string;
   username: string;
   display_name: string;
-  request_count: number;
-  total_tokens: number;
-  total_cost_usd: number;
   model_distribution: DistributionItemApiResponse[];
+  comparison?: LeaderboardComparisonApiResponse;
 }
 
 /**
@@ -1523,6 +1538,22 @@ export interface StatsLeaderboardApiResponse {
   upstreams: LeaderboardUpstreamApiResponse[];
   models: LeaderboardModelApiResponse[];
   users: LeaderboardUserApiResponse[];
+}
+
+/**
+ * API response format for single-dimension rankings (snake_case).
+ */
+export interface StatsRankingsApiResponse {
+  range: TimeRange | "custom";
+  dimension: LeaderboardDimension;
+  sort_by: LeaderboardSortBy;
+  order: LeaderboardSortOrder;
+  items: (
+    | LeaderboardApiKeyApiResponse
+    | LeaderboardUpstreamApiResponse
+    | LeaderboardModelApiResponse
+    | LeaderboardUserApiResponse
+  )[];
 }
 
 // ========== Stats Transformers ==========
@@ -1600,6 +1631,31 @@ export function transformStatsTimeseriesToApi(stats: StatsTimeseries): StatsTime
   };
 }
 
+function transformLeaderboardMetricsToApi(item: LeaderboardMetrics): LeaderboardMetricsApiResponse {
+  return {
+    request_count: item.requestCount,
+    total_tokens: item.totalTokens,
+    total_cost_usd: item.totalCostUsd,
+    avg_ttft_ms: item.avgTtftMs,
+    avg_tps: item.avgTps,
+    cache_hit_rate: item.cacheHitRate,
+    error_rate: item.errorRate,
+  };
+}
+
+function transformLeaderboardComparisonToApi(comparison?: LeaderboardComparison): {
+  comparison?: LeaderboardComparisonApiResponse;
+} {
+  return comparison
+    ? {
+        comparison: {
+          prev_rank: comparison.prevRank,
+          prev_request_count: comparison.prevRequestCount,
+        },
+      }
+    : {};
+}
+
 /**
  * Transform a leaderboard API key item to API response format.
  */
@@ -1610,10 +1666,9 @@ export function transformLeaderboardApiKeyToApi(
     id: item.id,
     name: item.name,
     key_prefix: item.keyPrefix,
-    request_count: item.requestCount,
-    total_tokens: item.totalTokens,
-    total_cost_usd: item.totalCostUsd,
+    ...transformLeaderboardMetricsToApi(item),
     model_distribution: item.modelDistribution,
+    ...transformLeaderboardComparisonToApi(item.comparison),
   };
 }
 
@@ -1627,13 +1682,9 @@ export function transformLeaderboardUpstreamToApi(
     id: item.id,
     name: item.name,
     provider_type: item.providerType,
-    request_count: item.requestCount,
-    total_tokens: item.totalTokens,
-    avg_ttft_ms: item.avgTtftMs,
-    avg_tps: item.avgTps,
-    cache_hit_rate: item.cacheHitRate,
-    total_cost_usd: item.totalCostUsd,
+    ...transformLeaderboardMetricsToApi(item),
     model_distribution: item.modelDistribution,
+    ...transformLeaderboardComparisonToApi(item.comparison),
   };
 }
 
@@ -1645,11 +1696,9 @@ export function transformLeaderboardModelToApi(
 ): LeaderboardModelApiResponse {
   return {
     model: item.model,
-    request_count: item.requestCount,
-    total_tokens: item.totalTokens,
-    avg_ttft_ms: item.avgTtftMs,
-    avg_tps: item.avgTps,
+    ...transformLeaderboardMetricsToApi(item),
     upstream_distribution: item.upstreamDistribution,
+    ...transformLeaderboardComparisonToApi(item.comparison),
   };
 }
 
@@ -1663,10 +1712,9 @@ export function transformLeaderboardUserToApi(
     id: item.id,
     username: item.username,
     display_name: item.displayName,
-    request_count: item.requestCount,
-    total_tokens: item.totalTokens,
-    total_cost_usd: item.totalCostUsd,
+    ...transformLeaderboardMetricsToApi(item),
     model_distribution: item.modelDistribution,
+    ...transformLeaderboardComparisonToApi(item.comparison),
   };
 }
 
@@ -1683,6 +1731,25 @@ export function transformStatsLeaderboardToApi(
     upstreams: stats.upstreams.map(transformLeaderboardUpstreamToApi),
     models: stats.models.map(transformLeaderboardModelToApi),
     users: stats.users.map(transformLeaderboardUserToApi),
+  };
+}
+
+/**
+ * Transform single-dimension rankings to API response format.
+ */
+export function transformStatsRankingsToApi(rankings: StatsRankings): StatsRankingsApiResponse {
+  const transformItem = (item: StatsRankings["items"][number]) => {
+    if ("model" in item) return transformLeaderboardModelToApi(item);
+    if ("keyPrefix" in item) return transformLeaderboardApiKeyToApi(item);
+    if ("providerType" in item) return transformLeaderboardUpstreamToApi(item);
+    return transformLeaderboardUserToApi(item);
+  };
+  return {
+    range: rankings.range,
+    dimension: rankings.dimension,
+    sort_by: rankings.sortBy,
+    order: rankings.order,
+    items: rankings.items.map(transformItem),
   };
 }
 

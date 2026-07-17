@@ -57,6 +57,7 @@
     "error": "Error",
     "success": "Success",
     "cancel": "Cancel",
+    "clear": "Clear",
     "confirm": "Confirm",
     "save": "Save",
     "saving": "Saving...",
@@ -101,6 +102,7 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "rankings": "Rankings",
     "apiKeys": "API Keys",
     "upstreams": "Upstreams",
     "logs": "Logs",
@@ -115,6 +117,45 @@
     "billing": "Billing",
     "cliproxy": "CLIProxyAPI",
     "users": "Users"
+  },
+  "rankings": {
+    "pageTitle": "RANKINGS",
+    "title": "LEADERBOARD",
+    "description": "Full ranking across upstreams, models, API keys and users",
+    "dimensions": {
+      "upstreams": "Upstreams",
+      "models": "Models",
+      "apiKeys": "API Keys",
+      "users": "Users"
+    },
+    "columns": {
+      "name": "Name",
+      "requests": "Requests",
+      "tokens": "Tokens",
+      "cost": "Cost",
+      "ttft": "Avg TTFT",
+      "tps": "Avg TPS",
+      "cacheHit": "Cache Hit",
+      "errorRate": "Error Rate",
+      "change": "Change"
+    },
+    "newEntry": "New",
+    "viewLogs": "View logs",
+    "filters": {
+      "searchPlaceholder": "Search name...",
+      "minRequests": "Min requests",
+      "errorsOnly": "Errors only",
+      "upstream": "Upstream",
+      "allUpstreams": "All upstreams",
+      "reset": "Reset filters"
+    },
+    "noMatch": "No matching entries",
+    "empty": "No data in this time range",
+    "noDistribution": "No breakdown data",
+    "distribution": {
+      "models": "Model breakdown",
+      "upstreams": "Upstream breakdown"
+    }
   },
   "users": {
     "pageTitle": "USERS",
@@ -300,7 +341,8 @@
       "upstreamDistribution": "Upstream Distribution",
       "others": "Others",
       "vsYesterday": "vs yesterday",
-      "noChange": "Same as yesterday"
+      "noChange": "Same as yesterday",
+      "viewFullRankings": "View full rankings"
     },
     "timeRange": {
       "all": "ALL",
@@ -309,6 +351,12 @@
       "30d": "30 DAYS",
       "custom": "CUSTOM",
       "customRange": "Custom Range",
+      "quickSelect": "Quick select",
+      "last90d": "Last 90 days",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "lastYear": "Last year",
       "startDate": "Start Date",
       "endDate": "End Date",
       "apply": "Apply",
@@ -418,6 +466,11 @@
     "expirationDate": "Expiration Date (Optional)",
     "expirationDateDesc": "Leave empty for no expiration",
     "selectDate": "Select date",
+    "expiryPresets": {
+      "30": "In 30 days",
+      "90": "In 90 days",
+      "365": "In 1 year"
+    },
     "creating": "Creating...",
     "createSuccess": "API Key created successfully",
     "createFailed": "Failed to create API Key",

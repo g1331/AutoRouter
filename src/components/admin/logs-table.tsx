@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
+import { formatTtft } from "@/components/dashboard/chart-theme";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
@@ -835,13 +836,6 @@ export function LogsTable({
     }
 
     return `${(durationMs / 1000).toFixed(2)}s`;
-  };
-
-  const formatTtft = (ttftMs: number) => {
-    if (ttftMs >= 1000) {
-      return `${(ttftMs / 1000).toFixed(3)}s`;
-    }
-    return `${Math.round(ttftMs)}ms`;
   };
 
   const formatSummaryTtft = (ttftMs: number | null) => {

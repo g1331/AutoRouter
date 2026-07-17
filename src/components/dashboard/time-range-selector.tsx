@@ -3,7 +3,17 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { CalendarIcon, X } from "lucide-react";
-import { format } from "date-fns";
+import {
+  addDays,
+  format,
+  min,
+  startOfDay,
+  startOfMonth,
+  startOfYear,
+  subDays,
+  subMonths,
+  subYears,
+} from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
@@ -16,7 +26,35 @@ import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
 
 export type TimeRangeOrCustom = TimeRange | "custom";
 
-const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
+export const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
+
+export type QuickRangeKey = "last90d" | "thisMonth" | "lastMonth" | "thisYear" | "lastYear";
+
+const QUICK_RANGE_KEYS: QuickRangeKey[] = [
+  "last90d",
+  "thisMonth",
+  "lastMonth",
+  "thisYear",
+  "lastYear",
+];
+
+/** Resolve a quick preset to a custom range; `end` is exclusive (next-day 00:00). */
+export function computeQuickRange(key: QuickRangeKey, now: Date = new Date()): CustomDateRange {
+  const today = startOfDay(now);
+  const endExclusive = addDays(today, 1);
+  switch (key) {
+    case "last90d":
+      return { start: subDays(today, 89), end: endExclusive };
+    case "thisMonth":
+      return { start: startOfMonth(today), end: endExclusive };
+    case "lastMonth":
+      return { start: startOfMonth(subMonths(today, 1)), end: startOfMonth(today) };
+    case "thisYear":
+      return { start: startOfYear(today), end: endExclusive };
+    case "lastYear":
+      return { start: startOfYear(subYears(today, 1)), end: startOfYear(today) };
+  }
+}
 
 interface TimeRangeSelectorProps {
   value: TimeRangeOrCustom | "all";
@@ -41,9 +79,7 @@ export function TimeRangeSelector({
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
   const [open, setOpen] = useState(false);
-  const [pendingRange, setPendingRange] = useState<DateRange | undefined>(
-    customRange ? { from: customRange.start, to: customRange.end } : undefined
-  );
+  const [pendingRange, setPendingRange] = useState<DateRange | undefined>();
 
   const getLabel = (range: TimeRange | "all"): string => {
     switch (range) {
@@ -65,20 +101,36 @@ export function TimeRangeSelector({
   const customLabel = (() => {
     if (value !== "custom" || !customRange) return t("timeRange.custom");
     // customRange.end is exclusive (next day 00:00), display the actual last day
-    const displayEnd = new Date(customRange.end);
-    displayEnd.setDate(displayEnd.getDate() - 1);
-    return `${format(customRange.start, "MM/dd", { locale: dateLocale })} – ${format(displayEnd, "MM/dd", { locale: dateLocale })}`;
+    const displayEnd = subDays(customRange.end, 1);
+    const currentYear = new Date().getFullYear();
+    const withYear =
+      customRange.start.getFullYear() !== currentYear || displayEnd.getFullYear() !== currentYear;
+    const pattern = withYear ? "yyyy/MM/dd" : "MM/dd";
+    return `${format(customRange.start, pattern, { locale: dateLocale })} – ${format(displayEnd, pattern, { locale: dateLocale })}`;
   })();
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      // Re-seed from the applied range so an abandoned selection doesn't linger.
+      setPendingRange(
+        customRange ? { from: customRange.start, to: subDays(customRange.end, 1) } : undefined
+      );
+    }
+  }
 
   function handleApply() {
     if (pendingRange?.from && pendingRange?.to) {
       // Calendar returns midnight dates; backend treats end_date as exclusive upper bound.
       // Extend end to next day 00:00 so the selected end day is fully included.
-      const endInclusive = new Date(pendingRange.to);
-      endInclusive.setDate(endInclusive.getDate() + 1);
-      onChange("custom", { start: pendingRange.from, end: endInclusive });
+      onChange("custom", { start: pendingRange.from, end: addDays(pendingRange.to, 1) });
       setOpen(false);
     }
+  }
+
+  function handleQuickRange(key: QuickRangeKey) {
+    onChange("custom", computeQuickRange(key));
+    setOpen(false);
   }
 
   return (
@@ -114,7 +166,7 @@ export function TimeRangeSelector({
       )}
 
       {!hideCustom && (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
               type="button"
@@ -130,38 +182,67 @@ export function TimeRangeSelector({
               {customLabel}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <div className="p-4">
-              <p className="type-label-medium mb-3 border-b border-divider pb-2.5 text-foreground">
-                {t("timeRange.customRange")}
-              </p>
-              <Calendar
-                locale={dateLocale}
-                mode="range"
-                selected={pendingRange}
-                onSelect={setPendingRange}
-                numberOfMonths={2}
-                disabled={{ after: new Date() }}
-              />
-              {pendingRange?.from && (
-                <p className="mt-2 text-center type-caption text-muted-foreground">
-                  {format(pendingRange.from, "PPP", { locale: dateLocale })}
-                  {pendingRange.to
-                    ? ` – ${format(pendingRange.to, "PPP", { locale: dateLocale })}`
-                    : ""}
+          {/* 日期选择器弹层用中性描边（覆盖 Popover 默认的琥珀边框），与下拉菜单一致 */}
+          <PopoverContent
+            className="w-auto border border-border p-0 text-foreground shadow-[var(--vr-shadow-md)]"
+            align="end"
+          >
+            <div className="flex">
+              <div className="flex flex-col gap-1 border-r border-divider p-3">
+                <p className="type-label-medium mb-1 px-2 text-muted-foreground">
+                  {t("timeRange.quickSelect")}
                 </p>
-              )}
-              <div className="mt-3 flex justify-end gap-2 border-t border-divider pt-3">
-                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                  {tCommon("cancel")}
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!pendingRange?.from || !pendingRange?.to}
-                  onClick={handleApply}
-                >
-                  {t("timeRange.apply")}
-                </Button>
+                {QUICK_RANGE_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleQuickRange(key)}
+                    className={cn(
+                      "rounded-cf-sm px-2 py-1.5 text-left type-label-medium text-foreground transition-colors",
+                      "hover:bg-surface-300",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    )}
+                  >
+                    {t(`timeRange.${key}`)}
+                  </button>
+                ))}
+              </div>
+              <div className="p-4">
+                <p className="type-label-medium mb-3 border-b border-divider pb-2.5 text-foreground">
+                  {t("timeRange.customRange")}
+                </p>
+                <Calendar
+                  locale={dateLocale}
+                  mode="range"
+                  selected={pendingRange}
+                  onSelect={setPendingRange}
+                  defaultMonth={pendingRange?.from}
+                  numberOfMonths={2}
+                  disabled={{ after: new Date() }}
+                  // 默认最早到 5 年前；URL 恢复等来源的更早区间也要能在日历中查看
+                  startMonth={min([subYears(new Date(), 5), pendingRange?.from ?? new Date()])}
+                  endMonth={new Date()}
+                />
+                {pendingRange?.from && (
+                  <p className="mt-2 text-center type-caption text-muted-foreground">
+                    {format(pendingRange.from, "PPP", { locale: dateLocale })}
+                    {pendingRange.to
+                      ? ` – ${format(pendingRange.to, "PPP", { locale: dateLocale })}`
+                      : ""}
+                  </p>
+                )}
+                <div className="mt-3 flex justify-end gap-2 border-t border-divider pt-3">
+                  <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                    {tCommon("cancel")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!pendingRange?.from || !pendingRange?.to}
+                    onClick={handleApply}
+                  >
+                    {t("timeRange.apply")}
+                  </Button>
+                </div>
               </div>
             </div>
           </PopoverContent>

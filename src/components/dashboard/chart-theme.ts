@@ -127,6 +127,15 @@ export function formatDuration(ms: number): string {
   return `${Math.round(ms)}ms`;
 }
 
+// TTFT keeps millisecond precision when crossing into seconds (unlike
+// formatDuration's 1-decimal display for coarse durations).
+export function formatTtft(ttftMs: number): string {
+  if (ttftMs >= 1000) {
+    return `${(ttftMs / 1000).toFixed(3)}s`;
+  }
+  return `${Math.round(ttftMs)}ms`;
+}
+
 export function formatCost(usd: number): string {
   if (usd === 0) return "$0.00";
   if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;

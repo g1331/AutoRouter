@@ -150,7 +150,34 @@ export default function LogsPage() {
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
-  const [tableFilters, setTableFilters] = useState<LogsServerFilters>(DEFAULT_LOGS_SERVER_FILTERS);
+  // URL params seed the initial filters only (same pattern as user_id above);
+  // afterwards the filter bar owns the state. The rankings page links here
+  // with an object filter plus its current time window.
+  const [tableFilters, setTableFilters] = useState<LogsServerFilters>(() => {
+    const upstreamId = searchParams.get("upstream_id")?.trim() || "";
+    const apiKeyId = searchParams.get("api_key_id")?.trim() || "";
+    const model = searchParams.get("model")?.trim() || "";
+
+    let customRange: LogsServerFilters["customRange"] = null;
+    const startStr = searchParams.get("start_time");
+    if (startStr) {
+      const start = new Date(startStr);
+      // A missing end_time means "up to now" (preset windows from rankings).
+      const endStr = searchParams.get("end_time");
+      const end = endStr ? new Date(endStr) : new Date();
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start < end) {
+        customRange = { startIso: start.toISOString(), endIso: end.toISOString() };
+      }
+    }
+
+    return {
+      ...DEFAULT_LOGS_SERVER_FILTERS,
+      upstreamId,
+      apiKeyId,
+      model,
+      ...(customRange ? { timeRange: "custom" as const, customRange } : {}),
+    };
+  });
   // Functional merge: a debounced patch (e.g. the model input) can arrive after
   // a newer status/time change and must not overwrite it.
   const handleTableFiltersChange = useCallback((patch: Partial<LogsServerFilters>) => {

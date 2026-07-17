@@ -43,18 +43,42 @@ function createOpenAIModelListItem(model: string): Record<string, unknown> {
   };
 }
 
+function normalizeModelNames(models: string[]): string[] {
+  return models.map((model) => model.trim()).filter((model) => model.length > 0);
+}
+
+/**
+ * Pick the model names an upstream is known to serve from local data only, with a
+ * fixed precedence: synced model catalog first, then declared allowed models, then
+ * exact model rules. Shared by every local model-list source so the precedence rule
+ * lives in one place.
+ */
+export function pickUpstreamLocalModels(input: {
+  catalogModels: string[];
+  allowedModels: string[];
+  exactRuleModels: string[];
+}): string[] {
+  const catalogModels = normalizeModelNames(input.catalogModels);
+  if (catalogModels.length > 0) {
+    return catalogModels;
+  }
+
+  const allowedModels = normalizeModelNames(input.allowedModels);
+  if (allowedModels.length > 0) {
+    return allowedModels;
+  }
+
+  return normalizeModelNames(input.exactRuleModels);
+}
+
 function getCandidateModelsFromUpstream(upstream: Upstream): string[] {
-  if (upstream.model_catalog && upstream.model_catalog.length > 0) {
-    return upstream.model_catalog.map((entry) => entry.model);
-  }
-
-  if (upstream.allowed_models && upstream.allowed_models.length > 0) {
-    return upstream.allowed_models;
-  }
-
-  return (upstream.model_rules ?? [])
-    .filter((rule) => rule.type === "exact")
-    .map((rule) => rule.value);
+  return pickUpstreamLocalModels({
+    catalogModels: (upstream.model_catalog ?? []).map((entry) => entry.model),
+    allowedModels: upstream.allowed_models ?? [],
+    exactRuleModels: (upstream.model_rules ?? [])
+      .filter((rule) => rule.type === "exact")
+      .map((rule) => rule.value),
+  });
 }
 
 export function collectApiKeyModelCandidates(input: {
@@ -75,10 +99,7 @@ export function collectApiKeyModelCandidates(input: {
     }
 
     for (const model of getCandidateModelsFromUpstream(upstream)) {
-      const normalized = model.trim();
-      if (normalized.length > 0) {
-        candidates.add(normalized);
-      }
+      candidates.add(model);
     }
   }
 

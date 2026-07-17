@@ -23,6 +23,7 @@ import {
   ShieldAlert,
   Sun,
   TerminalSquare,
+  Trophy,
   Users,
   Wrench,
   ArrowLeftRight,
@@ -56,7 +57,7 @@ import { useAuth } from "@/providers/auth-provider";
 type NavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
-  labelKey: "dashboard" | "apiKeys" | "upstreams" | "logs" | "settings";
+  labelKey: "dashboard" | "rankings" | "apiKeys" | "upstreams" | "logs" | "settings";
 };
 
 type SystemNavigationItem = {
@@ -74,6 +75,7 @@ type SystemNavigationItem = {
 
 const navigation: NavigationItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard" },
+  { href: "/rankings", icon: Trophy, labelKey: "rankings" },
   { href: "/keys", icon: Key, labelKey: "apiKeys" },
   { href: "/upstreams", icon: Server, labelKey: "upstreams" },
   { href: "/logs", icon: ScrollText, labelKey: "logs" },
