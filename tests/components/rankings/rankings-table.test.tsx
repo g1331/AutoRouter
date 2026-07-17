@@ -188,6 +188,43 @@ describe("RankingsTable", () => {
     expect(within(rows[1]).getByText("newEntry")).toBeInTheDocument();
   });
 
+  it("keeps global ranks, medals, and rank deltas when a filtered subset is shown", () => {
+    // Simulates a filtered view: only the globally 2nd and 5th items remain.
+    const items = [
+      upstreamItem({
+        id: "up-2",
+        name: "Second",
+        request_count: 90,
+        comparison: { prev_rank: 4, prev_request_count: 45 },
+      }),
+      upstreamItem({ id: "up-5", name: "Fifth", request_count: 10 }),
+    ];
+    const ranks = new Map([
+      ["up-2", 2],
+      ["up-5", 5],
+    ]);
+
+    render(
+      <RankingsTable
+        dimension="upstreams"
+        items={items}
+        isLoading={false}
+        sortBy="requests"
+        order="desc"
+        onSortChange={vi.fn()}
+        logsWindow={defaultWindow}
+        ranks={ranks}
+      />
+    );
+
+    const rows = screen.getAllByTestId("rankings-row");
+    expect(within(rows[0]).getByText("#2")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("#5")).toBeInTheDocument();
+    // prev_rank 4 → global rank 2 = moved up 2, not up 3 (filtered index).
+    expect(within(rows[0]).getByText("2")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("+100.0%")).toBeInTheDocument();
+  });
+
   it("shows the empty state when there is no data", () => {
     render(
       <RankingsTable
@@ -202,5 +239,23 @@ describe("RankingsTable", () => {
     );
 
     expect(screen.getByText("empty")).toBeInTheDocument();
+  });
+
+  it("prefers the emptyLabel override when provided", () => {
+    render(
+      <RankingsTable
+        dimension="users"
+        items={[]}
+        isLoading={false}
+        sortBy="requests"
+        order="desc"
+        onSortChange={vi.fn()}
+        logsWindow={defaultWindow}
+        emptyLabel="no-match-label"
+      />
+    );
+
+    expect(screen.getByText("no-match-label")).toBeInTheDocument();
+    expect(screen.queryByText("empty")).not.toBeInTheDocument();
   });
 });

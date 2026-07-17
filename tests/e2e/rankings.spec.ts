@@ -77,4 +77,52 @@ test.describe("Rankings page", () => {
     await expect(page).toHaveURL(/\/zh-CN\/rankings\?.*sort=cost/);
     await expect(page.getByTestId("rankings-row").first()).toContainText(UPSTREAM_COSTLY.name);
   });
+
+  test("filters by name search and min requests, then resets", async ({ page }) => {
+    await page.goto("/zh-CN/rankings");
+    const rows = page.getByTestId("rankings-row");
+    await expect(rows).toHaveCount(2);
+
+    // 名称搜索（300ms debounce 后进 URL）。
+    await page.getByRole("textbox", { name: "搜索名称..." }).fill(UPSTREAM_COSTLY.name);
+    await expect(page).toHaveURL(/q=/);
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(UPSTREAM_COSTLY.name);
+    // 过滤视图保留全局排名：该上游是全量第 2 名，不因过滤变成 #1。
+    await expect(rows.first()).toContainText("#2");
+
+    // 叠加请求数下限，超过唯一匹配项的请求数 → 空态显示「无匹配条目」。
+    await page.getByRole("spinbutton", { name: "最少请求数" }).fill("999999");
+    await expect(page).toHaveURL(/min=999999/);
+    await expect(page.getByText("无匹配条目")).toBeVisible();
+
+    // 重置一键清空过滤并还原列表与 URL。
+    await page.getByRole("button", { name: "重置筛选" }).click();
+    await expect(rows).toHaveCount(2);
+    await expect(page).not.toHaveURL(/q=|min=/);
+  });
+
+  test("restores filters from a shared URL and filters models by upstream", async ({ page }) => {
+    // 直达带过滤的 URL：搜索词生效、输入框回填。
+    await page.goto(`/zh-CN/rankings?q=${UPSTREAM_COSTLY.name}`);
+    const rows = page.getByTestId("rankings-row");
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByRole("textbox", { name: "搜索名称..." })).toHaveValue(
+      UPSTREAM_COSTLY.name
+    );
+
+    // models 维度的上游过滤：claude-3-opus 仅由第二个上游提供。
+    await page.goto("/zh-CN/rankings?dim=models");
+    await expect(rows).toHaveCount(2);
+    await page.getByRole("combobox", { name: "上游" }).click();
+    await page.getByRole("option", { name: UPSTREAM_COSTLY.name }).click();
+    await expect(page).toHaveURL(/upstream=/);
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("claude-3-opus");
+
+    // 切换维度丢弃维度特有的上游过滤。
+    await page.getByRole("tab", { name: "上游" }).click();
+    await expect(page).not.toHaveURL(/upstream=/);
+    await expect(rows).toHaveCount(2);
+  });
 });
