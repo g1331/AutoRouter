@@ -1,6 +1,6 @@
 import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
 import { PRESET_RANGES, type TimeRangeOrCustom } from "@/components/dashboard/time-range-selector";
-import type { RankingsDimension, RankingsSortField, TimeRange } from "@/types/api";
+import type { RankingsDimension, RankingsItem, RankingsSortField, TimeRange } from "@/types/api";
 
 // Derived from Record keys so the compiler errors here whenever the unions in
 // types/api.ts gain or lose a member — a plain literal array would silently
@@ -26,7 +26,18 @@ export const RANKINGS_DIMENSIONS = Object.keys(DIMENSION_FLAGS) as RankingsDimen
 
 export const RANKINGS_SORT_FIELDS = Object.keys(SORT_FIELD_FLAGS) as RankingsSortField[];
 
-export interface RankingsViewState {
+export interface RankingsFilterState {
+  /** Case-insensitive substring match on the item name fields. */
+  query: string;
+  /** Hide items with fewer requests than this (0 = off). */
+  minRequests: number;
+  /** Only show items with a non-zero error rate. */
+  errorsOnly: boolean;
+  /** models dimension only: keep items served by this upstream ("" = off). */
+  upstream: string;
+}
+
+export interface RankingsViewState extends RankingsFilterState {
   dimension: RankingsDimension;
   range: TimeRangeOrCustom;
   sortBy: RankingsSortField;
@@ -39,6 +50,10 @@ export const DEFAULT_RANKINGS_STATE: RankingsViewState = {
   range: "7d",
   sortBy: "requests",
   order: "desc",
+  query: "",
+  minRequests: 0,
+  errorsOnly: false,
+  upstream: "",
 };
 
 // The view state lives in the URL (dim/range/sort/order/start/end) so that
@@ -58,6 +73,8 @@ export function readStateFromUrl(params: URLSearchParams): RankingsViewState {
     }
   }
 
+  const minRaw = Number.parseInt(params.get("min") ?? "", 10);
+
   return {
     dimension: dim && RANKINGS_DIMENSIONS.includes(dim) ? dim : DEFAULT_RANKINGS_STATE.dimension,
     range:
@@ -71,6 +88,10 @@ export function readStateFromUrl(params: URLSearchParams): RankingsViewState {
     sortBy: sort && RANKINGS_SORT_FIELDS.includes(sort) ? sort : DEFAULT_RANKINGS_STATE.sortBy,
     order: order === "asc" ? "asc" : "desc",
     customRange,
+    query: params.get("q") ?? "",
+    minRequests: Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 0,
+    errorsOnly: params.get("errors") === "1",
+    upstream: params.get("upstream") ?? "",
   };
 }
 
@@ -84,5 +105,47 @@ export function buildQuery(state: RankingsViewState): string {
     params.set("start", state.customRange.start.toISOString());
     params.set("end", state.customRange.end.toISOString());
   }
+  if (state.query) params.set("q", state.query);
+  if (state.minRequests > 0) params.set("min", String(state.minRequests));
+  if (state.errorsOnly) params.set("errors", "1");
+  if (state.upstream) params.set("upstream", state.upstream);
   return params.toString();
+}
+
+function itemSearchTexts(item: RankingsItem): string[] {
+  if ("model" in item) return [item.model];
+  if ("provider_type" in item) return [item.name, item.provider_type];
+  if ("key_prefix" in item) return [item.name, item.key_prefix];
+  return [item.display_name, item.username];
+}
+
+// Pure client-side filtering: the leaderboard endpoint returns the full
+// aggregated set in one response, so search/threshold filters never need a
+// server round-trip. The upstream filter only applies to items that carry an
+// upstream_distribution (models dimension); other dimensions ignore it so a
+// stale `upstream` URL param can't blank out an unrelated view.
+export function filterRankingsItems(
+  items: RankingsItem[],
+  filters: RankingsFilterState
+): RankingsItem[] {
+  const query = filters.query.trim().toLowerCase();
+  return items.filter((item) => {
+    if (query && !itemSearchTexts(item).some((text) => text.toLowerCase().includes(query))) {
+      return false;
+    }
+    if (filters.minRequests > 0 && item.request_count < filters.minRequests) return false;
+    if (filters.errorsOnly && item.error_rate <= 0) return false;
+    if (
+      filters.upstream &&
+      "upstream_distribution" in item &&
+      !item.upstream_distribution.some((d) => d.name === filters.upstream)
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function hasActiveFilters(state: RankingsFilterState): boolean {
+  return Boolean(state.query || state.minRequests > 0 || state.errorsOnly || state.upstream);
 }

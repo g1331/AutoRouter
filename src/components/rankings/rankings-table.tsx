@@ -37,6 +37,8 @@ interface RankingsTableProps {
   order: "asc" | "desc";
   onSortChange: (field: RankingsSortField) => void;
   logsWindow: RankingsLogsWindow;
+  /** Overrides the default empty-state text (e.g. "no match" while filters are active). */
+  emptyLabel?: string;
 }
 
 // One entry per metric: header label, raw value (ratio bar / sorting), and
@@ -246,6 +248,7 @@ export function RankingsTable({
   order,
   onSortChange,
   logsWindow,
+  emptyLabel,
 }: RankingsTableProps) {
   const t = useTranslations("rankings");
   const tCommon = useTranslations("common");
@@ -304,7 +307,7 @@ export function RankingsTable({
           ) : items.length === 0 ? (
             <TableRow>
               <TableCell colSpan={columnCount} className="py-10 text-center text-muted-foreground">
-                {t("empty")}
+                {emptyLabel ?? t("empty")}
               </TableCell>
             </TableRow>
           ) : (

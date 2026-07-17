@@ -141,6 +141,15 @@
     },
     "newEntry": "新上榜",
     "viewLogs": "查看日志",
+    "filters": {
+      "searchPlaceholder": "搜索名称...",
+      "minRequests": "最少请求数",
+      "errorsOnly": "仅看有错误",
+      "upstream": "上游",
+      "allUpstreams": "全部上游",
+      "reset": "重置筛选"
+    },
+    "noMatch": "无匹配条目",
     "empty": "该时间范围内暂无数据",
     "noDistribution": "暂无构成数据",
     "distribution": {

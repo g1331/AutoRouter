@@ -203,4 +203,22 @@ describe("RankingsTable", () => {
 
     expect(screen.getByText("empty")).toBeInTheDocument();
   });
+
+  it("prefers the emptyLabel override when provided", () => {
+    render(
+      <RankingsTable
+        dimension="users"
+        items={[]}
+        isLoading={false}
+        sortBy="requests"
+        order="desc"
+        onSortChange={vi.fn()}
+        logsWindow={defaultWindow}
+        emptyLabel="no-match-label"
+      />
+    );
+
+    expect(screen.getByText("no-match-label")).toBeInTheDocument();
+    expect(screen.queryByText("empty")).not.toBeInTheDocument();
+  });
 });

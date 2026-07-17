@@ -141,6 +141,15 @@
     },
     "newEntry": "New",
     "viewLogs": "View logs",
+    "filters": {
+      "searchPlaceholder": "Search name...",
+      "minRequests": "Min requests",
+      "errorsOnly": "Errors only",
+      "upstream": "Upstream",
+      "allUpstreams": "All upstreams",
+      "reset": "Reset filters"
+    },
+    "noMatch": "No matching entries",
     "empty": "No data in this time range",
     "noDistribution": "No breakdown data",
     "distribution": {
