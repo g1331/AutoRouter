@@ -11,8 +11,11 @@ const buttonVariants = cva(
     "transition-all duration-cf-normal ease-cf-standard",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     "focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    // 不要在 disabled 变体里写 translate-y-0 之类的全局 transform 复位：
+    // 它会覆盖调用方用 translate 做的绝对定位（垂直居中等）。hover 上浮的
+    // 禁用态复位由变体自身的 not-disabled: 前缀承担
     "disabled:pointer-events-none disabled:cursor-not-allowed",
-    "disabled:opacity-45 disabled:shadow-none disabled:translate-y-0",
+    "disabled:opacity-45 disabled:shadow-none",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   ].join(" "),
   {
@@ -21,9 +24,9 @@ const buttonVariants = cva(
         // 亮色 hover 走深档（600=hot，白字对比更高），暗色 hover 走亮档（400=hot，
         // ink 字对比更高）；辉光令牌 --vr-glow 在亮色为 transparent，天然只在暗色发光
         default:
-          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] hover:-translate-y-px hover:bg-amber-600 hover:shadow-[var(--vr-glow)] active:translate-y-0 dark:hover:bg-amber-400",
+          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] not-disabled:hover:-translate-y-px hover:bg-amber-600 hover:shadow-[var(--vr-glow)] active:translate-y-0 dark:hover:bg-amber-400",
         primary:
-          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] hover:-translate-y-px hover:bg-amber-600 hover:shadow-[var(--vr-glow)] active:translate-y-0 dark:hover:bg-amber-400",
+          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] not-disabled:hover:-translate-y-px hover:bg-amber-600 hover:shadow-[var(--vr-glow)] active:translate-y-0 dark:hover:bg-amber-400",
         secondary:
           "border-border bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)] hover:bg-surface-400 hover:border-amber-400/50",
         outline:
