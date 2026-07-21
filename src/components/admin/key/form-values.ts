@@ -43,6 +43,13 @@ export function spendingRulesDefaults(apiKey: APIKeyResponse): SectionInput<"spe
   };
 }
 
+export function rateLimitsDefaults(apiKey: APIKeyResponse): SectionInput<"rate-limits"> {
+  return {
+    rpm_limit: apiKey.rpm_limit ?? null,
+    tpm_limit: apiKey.tpm_limit ?? null,
+  };
+}
+
 export function modelAllowlistDefaults(apiKey: APIKeyResponse): SectionInput<"model-allowlist"> {
   return { allowed_models: apiKey.allowed_models ?? [] };
 }

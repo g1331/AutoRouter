@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import {
   ArrowLeft,
   CalendarClock,
+  Gauge,
   KeyRound,
   ListChecks,
   Shield,
@@ -21,6 +22,7 @@ import { AccessGrantsSection } from "@/components/admin/key/sections/access-gran
 import { BasicSection } from "@/components/admin/key/sections/basic-section";
 import { ExpirySection } from "@/components/admin/key/sections/expiry-section";
 import { ModelAllowlistSection } from "@/components/admin/key/sections/model-allowlist-section";
+import { RateLimitsSection } from "@/components/admin/key/sections/rate-limits-section";
 import { SpendingRulesSection } from "@/components/admin/key/sections/spending-rules-section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +65,12 @@ const KEY_DETAIL_SECTIONS: KeyDetailSection[] = [
     category: "configCategoryPolicy",
   },
   {
+    id: "rate-limits",
+    labelKey: "rateLimits",
+    icon: Gauge,
+    category: "configCategoryPolicy",
+  },
+  {
     id: "model-allowlist",
     labelKey: "allowedModels",
     icon: ListChecks,
@@ -79,6 +87,7 @@ const SECTION_COMPONENTS: Record<string, ComponentType<{ apiKey: APIKeyResponse 
   expiry: ExpirySection,
   "access-grants": AccessGrantsSection,
   "spending-rules": SpendingRulesSection,
+  "rate-limits": RateLimitsSection,
   "model-allowlist": ModelAllowlistSection,
 };
 

@@ -60,6 +60,13 @@ export function buildSpendingRulesPayload(values: SectionOutput<"spending-rules"
   return { spending_rules: keySpendingRulesToApi(values.spending_rules) ?? [] };
 }
 
+export function buildRateLimitsPayload(values: SectionOutput<"rate-limits">): APIKeyUpdate {
+  return {
+    rpm_limit: values.rpm_limit,
+    tpm_limit: values.tpm_limit,
+  };
+}
+
 export function buildModelAllowlistPayload(values: SectionOutput<"model-allowlist">): APIKeyUpdate {
   return { allowed_models: values.allowed_models.length > 0 ? values.allowed_models : null };
 }
@@ -78,6 +85,7 @@ export const apiKeySectionPayloadBuilders: SectionPayloadBuilders = {
   basic: buildBasicPayload,
   "access-grants": buildAccessGrantsPayload,
   "spending-rules": buildSpendingRulesPayload,
+  "rate-limits": buildRateLimitsPayload,
   "model-allowlist": buildModelAllowlistPayload,
   expiry: buildExpiryPayload,
 };
