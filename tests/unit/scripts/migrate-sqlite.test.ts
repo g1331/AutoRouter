@@ -133,10 +133,16 @@ describe("db:migrate:sqlite", () => {
       dbPath,
       "PRAGMA table_info('upstreams')"
     );
-    expect(upstreamColumns.map((row) => row.name)).toContain("model_discovery");
-    expect(upstreamColumns.map((row) => row.name)).toContain("model_rules");
-    expect(upstreamColumns.map((row) => row.name)).toContain("queue_policy");
-    expect(upstreamColumns.map((row) => row.name)).toContain("failure_rule_config");
+    expect(upstreamColumns.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        "official_website_url",
+        "max_concurrency",
+        "model_discovery",
+        "model_rules",
+        "queue_policy",
+        "failure_rule_config",
+      ])
+    );
 
     const failureRuleColumns = await queryRows<{ name: string }>(
       dbPath,

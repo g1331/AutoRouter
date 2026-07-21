@@ -33,3 +33,8 @@
 
 - [x] 6.1 让 SQLite 迁移脚本测试从 journal 动态推导迁移数量和标签，覆盖本次新增迁移。
 - [x] 6.2 运行相关测试与质量检查，复核 OpenSpec 后提交并推送 CI 修复。
+
+## 7. 本地预览环境迁移修复
+
+- [x] 7.1 补齐 SQLite `upstreams` 的 `official_website_url`、`max_concurrency` 前向迁移，并在全新库迁移测试中覆盖。
+- [ ] 7.2 验证迁移并使用隔离 SQLite 库启动 Issue #237 预览环境。
