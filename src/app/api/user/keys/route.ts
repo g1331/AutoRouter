@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { nullableSpendingRulesSchema } from "@/lib/services/spending-rules";
+import { nullableApiKeyRateLimitSchema } from "@/lib/services/api-key-rate-limits";
 
 const log = createLogger("user-keys");
 
@@ -23,6 +24,8 @@ const createOwnKeySchema = z.object({
   upstream_ids: z.array(z.string().uuid()).min(1),
   description: z.string().nullable().optional(),
   spending_rules: nullableSpendingRulesSchema,
+  rpm_limit: nullableApiKeyRateLimitSchema,
+  tpm_limit: nullableApiKeyRateLimitSchema,
 });
 
 /**
@@ -68,6 +71,8 @@ export async function POST(request: NextRequest) {
       upstreamIds: validated.upstream_ids,
       description: validated.description ?? null,
       spendingRules: validated.spending_rules ?? null,
+      rpmLimit: validated.rpm_limit ?? null,
+      tpmLimit: validated.tpm_limit ?? null,
     });
 
     return NextResponse.json(transformApiKeyCreateToApi(result), { status: 201 });

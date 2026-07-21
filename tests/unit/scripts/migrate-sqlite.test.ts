@@ -1,12 +1,35 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createClient } from "@libsql/client/sqlite3";
 
 const cleanupPaths = new Set<string>();
+const SQLITE_MIGRATION_JOURNAL_PATH = path.join(
+  process.cwd(),
+  "drizzle-sqlite",
+  "meta",
+  "_journal.json"
+);
+
+function readExpectedMigrationHashes(): string[] {
+  const journal = JSON.parse(readFileSync(SQLITE_MIGRATION_JOURNAL_PATH, "utf8")) as {
+    entries?: Array<{ tag?: unknown }>;
+  };
+
+  if (!Array.isArray(journal.entries)) {
+    throw new Error("SQLite migration journal contains invalid entries");
+  }
+
+  return journal.entries.map((entry) => {
+    if (typeof entry.tag !== "string") {
+      throw new Error("SQLite migration journal contains invalid entries");
+    }
+    return entry.tag;
+  });
+}
 
 async function removeFileWithRetry(filePath: string): Promise<void> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -83,6 +106,7 @@ describe("db:migrate:sqlite", () => {
   it("should adopt existing sqlite databases with empty migration history and apply pending schema changes", async () => {
     const dbPath = path.join(tmpdir(), `autorouter-test-migrate-${randomUUID()}.sqlite`);
     cleanupPaths.add(dbPath);
+    const expectedMigrationHashes = readExpectedMigrationHashes();
 
     await bootstrapLegacyUpstreamsTable(dbPath);
 
@@ -97,40 +121,29 @@ describe("db:migrate:sqlite", () => {
     });
 
     expect(firstRun.status).toBe(0);
-    expect(firstRun.stdout).toContain("Applied 17 migration(s)");
+    expect(firstRun.stdout).toContain(`Applied ${expectedMigrationHashes.length} migration(s)`);
 
     const migrations = await queryRows<{ hash: string }>(
       dbPath,
       "SELECT hash FROM __drizzle_migrations ORDER BY id"
     );
-    expect(migrations.map((row) => row.hash)).toEqual([
-      "0000_broken_post",
-      "0001_known_prima",
-      "0002_api_keys_access_mode",
-      "0003_medical_rattler",
-      "0004_simple_donald_blake",
-      "0005_cloudy_mesmero",
-      "0006_dapper_bucky",
-      "0007_rare_psynapse",
-      "0008_cloudy_photon",
-      "0009_numerous_night_thrasher",
-      "0010_confused_mister_fear",
-      "0011_lush_kitty_pryde",
-      "0012_tense_chimera",
-      "0013_daily_white_tiger",
-      "0014_nebulous_payback",
-      "0015_steady_silver_samurai",
-      "0016_fixed_deadpool",
-    ]);
+    expect(migrations.map((row) => row.hash)).toEqual(expectedMigrationHashes);
 
     const upstreamColumns = await queryRows<{ name: string }>(
       dbPath,
       "PRAGMA table_info('upstreams')"
     );
-    expect(upstreamColumns.map((row) => row.name)).toContain("model_discovery");
-    expect(upstreamColumns.map((row) => row.name)).toContain("model_rules");
-    expect(upstreamColumns.map((row) => row.name)).toContain("queue_policy");
-    expect(upstreamColumns.map((row) => row.name)).toContain("failure_rule_config");
+    expect(upstreamColumns.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        "official_website_url",
+        "max_concurrency",
+        "spending_rules",
+        "model_discovery",
+        "model_rules",
+        "queue_policy",
+        "failure_rule_config",
+      ])
+    );
 
     const failureRuleColumns = await queryRows<{ name: string }>(
       dbPath,
@@ -144,7 +157,9 @@ describe("db:migrate:sqlite", () => {
       dbPath,
       "PRAGMA table_info('api_keys')"
     );
-    expect(apiKeyColumns.map((row) => row.name)).toContain("allowed_models");
+    expect(apiKeyColumns.map((row) => row.name)).toEqual(
+      expect.arrayContaining(["allowed_models", "rpm_limit", "tpm_limit"])
+    );
 
     const probeColumns = await queryRows<{ name: string }>(
       dbPath,

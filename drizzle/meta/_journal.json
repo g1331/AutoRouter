@@ -281,6 +281,13 @@
       "when": 1781326989515,
       "tag": "0039_daffy_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784636412616,
+      "tag": "0040_burly_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

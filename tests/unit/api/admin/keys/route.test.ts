@@ -48,6 +48,8 @@ function buildServiceApiKey(overrides?: Record<string, unknown>) {
     upstreamIds: [UPSTREAM_ID],
     allowedModels: ["gpt-4.1"],
     spendingRules: [QUOTA_RULE],
+    rpmLimit: 60,
+    tpmLimit: 120000,
     spendingRuleStatuses: [
       {
         periodType: "rolling" as const,
@@ -91,6 +93,8 @@ describe("admin keys routes spending rules", () => {
         upstream_ids: [UPSTREAM_ID],
         allowed_models: ["gpt-4.1"],
         spending_rules: [QUOTA_RULE],
+        rpm_limit: 60,
+        tpm_limit: 120000,
       }),
     });
 
@@ -105,6 +109,8 @@ describe("admin keys routes spending rules", () => {
         upstreamIds: [UPSTREAM_ID],
         allowedModels: ["gpt-4.1"],
         spendingRules: [QUOTA_RULE],
+        rpmLimit: 60,
+        tpmLimit: 120000,
       })
     );
     expect(data).toEqual(
@@ -120,6 +126,8 @@ describe("admin keys routes spending rules", () => {
           }),
         ],
         is_quota_exceeded: false,
+        rpm_limit: 60,
+        tpm_limit: 120000,
       })
     );
   });
@@ -146,6 +154,29 @@ describe("admin keys routes spending rules", () => {
 
     expect(response.status).toBe(400);
     expect(data.error).toContain("period_hours");
+    expect(mockCreateApiKey).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/admin/keys should reject invalid rate limits", async () => {
+    const { POST } = await import("@/app/api/admin/keys/route");
+
+    const request = new NextRequest("http://localhost:3000/api/admin/keys", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Broken Rate Key",
+        access_mode: "restricted",
+        upstream_ids: [UPSTREAM_ID],
+        rpm_limit: 0,
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
     expect(mockCreateApiKey).not.toHaveBeenCalled();
   });
 
@@ -223,6 +254,8 @@ describe("admin keys routes spending rules", () => {
         upstream_ids: [UPSTREAM_ID],
         allowed_models: ["gpt-4.1"],
         spending_rules: [QUOTA_RULE],
+        rpm_limit: 60,
+        tpm_limit: 120000,
       }),
     });
 
@@ -239,6 +272,8 @@ describe("admin keys routes spending rules", () => {
         upstreamIds: [UPSTREAM_ID],
         allowedModels: ["gpt-4.1"],
         spendingRules: [QUOTA_RULE],
+        rpmLimit: 60,
+        tpmLimit: 120000,
       })
     );
     expect(data).toEqual(
@@ -253,6 +288,8 @@ describe("admin keys routes spending rules", () => {
           }),
         ],
         is_quota_exceeded: true,
+        rpm_limit: 60,
+        tpm_limit: 120000,
       })
     );
   });

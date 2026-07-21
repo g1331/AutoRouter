@@ -53,6 +53,7 @@ import {
   KeyOwnershipError,
   UpstreamNotAllowedError,
   SpendingRuleRelaxationError,
+  ApiKeyRateLimitRelaxationError,
   AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 
@@ -118,6 +119,25 @@ describe("createOwnApiKey", () => {
     const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, result.id) });
     expect(row?.userId).toBe(alice.id);
     expect(row?.accessMode).toBe("restricted");
+  });
+
+  it("persists optional RPM and TPM limits for a newly created key", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+
+    const result = await createOwnApiKey(alice.id, {
+      name: "rate-limited key",
+      upstreamIds: [upstream.id],
+      rpmLimit: 60,
+      tpmLimit: 120000,
+    });
+
+    expect(result.rpmLimit).toBe(60);
+    expect(result.tpmLimit).toBe(120000);
+    const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, result.id) });
+    expect(row?.rpmLimit).toBe(60);
+    expect(row?.tpmLimit).toBe(120000);
   });
 
   it("rejects upstreams outside the caller's granted set", async () => {
@@ -273,6 +293,48 @@ describe("updateOwnApiKey", () => {
 
     expect(withRules.spendingRules).toEqual([{ period_type: "daily", limit: 3 }]);
     expect(withRules.isActive).toBe(false);
+  });
+
+  it("allows a member to add or lower independent rate limits", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+    const key = await createOwnApiKey(alice.id, {
+      name: "my key",
+      upstreamIds: [upstream.id],
+      rpmLimit: 100,
+    });
+
+    const updated = await updateOwnApiKey(alice.id, key.id, {
+      rpmLimit: 50,
+      tpmLimit: 120000,
+    });
+
+    expect(updated.rpmLimit).toBe(50);
+    expect(updated.tpmLimit).toBe(120000);
+  });
+
+  it("rejects removing or raising an existing rate limit", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+    const key = await createOwnApiKey(alice.id, {
+      name: "my key",
+      upstreamIds: [upstream.id],
+      rpmLimit: 100,
+      tpmLimit: 1000,
+    });
+
+    await expect(updateOwnApiKey(alice.id, key.id, { rpmLimit: 101 })).rejects.toBeInstanceOf(
+      ApiKeyRateLimitRelaxationError
+    );
+    await expect(updateOwnApiKey(alice.id, key.id, { tpmLimit: null })).rejects.toBeInstanceOf(
+      ApiKeyRateLimitRelaxationError
+    );
+
+    const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, key.id) });
+    expect(row?.rpmLimit).toBe(100);
+    expect(row?.tpmLimit).toBe(1000);
   });
 
   it("lets the member re-enable a key they disabled themselves", async () => {

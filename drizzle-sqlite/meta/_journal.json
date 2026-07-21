@@ -120,6 +120,27 @@
       "when": 1781326918982,
       "tag": "0016_fixed_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1784636428492,
+      "tag": "0017_clever_patch",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1784644976990,
+      "tag": "0018_purple_redwing",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1784644976990,
+      "tag": "0019_solid_viper",
+      "breakpoints": true
     }
   ]
 }

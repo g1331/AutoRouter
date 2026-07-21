@@ -11,6 +11,7 @@ import { transformApiKeyToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { nullableSpendingRulesSchema } from "@/lib/services/spending-rules";
+import { nullableApiKeyRateLimitSchema } from "@/lib/services/api-key-rate-limits";
 
 const log = createLogger("admin-keys");
 
@@ -72,6 +73,8 @@ const updateApiKeySchema = z
     upstream_ids: z.array(z.string().uuid()).optional(),
     allowed_models: z.array(z.string()).nullable().optional(),
     spending_rules: nullableSpendingRulesSchema,
+    rpm_limit: nullableApiKeyRateLimitSchema,
+    tpm_limit: nullableApiKeyRateLimitSchema,
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -140,6 +143,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.spending_rules !== undefined) {
       input.spendingRules = validated.spending_rules ?? null;
+    }
+    if (validated.rpm_limit !== undefined) {
+      input.rpmLimit = validated.rpm_limit;
+    }
+    if (validated.tpm_limit !== undefined) {
+      input.tpmLimit = validated.tpm_limit;
     }
 
     const result = await updateApiKey(id, input);

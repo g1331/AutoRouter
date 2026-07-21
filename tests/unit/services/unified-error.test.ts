@@ -101,6 +101,23 @@ describe("Unified Error", () => {
       });
     });
 
+    it("should create a rate-limited error body", () => {
+      const body = createUnifiedErrorBody("API_KEY_RATE_LIMITED", {
+        reason: "API_KEY_RATE_LIMITED",
+        did_send_upstream: false,
+      });
+
+      expect(body).toEqual({
+        error: {
+          message: "当前密钥已达到速率限制，请稍后重试",
+          type: "rate_limited",
+          code: "API_KEY_RATE_LIMITED",
+          reason: "API_KEY_RATE_LIMITED",
+          did_send_upstream: false,
+        },
+      });
+    });
+
     it("should create correct error body for CLIENT_DISCONNECTED", () => {
       const body = createUnifiedErrorBody("CLIENT_DISCONNECTED");
       expect(body).toEqual({
@@ -156,6 +173,18 @@ describe("Unified Error", () => {
       const response = createUnifiedErrorResponse("STREAM_ERROR");
       expect(response.status).toBe(502);
     });
+
+    it("should return 429 and preserve Retry-After for API_KEY_RATE_LIMITED", async () => {
+      const response = createUnifiedErrorResponse(
+        "API_KEY_RATE_LIMITED",
+        { reason: "API_KEY_RATE_LIMITED", did_send_upstream: false },
+        { "Retry-After": "17" }
+      );
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get("Retry-After")).toBe("17");
+      expect((await response.json()).error.type).toBe("rate_limited");
+    });
   });
 
   describe("createSSEErrorEvent", () => {
@@ -181,6 +210,7 @@ describe("Unified Error", () => {
       { code: "ALL_UPSTREAMS_UNAVAILABLE", expectedStatus: 503 },
       { code: "NO_AUTHORIZED_UPSTREAMS", expectedStatus: 403 },
       { code: "NO_UPSTREAMS_CONFIGURED", expectedStatus: 503 },
+      { code: "API_KEY_RATE_LIMITED", expectedStatus: 429 },
       { code: "SERVICE_UNAVAILABLE", expectedStatus: 503 },
       { code: "QUEUE_WAIT_TIMEOUT", expectedStatus: 504 },
       { code: "REQUEST_TIMEOUT", expectedStatus: 504 },

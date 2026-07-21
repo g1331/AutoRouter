@@ -35,6 +35,8 @@ export interface APIKeyCreate {
   allowed_models?: string[] | null;
   expires_at?: string | null; // ISO 8601 date string
   spending_rules?: APIKeySpendingRule[] | null;
+  rpm_limit?: number | null;
+  tpm_limit?: number | null;
 }
 
 export interface APIKeyUpdate {
@@ -46,6 +48,8 @@ export interface APIKeyUpdate {
   upstream_ids?: string[]; // UUID[]
   allowed_models?: string[] | null;
   spending_rules?: APIKeySpendingRule[] | null;
+  rpm_limit?: number | null;
+  tpm_limit?: number | null;
 }
 
 export interface APIKeyResponse {
@@ -57,6 +61,8 @@ export interface APIKeyResponse {
   upstream_ids: string[]; // UUID[]
   allowed_models: string[] | null;
   spending_rules: APIKeySpendingRule[] | null;
+  rpm_limit: number | null;
+  tpm_limit: number | null;
   spending_rule_statuses: APIKeySpendingRuleStatus[];
   is_quota_exceeded: boolean;
   is_active: boolean;
@@ -1341,6 +1347,8 @@ export interface PortalKeyCreate {
   upstream_ids: string[]; // UUID[]
   description?: string | null;
   spending_rules?: APIKeySpendingRule[] | null;
+  rpm_limit?: number | null;
+  tpm_limit?: number | null;
 }
 
 export interface PortalKeyUpdate {
@@ -1349,6 +1357,8 @@ export interface PortalKeyUpdate {
   is_active?: boolean;
   upstream_ids?: string[]; // UUID[]
   spending_rules?: APIKeySpendingRule[] | null;
+  rpm_limit?: number | null;
+  tpm_limit?: number | null;
 }
 
 export interface PasswordChangeRequest {

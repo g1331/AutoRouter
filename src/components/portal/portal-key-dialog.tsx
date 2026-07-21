@@ -29,11 +29,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ShowKeyDialog } from "@/components/admin/show-key-dialog";
+import { coerceNumericInput, getNumericInputValue } from "@/components/admin/upstream/coerce";
 import {
   useCreatePortalKey,
   usePortalUpstreamOptions,
   useUpdatePortalKey,
 } from "@/hooks/use-portal-keys";
+import { MAX_API_KEY_RATE_LIMIT } from "@/lib/services/api-key-rate-limits";
 import type { APIKey, APIKeyCreateResponse, APIKeySpendingRule } from "@/types/api";
 
 interface SpendingRuleDraft {
@@ -41,6 +43,13 @@ interface SpendingRuleDraft {
   limit: string;
   period_hours: string;
 }
+
+// Empty fields mean no limit. Keep them as null rather than using z.coerce.number(),
+// which would turn an empty string into 0 and corrupt an unlimited setting.
+const portalRateLimitSchema = z.preprocess(
+  (value) => coerceNumericInput(value, null),
+  z.number().int().min(1).max(MAX_API_KEY_RATE_LIMIT).nullable()
+);
 
 interface PortalKeyDialogProps {
   mode: "create" | "edit";
@@ -133,11 +142,14 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
     name: z.string().min(1, t("keyNameRequired")).max(100),
     description: z.string().max(500).optional(),
     upstream_ids: z.array(z.string()).min(1, t("selectUpstreamsRequired")),
+    rpm_limit: portalRateLimitSchema,
+    tpm_limit: portalRateLimitSchema,
   });
 
-  type KeyForm = z.infer<typeof keyFormSchema>;
+  type KeyFormInput = z.input<typeof keyFormSchema>;
+  type KeyForm = z.output<typeof keyFormSchema>;
 
-  const form = useForm<KeyForm>({
+  const form = useForm<KeyFormInput, unknown, KeyForm>({
     resolver: zodResolver(keyFormSchema),
     defaultValues:
       mode === "edit" && apiKey
@@ -145,8 +157,10 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
             name: apiKey.name,
             description: apiKey.description ?? "",
             upstream_ids: apiKey.upstream_ids,
+            rpm_limit: apiKey.rpm_limit ?? null,
+            tpm_limit: apiKey.tpm_limit ?? null,
           }
-        : { name: "", description: "", upstream_ids: [] },
+        : { name: "", description: "", upstream_ids: [], rpm_limit: null, tpm_limit: null },
   });
 
   // The granted upstream options load after this body mounts. A key may still
@@ -193,9 +207,35 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
     return parsed.length > 0 ? parsed : null;
   };
 
+  const assertRateLimitTightened = (
+    field: "rpm_limit" | "tpm_limit",
+    nextValue: number | null
+  ): boolean => {
+    const currentValue = apiKey?.[field] ?? null;
+    if (mode !== "edit" || currentValue == null) {
+      return true;
+    }
+
+    if (nextValue != null && nextValue <= currentValue) {
+      return true;
+    }
+
+    form.setError(field, {
+      type: "manual",
+      message: tPortal("keys.rateLimitsTightenHint"),
+    });
+    return false;
+  };
+
   const onSubmit = async (data: KeyForm) => {
     const rules = parseSpendingRules();
     if (rules === undefined) {
+      return;
+    }
+    if (
+      !assertRateLimitTightened("rpm_limit", data.rpm_limit) ||
+      !assertRateLimitTightened("tpm_limit", data.tpm_limit)
+    ) {
       return;
     }
 
@@ -206,6 +246,8 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
           upstream_ids: data.upstream_ids,
           description: data.description || null,
           spending_rules: rules,
+          rpm_limit: data.rpm_limit,
+          tpm_limit: data.tpm_limit,
         });
         onCreated(result);
       } else if (apiKey) {
@@ -216,6 +258,8 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
             description: data.description || null,
             upstream_ids: data.upstream_ids,
             spending_rules: rules,
+            rpm_limit: data.rpm_limit,
+            tpm_limit: data.tpm_limit,
           },
         });
       }
@@ -324,6 +368,67 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                 </FormItem>
               )}
             />
+
+            <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
+              <div>
+                <p className="type-body-medium text-foreground">{t("rateLimits")}</p>
+                <p className="mt-1 type-body-small text-muted-foreground">
+                  {mode === "edit" ? tPortal("keys.rateLimitsTightenHint") : t("rateLimitsDesc")}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="rpm_limit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("rpmLimit")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={mode === "edit" ? (apiKey?.rpm_limit ?? undefined) : undefined}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder={t("rateLimitUnlimited")}
+                          value={getNumericInputValue(field.value)}
+                          onChange={(event) => field.onChange(event.target.value)}
+                          onBlur={field.onBlur}
+                        />
+                      </FormControl>
+                      <FormDescription>{t("rpmLimitDesc")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="tpm_limit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("tpmLimit")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={mode === "edit" ? (apiKey?.tpm_limit ?? undefined) : undefined}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder={t("rateLimitUnlimited")}
+                          value={getNumericInputValue(field.value)}
+                          onChange={(event) => field.onChange(event.target.value)}
+                          onBlur={field.onBlur}
+                        />
+                      </FormControl>
+                      <FormDescription>{t("tpmLimitDesc")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
             <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
               <div className="flex items-start justify-between gap-3">

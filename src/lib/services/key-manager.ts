@@ -6,6 +6,7 @@ import { hashApiKey, verifyApiKey } from "../utils/auth";
 import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
+import { parseApiKeyRateLimit } from "@/lib/services/api-key-rate-limits";
 import { parseSpendingRules } from "@/lib/services/spending-rules";
 import { normalizeApiKeyAllowedModels } from "@/lib/api-key-models";
 import type { SpendingRule } from "@/lib/services/upstream-quota-tracker";
@@ -43,6 +44,8 @@ export interface ApiKeyCreateInput {
   description?: string | null;
   expiresAt?: Date | null;
   spendingRules?: SpendingRule[] | null;
+  rpmLimit?: number | null;
+  tpmLimit?: number | null;
   allowedModels?: string[] | null;
 }
 
@@ -67,6 +70,8 @@ export interface ApiKeyCreateResult {
   upstreamIds: string[];
   allowedModels: string[] | null;
   spendingRules: SpendingRule[] | null;
+  rpmLimit: number | null;
+  tpmLimit: number | null;
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
   isActive: boolean;
@@ -85,6 +90,8 @@ export interface ApiKeyListItem {
   upstreamIds: string[];
   allowedModels: string[] | null;
   spendingRules: SpendingRule[] | null;
+  rpmLimit: number | null;
+  tpmLimit: number | null;
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
   isActive: boolean;
@@ -121,6 +128,8 @@ export interface ApiKeyUpdateInput {
   expiresAt?: Date | null;
   upstreamIds?: string[];
   spendingRules?: SpendingRule[] | null;
+  rpmLimit?: number | null;
+  tpmLimit?: number | null;
   allowedModels?: string[] | null;
 }
 
@@ -228,6 +237,8 @@ async function buildApiKeyListItem(
     | "accessMode"
     | "allowedModels"
     | "spendingRules"
+    | "rpmLimit"
+    | "tpmLimit"
     | "isActive"
     | "disabledByAdmin"
     | "expiresAt"
@@ -249,6 +260,8 @@ async function buildApiKeyListItem(
     upstreamIds: accessMode === "restricted" ? upstreamIds : [],
     allowedModels: normalizeApiKeyAllowedModels(key.allowedModels),
     spendingRules,
+    rpmLimit: key.rpmLimit,
+    tpmLimit: key.tpmLimit,
     spendingRuleStatuses: quotaState.spendingRuleStatuses,
     isQuotaExceeded: quotaState.isQuotaExceeded,
     isActive: key.isActive,
@@ -275,6 +288,8 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
   const normalizedUpstreamIds = Array.from(new Set(upstreamIds));
   const normalizedAccessMode = normalizeAccessMode(accessMode, normalizedUpstreamIds);
   const spendingRules = parseSpendingRules(input.spendingRules);
+  const rpmLimit = parseApiKeyRateLimit(input.rpmLimit);
+  const tpmLimit = parseApiKeyRateLimit(input.tpmLimit);
   const allowedModels = normalizeApiKeyAllowedModels(input.allowedModels);
 
   if (normalizedAccessMode === "restricted" && normalizedUpstreamIds.length === 0) {
@@ -318,6 +333,8 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       accessMode: normalizedAccessMode,
       allowedModels,
       spendingRules,
+      rpmLimit,
+      tpmLimit,
       isActive: true,
       disabledByAdmin: false,
       expiresAt: expiresAt ?? null,
@@ -345,6 +362,8 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       upstreams: normalizedUpstreamIds.length,
       allowedModels: allowedModels?.length ?? 0,
       spendingRules: spendingRules?.length ?? 0,
+      rpmLimit,
+      tpmLimit,
     },
     "created API key"
   );
@@ -362,6 +381,8 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     upstreamIds: normalizedAccessMode === "restricted" ? normalizedUpstreamIds : [],
     allowedModels: normalizeApiKeyAllowedModels(newKey.allowedModels),
     spendingRules,
+    rpmLimit: newKey.rpmLimit,
+    tpmLimit: newKey.tpmLimit,
     spendingRuleStatuses: quotaState.spendingRuleStatuses,
     isQuotaExceeded: quotaState.isQuotaExceeded,
     isActive: newKey.isActive,
@@ -553,6 +574,10 @@ export async function updateApiKey(
   const now = new Date();
   const parsedSpendingRules =
     input.spendingRules !== undefined ? parseSpendingRules(input.spendingRules) : undefined;
+  const parsedRpmLimit =
+    input.rpmLimit !== undefined ? parseApiKeyRateLimit(input.rpmLimit) : undefined;
+  const parsedTpmLimit =
+    input.tpmLimit !== undefined ? parseApiKeyRateLimit(input.tpmLimit) : undefined;
   const parsedAllowedModels =
     input.allowedModels !== undefined
       ? normalizeApiKeyAllowedModels(input.allowedModels)
@@ -619,6 +644,8 @@ export async function updateApiKey(
       spendingRules:
         | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
         | null;
+      rpmLimit: number | null;
+      tpmLimit: number | null;
       updatedAt: Date;
     }> = { updatedAt: now };
 
@@ -645,6 +672,12 @@ export async function updateApiKey(
     }
     if (parsedSpendingRules !== undefined) {
       updateData.spendingRules = parsedSpendingRules;
+    }
+    if (parsedRpmLimit !== undefined) {
+      updateData.rpmLimit = parsedRpmLimit;
+    }
+    if (parsedTpmLimit !== undefined) {
+      updateData.tpmLimit = parsedTpmLimit;
     }
 
     // Update the API key record
@@ -701,6 +734,8 @@ export async function updateApiKey(
           parsedSpendingRules !== undefined
             ? (parsedSpendingRules?.length ?? 0)
             : (existing.spendingRules?.length ?? 0),
+        rpmLimit: parsedRpmLimit !== undefined ? parsedRpmLimit : existing.rpmLimit,
+        tpmLimit: parsedTpmLimit !== undefined ? parsedTpmLimit : existing.tpmLimit,
       },
       "updated API key"
     );
@@ -716,6 +751,8 @@ export async function updateApiKey(
       upstreamIds: resolvedAccessMode === "restricted" ? currentUpstreamIds : [],
       allowedModels: normalizeApiKeyAllowedModels(updatedKey.allowedModels),
       spendingRules: parseSpendingRules(updatedKey.spendingRules),
+      rpmLimit: updatedKey.rpmLimit,
+      tpmLimit: updatedKey.tpmLimit,
       isActive: updatedKey.isActive,
       disabledByAdmin: updatedKey.disabledByAdmin,
       expiresAt: updatedKey.expiresAt,
@@ -739,6 +776,8 @@ export async function updateApiKey(
       accessMode: updatedResult.accessMode,
       allowedModels: updatedResult.allowedModels,
       spendingRules: updatedResult.spendingRules,
+      rpmLimit: updatedResult.rpmLimit,
+      tpmLimit: updatedResult.tpmLimit,
       isActive: updatedResult.isActive,
       disabledByAdmin: updatedResult.disabledByAdmin,
       expiresAt: updatedResult.expiresAt,

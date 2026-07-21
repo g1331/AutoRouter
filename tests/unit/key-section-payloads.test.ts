@@ -3,7 +3,8 @@
  * Phase C1 · 分区 payload 单测（openspec/changes/restructure-ops-console-pages
  * tasks.md #5.4）。断言 API Key 详情页各分区 partial PUT payload 只含本分区字段、
  * access-grants 在 unrestricted 模式下强制清空 upstream_ids、spending-rules 的
- * 空规则语义、model-allowlist 空转 null，并覆盖分发器（dispatcher）的分区覆盖面。
+ * 空规则语义、rate-limits 的 null 语义、model-allowlist 空转 null，并覆盖分发器
+ * （dispatcher）的分区覆盖面。
  */
 import { describe, expect, it } from "vitest";
 
@@ -14,6 +15,7 @@ import {
   buildBasicPayload,
   buildExpiryPayload,
   buildModelAllowlistPayload,
+  buildRateLimitsPayload,
   buildSpendingRulesPayload,
   keySpendingRulesToApi,
 } from "@/components/admin/key/section-payloads";
@@ -30,11 +32,12 @@ const EXPECTED_SECTION_IDS = [
   "basic",
   "expiry",
   "model-allowlist",
+  "rate-limits",
   "spending-rules",
 ] as const;
 
 describe("apiKeySectionPayloadBuilders 分区覆盖", () => {
-  it("覆盖且仅覆盖 5 个分区 id", () => {
+  it("覆盖且仅覆盖 6 个分区 id", () => {
     expect(Object.keys(apiKeySectionPayloadBuilders).sort()).toEqual([...EXPECTED_SECTION_IDS]);
     expect(Object.keys(apiKeySectionSchemas).sort()).toEqual([...EXPECTED_SECTION_IDS]);
   });
@@ -58,6 +61,14 @@ describe("apiKeySectionPayloadBuilders 分区覆盖", () => {
     const expiryValues = apiKeySectionSchemas.expiry.parse({ expires_at: null });
     expect(buildApiKeySectionPayload("expiry", expiryValues)).toEqual(
       buildExpiryPayload(expiryValues)
+    );
+
+    const rateLimitValues = apiKeySectionSchemas["rate-limits"].parse({
+      rpm_limit: "60",
+      tpm_limit: "",
+    });
+    expect(buildApiKeySectionPayload("rate-limits", rateLimitValues)).toEqual(
+      buildRateLimitsPayload(rateLimitValues)
     );
   });
 });
@@ -189,6 +200,35 @@ describe("buildSpendingRulesPayload", () => {
     const payload = buildSpendingRulesPayload(values);
     expect(payload).toEqual({ spending_rules: [] });
     expect("spending_rules" in payload).toBe(true);
+  });
+});
+
+describe("buildRateLimitsPayload", () => {
+  it("serializes both independent rate-limit dimensions", () => {
+    const values = apiKeySectionSchemas["rate-limits"].parse({
+      rpm_limit: "60",
+      tpm_limit: "120000",
+    });
+
+    expect(buildRateLimitsPayload(values)).toEqual({ rpm_limit: 60, tpm_limit: 120000 });
+  });
+
+  it("keeps empty numeric inputs as null instead of coercing them to zero", () => {
+    const values = apiKeySectionSchemas["rate-limits"].parse({
+      rpm_limit: "",
+      tpm_limit: "   ",
+    });
+
+    expect(buildRateLimitsPayload(values)).toEqual({ rpm_limit: null, tpm_limit: null });
+  });
+
+  it("rejects zero and fractional rate limits", () => {
+    expect(
+      apiKeySectionSchemas["rate-limits"].safeParse({ rpm_limit: "0", tpm_limit: null }).success
+    ).toBe(false);
+    expect(
+      apiKeySectionSchemas["rate-limits"].safeParse({ rpm_limit: null, tpm_limit: "1.5" }).success
+    ).toBe(false);
   });
 });
 

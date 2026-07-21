@@ -49,6 +49,8 @@ function makeKey(overrides: Partial<APIKey> = {}): APIKey {
     upstream_ids: ["up-1"],
     allowed_models: null,
     spending_rules: [{ period_type: "daily", limit: 5 }],
+    rpm_limit: null,
+    tpm_limit: null,
     spending_rule_statuses: [],
     is_quota_exceeded: false,
     is_active: true,
@@ -85,6 +87,8 @@ describe("PortalKeyDialog", () => {
         upstream_ids: ["up-1"],
         description: null,
         spending_rules: null,
+        rpm_limit: null,
+        tpm_limit: null,
       });
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -92,6 +96,41 @@ describe("PortalKeyDialog", () => {
       "data-key-value",
       "sk-auto-full-secret"
     );
+  });
+
+  it("edits independent rate limits and explains the self-service tightening rule", async () => {
+    updateMutateAsyncMock.mockResolvedValue(makeKey());
+
+    render(
+      <PortalKeyDialog
+        mode="edit"
+        apiKey={makeKey({ rpm_limit: 120, tpm_limit: 120000 })}
+        open
+        onOpenChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("portal.keys.rateLimitsTightenHint")).toBeInTheDocument();
+    expect(screen.getByLabelText("keys.rpmLimit")).toHaveValue(120);
+    expect(screen.getByLabelText("keys.tpmLimit")).toHaveValue(120000);
+
+    fireEvent.change(screen.getByLabelText("keys.rpmLimit"), { target: { value: "60" } });
+    fireEvent.change(screen.getByLabelText("keys.tpmLimit"), { target: { value: "60000" } });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(updateMutateAsyncMock).toHaveBeenCalledWith({
+        id: "key-1",
+        data: {
+          name: "my key",
+          description: "personal key",
+          upstream_ids: ["up-1"],
+          spending_rules: [{ period_type: "daily", limit: 5 }],
+          rpm_limit: 60,
+          tpm_limit: 60000,
+        },
+      });
+    });
   });
 
   it("requires at least one upstream before creating", async () => {
@@ -144,6 +183,8 @@ describe("PortalKeyDialog", () => {
           description: "personal key",
           upstream_ids: ["up-1"],
           spending_rules: [{ period_type: "daily", limit: 5 }],
+          rpm_limit: null,
+          tpm_limit: null,
         },
       });
     });
@@ -175,6 +216,8 @@ describe("PortalKeyDialog", () => {
           description: "personal key",
           upstream_ids: ["up-1"],
           spending_rules: [{ period_type: "daily", limit: 5 }],
+          rpm_limit: null,
+          tpm_limit: null,
         },
       });
     });
@@ -213,6 +256,8 @@ describe("PortalKeyDialog", () => {
           description: "personal key",
           upstream_ids: ["up-1"],
           spending_rules: [{ period_type: "daily", limit: 5 }],
+          rpm_limit: null,
+          tpm_limit: null,
         },
       });
     });
