@@ -36,5 +36,5 @@
 
 ## 7. 本地预览环境迁移修复
 
-- [x] 7.1 补齐 SQLite `upstreams` 的 `official_website_url`、`max_concurrency` 前向迁移，并在全新库迁移测试中覆盖。
-- [ ] 7.2 验证迁移并使用隔离 SQLite 库启动 Issue #237 预览环境。
+- [x] 7.1 补齐 SQLite `upstreams` 的 `official_website_url`、`max_concurrency`、`spending_rules` 前向迁移，并在全新库迁移测试中覆盖。
+- [x] 7.2 验证迁移并使用隔离 SQLite 库启动 Issue #237 预览环境。

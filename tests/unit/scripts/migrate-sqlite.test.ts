@@ -137,6 +137,7 @@ describe("db:migrate:sqlite", () => {
       expect.arrayContaining([
         "official_website_url",
         "max_concurrency",
+        "spending_rules",
         "model_discovery",
         "model_rules",
         "queue_policy",
