@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { nullableSpendingRulesSchema } from "@/lib/services/spending-rules";
+import { nullableApiKeyRateLimitSchema } from "@/lib/services/api-key-rate-limits";
 
 const log = createLogger("admin-keys");
 
@@ -20,6 +21,8 @@ const createApiKeySchema = z
     description: z.string().nullable().optional(),
     expires_at: z.string().datetime().nullable().optional(),
     spending_rules: nullableSpendingRulesSchema,
+    rpm_limit: nullableApiKeyRateLimitSchema,
+    tpm_limit: nullableApiKeyRateLimitSchema,
   })
   .superRefine((data, ctx) => {
     const effectiveMode =
@@ -80,6 +83,8 @@ export async function POST(request: NextRequest) {
       description: validated.description ?? null,
       expiresAt: validated.expires_at ? new Date(validated.expires_at) : null,
       spendingRules: validated.spending_rules ?? null,
+      rpmLimit: validated.rpm_limit ?? null,
+      tpmLimit: validated.tpm_limit ?? null,
     };
 
     const result = await createApiKey(input);

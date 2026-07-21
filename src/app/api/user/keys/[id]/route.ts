@@ -6,12 +6,14 @@ import {
   KeyOwnershipError,
   UpstreamNotAllowedError,
   SpendingRuleRelaxationError,
+  ApiKeyRateLimitRelaxationError,
   AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 import { transformApiKeyToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { nullableSpendingRulesSchema } from "@/lib/services/spending-rules";
+import { nullableApiKeyRateLimitSchema } from "@/lib/services/api-key-rate-limits";
 
 const log = createLogger("user-keys");
 
@@ -26,6 +28,8 @@ const updateOwnKeySchema = z.object({
   is_active: z.boolean().optional(),
   upstream_ids: z.array(z.string().uuid()).min(1).optional(),
   spending_rules: nullableSpendingRulesSchema,
+  rpm_limit: nullableApiKeyRateLimitSchema,
+  tpm_limit: nullableApiKeyRateLimitSchema,
 });
 
 /**
@@ -56,6 +60,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       ...(validated.spending_rules !== undefined
         ? { spendingRules: validated.spending_rules }
         : {}),
+      ...(validated.rpm_limit !== undefined ? { rpmLimit: validated.rpm_limit } : {}),
+      ...(validated.tpm_limit !== undefined ? { tpmLimit: validated.tpm_limit } : {}),
     });
 
     return NextResponse.json(transformApiKeyToApi(result));
@@ -76,6 +82,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return errorResponse(error.message, 403);
     }
     if (error instanceof SpendingRuleRelaxationError) {
+      return errorResponse(error.message, 400);
+    }
+    if (error instanceof ApiKeyRateLimitRelaxationError) {
       return errorResponse(error.message, 400);
     }
     log.error({ err: error }, "failed to update own API key");

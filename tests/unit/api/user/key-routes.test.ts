@@ -9,7 +9,7 @@ import { NextRequest } from "next/server";
 // scope from the principal, the schema stripping any attempted user_id /
 // access_mode fields, the snake_case body mapping, and the error-to-status
 // mapping (KeyOwnershipError → 404, UpstreamNotAllowedError → 403,
-// SpendingRuleRelaxationError → 400).
+// SpendingRuleRelaxationError / ApiKeyRateLimitRelaxationError → 400).
 
 vi.mock("@/lib/utils/api-auth", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
@@ -36,6 +36,7 @@ vi.mock("@/lib/services/user-key-service", () => {
   class KeyOwnershipError extends Error {}
   class UpstreamNotAllowedError extends Error {}
   class SpendingRuleRelaxationError extends Error {}
+  class ApiKeyRateLimitRelaxationError extends Error {}
   class AdminLockedKeyError extends Error {}
   return {
     listOwnApiKeys: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@/lib/services/user-key-service", () => {
     KeyOwnershipError,
     UpstreamNotAllowedError,
     SpendingRuleRelaxationError,
+    ApiKeyRateLimitRelaxationError,
     AdminLockedKeyError,
   };
 });
@@ -54,6 +56,7 @@ import {
   KeyOwnershipError,
   UpstreamNotAllowedError,
   SpendingRuleRelaxationError,
+  ApiKeyRateLimitRelaxationError,
   AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 import { GET as listRoute, POST as createRoute } from "@/app/api/user/keys/route";
@@ -96,6 +99,8 @@ function makeKeyItem() {
     upstreamIds: [UPSTREAM_ID],
     allowedModels: null,
     spendingRules: null,
+    rpmLimit: 60,
+    tpmLimit: 120000,
     spendingRuleStatuses: [],
     isQuotaExceeded: false,
     isActive: true,
@@ -226,6 +231,8 @@ describe("POST /api/user/keys", () => {
           name: "my key",
           upstream_ids: [UPSTREAM_ID],
           spending_rules: [{ period_type: "daily", limit: 5 }],
+          rpm_limit: 60,
+          tpm_limit: 120000,
         },
       })
     );
@@ -237,6 +244,8 @@ describe("POST /api/user/keys", () => {
       upstreamIds: [UPSTREAM_ID],
       description: null,
       spendingRules: [{ period_type: "daily", limit: 5 }],
+      rpmLimit: 60,
+      tpmLimit: 120000,
     });
   });
 
@@ -262,6 +271,8 @@ describe("POST /api/user/keys", () => {
       upstreamIds: [UPSTREAM_ID],
       description: null,
       spendingRules: null,
+      rpmLimit: null,
+      tpmLimit: null,
     });
   });
 
@@ -303,6 +314,8 @@ describe("PUT /api/user/keys/[id]", () => {
           is_active: false,
           upstream_ids: [UPSTREAM_ID],
           spending_rules: [{ period_type: "daily", limit: 1 }],
+          rpm_limit: 30,
+          tpm_limit: 60000,
           user_id: OTHER_ID,
           access_mode: "unrestricted",
         },
@@ -315,6 +328,8 @@ describe("PUT /api/user/keys/[id]", () => {
       isActive: false,
       upstreamIds: [UPSTREAM_ID],
       spendingRules: [{ period_type: "daily", limit: 1 }],
+      rpmLimit: 30,
+      tpmLimit: 60000,
     });
   });
 
@@ -360,6 +375,21 @@ describe("PUT /api/user/keys/[id]", () => {
       makeRequest(`http://localhost/api/user/keys/${KEY_ID}`, MEMBER, {
         method: "PUT",
         body: { spending_rules: null },
+      }),
+      makeContext()
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("maps ApiKeyRateLimitRelaxationError to 400", async () => {
+    vi.mocked(userKeyService.updateOwnApiKey).mockRejectedValue(
+      new ApiKeyRateLimitRelaxationError("Existing RPM limit cannot be cleared")
+    );
+
+    const res = await updateRoute(
+      makeRequest("http://localhost/api/user/keys/" + KEY_ID, MEMBER, {
+        method: "PUT",
+        body: { rpm_limit: null },
       }),
       makeContext()
     );

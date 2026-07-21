@@ -68,6 +68,8 @@ export const apiKeys = sqliteTable(
       | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
       | null
     >(),
+    rpmLimit: integer("rpm_limit"),
+    tpmLimit: integer("tpm_limit"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     // Mirror of schema-pg: records that the inactive state was imposed by an
     // admin. A member cannot re-enable a key while this is set.

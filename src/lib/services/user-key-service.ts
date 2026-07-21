@@ -12,6 +12,7 @@ import {
 } from "./key-manager";
 import { getUserUpstreams } from "./user-service";
 import { parseSpendingRules } from "./spending-rules";
+import { parseApiKeyRateLimit } from "./api-key-rate-limits";
 import type { SpendingRule } from "./upstream-quota-tracker";
 import { createLogger } from "../utils/logger";
 
@@ -28,6 +29,8 @@ const log = createLogger("user-key-service");
 //   no owner field);
 // - spending rules can only be tightened: existing rules cannot be removed or
 //   raised, and a non-empty rule set cannot be cleared.
+// - rate-limit dimensions can only be tightened: an existing RPM/TPM value
+//   cannot be removed or raised.
 
 /**
  * Raised when a key does not exist or is not owned by the caller. The two
@@ -64,6 +67,18 @@ export class SpendingRuleRelaxationError extends Error {
 }
 
 /**
+ * Raised when a member attempts to remove or increase a configured RPM/TPM
+ * boundary. Rate limits are independent dimensions, so one can be tightened
+ * without changing the other.
+ */
+export class ApiKeyRateLimitRelaxationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApiKeyRateLimitRelaxationError";
+  }
+}
+
+/**
  * Raised when a member tries to re-enable a key that an admin has disabled. The
  * admin lock takes priority: only an admin can restore such a key, so the
  * member is denied (decision: admin disable is irreversible from the portal).
@@ -80,6 +95,8 @@ export interface UserKeyCreateInput {
   upstreamIds: string[];
   description?: string | null;
   spendingRules?: SpendingRule[] | null;
+  rpmLimit?: number | null;
+  tpmLimit?: number | null;
 }
 
 export interface UserKeyUpdateInput {
@@ -88,6 +105,8 @@ export interface UserKeyUpdateInput {
   isActive?: boolean;
   upstreamIds?: string[];
   spendingRules?: SpendingRule[] | null;
+  rpmLimit?: number | null;
+  tpmLimit?: number | null;
 }
 
 function ruleKey(rule: SpendingRule): string {
@@ -123,6 +142,29 @@ function assertSpendingRulesTightened(
         `Spending limit for ${ruleKey(rule)} can only be tightened (current ${rule.limit})`
       );
     }
+  }
+}
+
+/**
+ * Enforce the tighten-only contract for one rate-limit dimension. Moving from
+ * unlimited to a positive value is stricter; removing or increasing an
+ * existing value is a relaxation.
+ */
+function assertRateLimitTightened(
+  dimension: "RPM" | "TPM",
+  existing: number | null,
+  next: number | null
+): void {
+  if (existing == null) {
+    return;
+  }
+  if (next == null) {
+    throw new ApiKeyRateLimitRelaxationError("Existing " + dimension + " limit cannot be cleared");
+  }
+  if (next > existing) {
+    throw new ApiKeyRateLimitRelaxationError(
+      dimension + " limit can only be tightened (current " + existing + ")"
+    );
   }
 }
 
@@ -170,6 +212,8 @@ export async function createOwnApiKey(
     userId,
     description: input.description ?? null,
     spendingRules: input.spendingRules ?? null,
+    rpmLimit: input.rpmLimit ?? null,
+    tpmLimit: input.tpmLimit ?? null,
   });
 
   log.info({ userId, keyPrefix: result.keyPrefix }, "user created self-service API key");
@@ -204,6 +248,12 @@ export async function updateOwnApiKey(
   if (input.spendingRules !== undefined) {
     assertSpendingRulesTightened(parseSpendingRules(key.spendingRules), input.spendingRules);
   }
+  if (input.rpmLimit !== undefined) {
+    assertRateLimitTightened("RPM", key.rpmLimit, parseApiKeyRateLimit(input.rpmLimit));
+  }
+  if (input.tpmLimit !== undefined) {
+    assertRateLimitTightened("TPM", key.tpmLimit, parseApiKeyRateLimit(input.tpmLimit));
+  }
 
   const update: ApiKeyUpdateInput = {};
   if (input.name !== undefined) update.name = input.name;
@@ -211,6 +261,8 @@ export async function updateOwnApiKey(
   if (input.isActive !== undefined) update.isActive = input.isActive;
   if (input.upstreamIds !== undefined) update.upstreamIds = input.upstreamIds;
   if (input.spendingRules !== undefined) update.spendingRules = input.spendingRules;
+  if (input.rpmLimit !== undefined) update.rpmLimit = input.rpmLimit;
+  if (input.tpmLimit !== undefined) update.tpmLimit = input.tpmLimit;
 
   const result = await updateApiKey(keyId, update);
   log.info({ userId, keyPrefix: result.keyPrefix }, "user updated self-service API key");

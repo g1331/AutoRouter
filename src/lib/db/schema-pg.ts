@@ -75,6 +75,8 @@ export const apiKeys = pgTable(
       | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
       | null
     >(),
+    rpmLimit: integer("rpm_limit"),
+    tpmLimit: integer("tpm_limit"),
     isActive: boolean("is_active").notNull().default(true),
     // Records that the inactive state was imposed by an admin. A member cannot
     // re-enable a key while this is set; an admin clears it by re-enabling the
