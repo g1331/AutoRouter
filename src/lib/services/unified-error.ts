@@ -15,6 +15,7 @@ export type UnifiedErrorCode =
   | "NO_AUTHORIZED_UPSTREAMS"
   | "NO_UPSTREAMS_CONFIGURED"
   | "API_KEY_QUOTA_EXCEEDED"
+  | "API_KEY_RATE_LIMITED"
   | "API_KEY_MODEL_NOT_ALLOWED"
   | "SERVICE_UNAVAILABLE"
   | "QUEUE_WAIT_TIMEOUT"
@@ -25,13 +26,19 @@ export type UnifiedErrorCode =
 /**
  * Error types for unified error responses.
  */
-export type UnifiedErrorType = "service_unavailable" | "timeout" | "client_error" | "stream_error";
+export type UnifiedErrorType =
+  | "service_unavailable"
+  | "timeout"
+  | "client_error"
+  | "stream_error"
+  | "rate_limited";
 
 /**
  * Optional error reason details for better diagnostics.
  */
 export type UnifiedErrorReason =
   | "API_KEY_QUOTA_EXCEEDED"
+  | "API_KEY_RATE_LIMITED"
   | "API_KEY_MODEL_NOT_ALLOWED"
   | "NO_AUTHORIZED_UPSTREAMS"
   | "CLIENT_DISCONNECTED"
@@ -74,6 +81,7 @@ const ERROR_MESSAGES: Record<UnifiedErrorCode, string> = {
   NO_AUTHORIZED_UPSTREAMS: "当前密钥未绑定可用上游，请先完成授权配置",
   NO_UPSTREAMS_CONFIGURED: "服务暂时不可用，请稍后重试",
   API_KEY_QUOTA_EXCEEDED: "当前密钥已达到消费限额，请稍后重试",
+  API_KEY_RATE_LIMITED: "当前密钥已达到速率限制，请稍后重试",
   API_KEY_MODEL_NOT_ALLOWED: "当前密钥不允许请求该模型，请检查密钥模型权限",
   SERVICE_UNAVAILABLE: "服务暂时不可用，请稍后重试",
   QUEUE_WAIT_TIMEOUT: "请求在等待可用上游槽位时超时，请稍后重试",
@@ -90,6 +98,7 @@ const ERROR_TYPES: Record<UnifiedErrorCode, UnifiedErrorType> = {
   NO_AUTHORIZED_UPSTREAMS: "client_error",
   NO_UPSTREAMS_CONFIGURED: "service_unavailable",
   API_KEY_QUOTA_EXCEEDED: "client_error",
+  API_KEY_RATE_LIMITED: "rate_limited",
   API_KEY_MODEL_NOT_ALLOWED: "client_error",
   SERVICE_UNAVAILABLE: "service_unavailable",
   QUEUE_WAIT_TIMEOUT: "timeout",
@@ -106,6 +115,7 @@ const HTTP_STATUS_CODES: Record<UnifiedErrorCode, number> = {
   NO_AUTHORIZED_UPSTREAMS: 403,
   NO_UPSTREAMS_CONFIGURED: 503,
   API_KEY_QUOTA_EXCEEDED: 429,
+  API_KEY_RATE_LIMITED: 429,
   API_KEY_MODEL_NOT_ALLOWED: 403,
   SERVICE_UNAVAILABLE: 503,
   QUEUE_WAIT_TIMEOUT: 504,
@@ -145,14 +155,17 @@ export function createUnifiedErrorBody(
  *
  * @param code - The error code
  * @param details - Optional diagnostic details for downstream users
+ * @param headers - Optional response headers
  * @returns A NextResponse with the unified error format
  */
 export function createUnifiedErrorResponse(
   code: UnifiedErrorCode,
-  details?: UnifiedErrorDetails
+  details?: UnifiedErrorDetails,
+  headers?: HeadersInit
 ): NextResponse {
   return NextResponse.json(createUnifiedErrorBody(code, details), {
     status: HTTP_STATUS_CODES[code],
+    headers,
   });
 }
 

@@ -21,6 +21,11 @@ const { mockApiKeyQuotaTracker, mockResolveBillingModelPrice } = vi.hoisted(() =
   })),
 }));
 
+const { mockCheckAndRecordApiKeyRateLimit, mockRecordApiKeyTokenUsage } = vi.hoisted(() => ({
+  mockCheckAndRecordApiKeyRateLimit: vi.fn(),
+  mockRecordApiKeyTokenUsage: vi.fn(),
+}));
+
 const {
   mockSelectFromUpstreamCandidates,
   mockDecideQueuedUpstreamResume,
@@ -205,6 +210,11 @@ vi.mock("@/lib/services/billing-price-service", () => ({
 
 vi.mock("@/lib/services/api-key-quota-tracker", () => ({
   apiKeyQuotaTracker: mockApiKeyQuotaTracker,
+}));
+
+vi.mock("@/lib/services/api-key-rate-limiter", () => ({
+  checkAndRecordApiKeyRateLimit: mockCheckAndRecordApiKeyRateLimit,
+  recordApiKeyTokenUsage: mockRecordApiKeyTokenUsage,
 }));
 
 // Mock load-balancer module
@@ -511,6 +521,7 @@ describe("proxy route upstream selection", () => {
     vi.resetModules();
     mockApiKeyQuotaTracker.initialize.mockResolvedValue(undefined);
     mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValue(null);
+    mockCheckAndRecordApiKeyRateLimit.mockReturnValue({ allowed: true });
     mockMatchFailureRule.mockResolvedValue(null);
     mockGetCircuitBreakerState.mockResolvedValue(null);
     mockGetEffectiveCircuitBreakerConfig.mockResolvedValue({
@@ -826,6 +837,159 @@ describe("proxy route upstream selection", () => {
       expect(response.status).not.toBe(401);
       expect(db.query.users.findFirst).not.toHaveBeenCalled();
     });
+  });
+
+  it("should reject a rate-limited request before upstream candidate lookup", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-rate",
+        name: "Rate Limited Key",
+        expiresAt: null,
+        isActive: true,
+        rpmLimit: 1,
+        tpmLimit: null,
+      },
+    ]);
+    mockCheckAndRecordApiKeyRateLimit.mockReturnValueOnce({
+      allowed: false,
+      limitedBy: ["rpm"],
+      retryAfterSeconds: 42,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("42");
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "API_KEY_RATE_LIMITED",
+        type: "rate_limited",
+        reason: "API_KEY_RATE_LIMITED",
+        did_send_upstream: false,
+      }),
+    });
+    expect(mockCheckAndRecordApiKeyRateLimit).toHaveBeenCalledWith("key-1", {
+      rpmLimit: 1,
+      tpmLimit: null,
+    });
+    expect(db.query.apiKeyUpstreams.findMany).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        apiKeyName: "Rate Limited Key",
+        apiKeyPrefix: "sk-rate",
+        upstreamId: null,
+        path: "chat/completions",
+        model: "gpt-5.2",
+        statusCode: 429,
+        errorMessage: expect.stringContaining("rate_limited"),
+        routingDecision: expect.objectContaining({
+          matched_route_capability: "openai_chat_compatible",
+          did_send_upstream: false,
+          failure_stage: "auth_filter",
+          actual_upstream_id: null,
+        }),
+      })
+    );
+  });
+
+  it("should record non-stream usage and reject the next request after TPM is exceeded", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
+    const apiKey = {
+      id: "key-1",
+      keyHash: "hash-1",
+      keyPrefix: "sk-tpm",
+      name: "TPM Key",
+      expiresAt: null,
+      isActive: true,
+      rpmLimit: null,
+      tpmLimit: 1_000,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([apiKey]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValue([{ upstreamId: upstream.id }]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 700,
+        completionTokens: 400,
+        totalTokens: 1_100,
+      },
+    });
+    mockCheckAndRecordApiKeyRateLimit.mockReturnValueOnce({ allowed: true }).mockReturnValueOnce({
+      allowed: false,
+      limitedBy: ["tpm"],
+      retryAfterSeconds: 59,
+    });
+
+    const createRequest = () =>
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      });
+
+    const firstResponse = await POST(createRequest(), {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    expect(firstResponse.status).toBe(200);
+    expect(mockRecordApiKeyTokenUsage).toHaveBeenCalledWith("key-1", 1_100, 1_000);
+
+    const secondResponse = await POST(createRequest(), {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+
+    expect(secondResponse.status).toBe(429);
+    expect(secondResponse.headers.get("Retry-After")).toBe("59");
+    expect((await secondResponse.json()).error).toEqual(
+      expect.objectContaining({
+        code: "API_KEY_RATE_LIMITED",
+        reason: "API_KEY_RATE_LIMITED",
+        did_send_upstream: false,
+      })
+    );
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(db.query.apiKeyUpstreams.findMany).toHaveBeenCalledTimes(1);
   });
 
   it("should reject streaming requests before upstream routing when API key quota is exceeded", async () => {
@@ -4049,7 +4213,7 @@ describe("proxy route upstream selection", () => {
     };
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
-      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true, tpmLimit: 1_000 },
     ]);
     vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
@@ -4099,7 +4263,14 @@ describe("proxy route upstream selection", () => {
       isStream: true,
       usage: null,
       headerDiff: null,
-      streamMetricsPromise: Promise.resolve({ usage: null, ttftMs: null }),
+      streamMetricsPromise: Promise.resolve({
+        usage: {
+          promptTokens: 700,
+          completionTokens: 500,
+          totalTokens: 1_200,
+        },
+        ttftMs: null,
+      }),
     });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
@@ -4130,6 +4301,12 @@ describe("proxy route upstream selection", () => {
     }
 
     await expect.poll(() => vi.mocked(releaseConnection).mock.calls.length).toBe(1);
+    await expect
+      .poll(() =>
+        mockRecordApiKeyTokenUsage.mock.calls.some(([, totalTokens]) => totalTokens === 1_200)
+      )
+      .toBe(true);
+    expect(mockRecordApiKeyTokenUsage).toHaveBeenCalledWith("key-1", 1_200, 1_000);
     expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
       "up-release-stream",
     ]);

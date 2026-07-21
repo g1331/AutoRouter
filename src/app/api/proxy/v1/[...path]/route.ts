@@ -122,6 +122,11 @@ import { buildCompensations } from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
 import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
+import {
+  checkAndRecordApiKeyRateLimit,
+  recordApiKeyTokenUsage,
+  type ApiKeyRateLimitDimension,
+} from "@/lib/services/api-key-rate-limiter";
 import { resolveBillingModelPrice } from "@/lib/services/billing-price-service";
 import {
   createApiKeyModelListResponseBody,
@@ -286,7 +291,14 @@ async function logApiKeyQuotaRejectedRequest(input: {
   });
 }
 
-async function logApiKeyModelRejectedRequest(input: {
+function buildApiKeyRateLimitedErrorMessage(
+  apiKeyId: string,
+  limitedBy: ApiKeyRateLimitDimension[]
+): string {
+  return `API key rate_limited (api_key_id=${apiKeyId}; dimensions=${limitedBy.join(",")})`;
+}
+
+async function logApiKeyAdmissionRejectedRequest(input: {
   apiKeyId: string;
   apiKeyName: string | null;
   apiKeyPrefix: string | null;
@@ -301,6 +313,7 @@ async function logApiKeyModelRejectedRequest(input: {
   sessionId: string | null;
   matchedRouteCapability: RouteCapability | null;
   routeMatchSource: RouteMatchSource | null;
+  errorCode: "API_KEY_MODEL_NOT_ALLOWED" | "API_KEY_RATE_LIMITED";
   errorMessage: string;
 }): Promise<void> {
   const routingDecision: RoutingDecisionLog = {
@@ -339,7 +352,7 @@ async function logApiKeyModelRejectedRequest(input: {
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
-    statusCode: getHttpStatusForError("API_KEY_MODEL_NOT_ALLOWED"),
+    statusCode: getHttpStatusForError(input.errorCode),
     durationMs: Date.now() - input.startTime,
     routingDurationMs: null,
     errorMessage: input.errorMessage,
@@ -2572,18 +2585,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     userId: validApiKey.userId ?? null,
   };
 
-  // Recorder setup
-  const trafficRecordingSettings = await getTrafficRecordingSettings();
-  const shouldRecordSuccess = shouldRecordFixture("success", trafficRecordingSettings);
-  const shouldRecordFailure = shouldRecordFixture("failure", trafficRecordingSettings);
-  const recorderEnabled = shouldRecordSuccess || shouldRecordFailure;
-  const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
-
-  // Routing type is always "tiered" for priority-based routing
-  const routingType = "tiered" as const;
-
-  await ensureRouteCapabilityMigration();
-
   // Extract model from request body. For path-based routing, model may be absent.
   const tempContext = await extractRequestContext(request, path);
   const model = tempContext.model;
@@ -2599,21 +2600,28 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const matchedRouteMatchSource = matchedRouteCapabilityDetails?.routeMatchSource ?? null;
   const thinkingConfig = extractRequestThinkingConfig(matchedRouteCapability, bodyJson);
 
-  if (!isModelAllowedByApiKey(model, validApiKey.allowedModels)) {
-    const errorCode: UnifiedErrorCode = "API_KEY_MODEL_NOT_ALLOWED";
-    const errorReason: UnifiedErrorReason = "API_KEY_MODEL_NOT_ALLOWED";
-    const errorMessage = `API key is not allowed to request model: ${model}`;
+  // Rate limiting is deliberately checked before recorder setup, migrations, and
+  // upstream candidate lookup so rejected requests never consume upstream work.
+  const rateLimitResult = checkAndRecordApiKeyRateLimit(validApiKey.id, {
+    rpmLimit: validApiKey.rpmLimit,
+    tpmLimit: validApiKey.tpmLimit,
+  });
+  if (!rateLimitResult.allowed) {
+    const errorCode: UnifiedErrorCode = "API_KEY_RATE_LIMITED";
+    const errorReason: UnifiedErrorReason = "API_KEY_RATE_LIMITED";
+    const errorMessage = buildApiKeyRateLimitedErrorMessage(
+      validApiKey.id,
+      rateLimitResult.limitedBy
+    );
     const errorDetails = {
       reason: errorReason,
       did_send_upstream: false,
       request_id: requestId,
-      user_hint: model
-        ? `当前密钥未允许模型 ${model}，请在密钥配置中添加该模型`
-        : "当前密钥未允许该请求模型，请检查密钥模型权限",
+      user_hint: "当前密钥的请求频率或 Token 用量已达到限制，请在 Retry-After 指定时间后重试",
     } as const;
 
     try {
-      await logApiKeyModelRejectedRequest({
+      await logApiKeyAdmissionRejectedRequest({
         apiKeyId: validApiKey.id,
         apiKeyName: apiKeySnapshot.apiKeyName,
         apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
@@ -2628,6 +2636,63 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         sessionId: null,
         matchedRouteCapability,
         routeMatchSource: matchedRouteMatchSource,
+        errorCode,
+        errorMessage,
+      });
+    } catch (error) {
+      log.error(
+        { err: error, requestId, apiKeyId: validApiKey.id },
+        "failed to log API key rate limit rejection"
+      );
+    }
+
+    return createUnifiedErrorResponse(errorCode, errorDetails, {
+      "Retry-After": String(rateLimitResult.retryAfterSeconds),
+    });
+  }
+
+  // Recorder setup
+  const trafficRecordingSettings = await getTrafficRecordingSettings();
+  const shouldRecordSuccess = shouldRecordFixture("success", trafficRecordingSettings);
+  const shouldRecordFailure = shouldRecordFixture("failure", trafficRecordingSettings);
+  const recorderEnabled = shouldRecordSuccess || shouldRecordFailure;
+  const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
+
+  // Routing type is always "tiered" for priority-based routing
+  const routingType = "tiered" as const;
+
+  await ensureRouteCapabilityMigration();
+
+  if (!isModelAllowedByApiKey(model, validApiKey.allowedModels)) {
+    const errorCode: UnifiedErrorCode = "API_KEY_MODEL_NOT_ALLOWED";
+    const errorReason: UnifiedErrorReason = "API_KEY_MODEL_NOT_ALLOWED";
+    const errorMessage = `API key is not allowed to request model: ${model}`;
+    const errorDetails = {
+      reason: errorReason,
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: model
+        ? `当前密钥未允许模型 ${model}，请在密钥配置中添加该模型`
+        : "当前密钥未允许该请求模型，请检查密钥模型权限",
+    } as const;
+
+    try {
+      await logApiKeyAdmissionRejectedRequest({
+        apiKeyId: validApiKey.id,
+        apiKeyName: apiKeySnapshot.apiKeyName,
+        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        userId: apiKeySnapshot.userId,
+        request,
+        path,
+        model,
+        reasoningEffort,
+        thinkingConfig,
+        requestId,
+        startTime,
+        sessionId: null,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
+        errorCode,
         errorMessage,
       });
     } catch (error) {
@@ -3589,6 +3654,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             cacheWriteTokens: usage?.cacheCreationTokens || 0,
           };
 
+          // TPM is based on usage reported after the stream settles. The
+          // request that crosses the limit remains successful; only a later
+          // request can be rejected by the next admission check.
+          recordApiKeyTokenUsage(validApiKey.id, usageForBilling.totalTokens, validApiKey.tpmLimit);
+
           let persistedLogId: string | null = requestLogId;
           if (requestLogId) {
             const updatedLog = await updateRequestLog(requestLogId, {
@@ -3791,6 +3861,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         cacheReadTokens: usage?.cacheReadTokens || 0,
         cacheWriteTokens: usage?.cacheCreationTokens || 0,
       };
+
+      // Usage is available only after the non-stream response completes, so
+      // TPM likewise applies to the next request rather than this response.
+      recordApiKeyTokenUsage(validApiKey.id, usageForBilling.totalTokens, validApiKey.tpmLimit);
 
       // Log request
       let persistedLogId: string | null = requestLogId;
