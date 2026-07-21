@@ -21,5 +21,5 @@
 
 ## 4. 整体验证与交接
 
-- [ ] 4.1 执行相关 Vitest 测试、数据库一致性检查、lint、format check、TypeScript 检查与受影响构建验证，修复发现的问题。
-- [ ] 4.2 复核 OpenSpec 规格与实现的一致性，更新任务状态、提交最终验证修正并准备 Issue #237 的交接。
+- [x] 4.1 执行相关 Vitest 测试、数据库一致性检查、lint、format check、TypeScript 检查与受影响构建验证，修复发现的问题。
+- [x] 4.2 复核 OpenSpec 规格与实现的一致性，更新任务状态、提交最终验证修正并准备 Issue #237 的交接。
