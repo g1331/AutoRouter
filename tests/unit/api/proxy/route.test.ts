@@ -992,6 +992,99 @@ describe("proxy route upstream selection", () => {
     expect(db.query.apiKeyUpstreams.findMany).toHaveBeenCalledTimes(1);
   });
 
+  it("should record settled stream usage after the downstream client disconnects", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
+    const apiKey = {
+      id: "key-1",
+      keyHash: "hash-1",
+      keyPrefix: "sk-tpm-stream",
+      name: "Streaming TPM Key",
+      expiresAt: null,
+      isActive: true,
+      rpmLimit: null,
+      tpmLimit: 1_000,
+    };
+    const settledUsage = {
+      promptTokens: 700,
+      completionTokens: 500,
+      totalTokens: 1_200,
+      cachedTokens: 0,
+      reasoningTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+    };
+    let settleStreamMetrics!: (value: { usage: typeof settledUsage; ttftMs?: number }) => void;
+    const streamMetricsPromise = new Promise<{
+      usage: typeof settledUsage;
+      ttftMs?: number;
+    }>((resolve) => {
+      settleStreamMetrics = resolve;
+    });
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([apiKey]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    const encoder = new TextEncoder();
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode("data: hello\\n\\n"));
+        },
+      }),
+      isStream: true,
+      streamMetricsPromise,
+    });
+
+    const abortController = new AbortController();
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true,
+      }),
+      signal: abortController.signal,
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    expect((await reader!.read()).done).toBe(false);
+
+    abortController.abort();
+    settleStreamMetrics({ usage: settledUsage });
+
+    await expect
+      .poll(() =>
+        mockRecordApiKeyTokenUsage.mock.calls.some(
+          ([apiKeyId, totalTokens]) => apiKeyId === "key-1" && totalTokens === 1_200
+        )
+      )
+      .toBe(true);
+    expect(mockRecordApiKeyTokenUsage).toHaveBeenCalledWith("key-1", 1_200, 1_000);
+    expect(mockRecordApiKeyTokenUsage).toHaveBeenCalledTimes(1);
+  });
+
   it("should reject streaming requests before upstream routing when API key quota is exceeded", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");

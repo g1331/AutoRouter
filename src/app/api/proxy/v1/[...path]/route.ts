@@ -3400,6 +3400,22 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       const metricsPromise =
         result.streamMetricsPromise ??
         Promise.resolve({ usage: result.usage ?? null, ttftMs: result.ttftMs });
+
+      // TPM accounting must follow the upstream metrics settlement, not the
+      // downstream response lifecycle. proxy-client keeps draining its logging
+      // tee after a client disconnects, so settled usage must still constrain
+      // later requests even when stream log settlement is skipped.
+      void metricsPromise
+        .then(({ usage }) => {
+          recordApiKeyTokenUsage(validApiKey.id, usage?.totalTokens ?? 0, validApiKey.tpmLimit);
+        })
+        .catch((error) =>
+          log.error(
+            { err: error, requestId },
+            "failed to record settled stream API key token usage"
+          )
+        );
+
       const streamOutcomePromise = result.streamFailurePromise
         ? Promise.race([
             metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics })),
@@ -3653,11 +3669,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             cacheReadTokens: usage?.cacheReadTokens || 0,
             cacheWriteTokens: usage?.cacheCreationTokens || 0,
           };
-
-          // TPM is based on usage reported after the stream settles. The
-          // request that crosses the limit remains successful; only a later
-          // request can be rejected by the next admission check.
-          recordApiKeyTokenUsage(validApiKey.id, usageForBilling.totalTokens, validApiKey.tpmLimit);
 
           let persistedLogId: string | null = requestLogId;
           if (requestLogId) {
