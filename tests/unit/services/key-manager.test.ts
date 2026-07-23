@@ -70,6 +70,7 @@ vi.mock("@/lib/db", () => {
     },
     apiKeyUpstreams: { apiKeyId: "apiKeyId" },
     upstreams: { id: "id" },
+    users: { id: "id", displayName: "displayName" },
   };
 });
 

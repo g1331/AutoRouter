@@ -36,6 +36,7 @@ vi.mock("@/lib/services/key-manager", () => ({
 const QUOTA_RULE = { period_type: "rolling" as const, limit: 15, period_hours: 6 };
 const KEY_ID = "11111111-1111-4111-8111-111111111111";
 const UPSTREAM_ID = "22222222-2222-4222-8222-222222222222";
+const USER_ID = "33333333-3333-4333-8333-333333333333";
 
 function buildServiceApiKey(overrides?: Record<string, unknown>) {
   return {
@@ -199,7 +200,7 @@ describe("admin keys routes spending rules", () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    expect(listApiKeys).toHaveBeenCalledWith(1, 10, { search: "prod" });
+    expect(listApiKeys).toHaveBeenCalledWith(1, 10, { search: "prod", unowned: true });
   });
 
   it("GET /api/admin/keys omits the search filter when the param is absent", async () => {
@@ -220,7 +221,80 @@ describe("admin keys routes spending rules", () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    expect(listApiKeys).toHaveBeenCalledWith(1, 10, {});
+    expect(listApiKeys).toHaveBeenCalledWith(1, 10, { unowned: true });
+  });
+
+  it("GET /api/admin/keys with owner_scope=all lists owned keys too", async () => {
+    const { GET } = await import("@/app/api/admin/keys/route");
+    const { listApiKeys } = await import("@/lib/services/key-manager");
+    vi.mocked(listApiKeys).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+    } as never);
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/admin/keys?page=1&page_size=10&owner_scope=all",
+      { headers: { authorization: "Bearer test-admin-token" } }
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(listApiKeys).toHaveBeenCalledWith(1, 10, { unowned: false });
+  });
+
+  it("GET /api/admin/keys with user_id scopes to that owner and ignores owner_scope", async () => {
+    const { GET } = await import("@/app/api/admin/keys/route");
+    const { listApiKeys } = await import("@/lib/services/key-manager");
+    vi.mocked(listApiKeys).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+    } as never);
+
+    const request = new NextRequest(
+      `http://localhost:3000/api/admin/keys?page=1&page_size=10&user_id=${USER_ID}`,
+      { headers: { authorization: "Bearer test-admin-token" } }
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(listApiKeys).toHaveBeenCalledWith(1, 10, { userId: USER_ID });
+  });
+
+  it("GET /api/admin/keys rejects an unknown owner_scope with 400", async () => {
+    const { GET } = await import("@/app/api/admin/keys/route");
+    const { listApiKeys } = await import("@/lib/services/key-manager");
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/admin/keys?page=1&page_size=10&owner_scope=owned",
+      { headers: { authorization: "Bearer test-admin-token" } }
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(400);
+    expect(listApiKeys).not.toHaveBeenCalled();
+  });
+
+  it("GET /api/admin/keys rejects a non-uuid user_id with 400", async () => {
+    const { GET } = await import("@/app/api/admin/keys/route");
+    const { listApiKeys } = await import("@/lib/services/key-manager");
+
+    const request = new NextRequest("http://localhost:3000/api/admin/keys?user_id=not-a-uuid", {
+      headers: { authorization: "Bearer test-admin-token" },
+    });
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(400);
+    expect(listApiKeys).not.toHaveBeenCalled();
   });
 
   it("PUT /api/admin/keys/[id] should pass spending_rules into updateApiKey and return quota fields", async () => {

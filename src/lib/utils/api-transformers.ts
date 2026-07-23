@@ -303,6 +303,10 @@ export interface ApiKeyApiResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  user_id: string | null;
+  /** Display name of the owning user; null when the key is unowned. */
+  user_name: string | null;
   access_mode: "unrestricted" | "restricted";
   upstream_ids: string[];
   allowed_models: string[] | null;
@@ -360,6 +364,8 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     key_prefix: apiKey.keyPrefix,
     name: apiKey.name,
     description: apiKey.description,
+    user_id: apiKey.userId,
+    user_name: apiKey.userName,
     access_mode: apiKey.accessMode,
     upstream_ids: apiKey.upstreamIds,
     allowed_models: apiKey.allowedModels,
@@ -396,6 +402,8 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     key_prefix: result.keyPrefix,
     name: result.name,
     description: result.description,
+    user_id: result.userId,
+    user_name: result.userName,
     access_mode: result.accessMode,
     upstream_ids: result.upstreamIds,
     allowed_models: result.allowedModels,

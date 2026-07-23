@@ -12,7 +12,7 @@
 
 ## 3. 密钥归属分离（后端）
 
-- [ ] 3.1 `listApiKeys` 增加 `unowned` 过滤与归属人批量装配，`ApiKeyListItem`/`ApiKeyApiResponse` 补 `user_id`、`user_name`；`GET /api/admin/keys` 支持 `owner_scope`（默认 `unowned`）与 `user_id` 参数；补服务与路由测试，通过后提交。
+- [x] 3.1 `listApiKeys` 增加 `unowned` 过滤与归属人批量装配，`ApiKeyListItem`/`ApiKeyApiResponse` 补 `user_id`、`user_name`；`GET /api/admin/keys` 支持 `owner_scope`（默认 `unowned`）与 `user_id` 参数；补服务与路由测试，通过后提交。
 
 ## 4. 前端与文案
 

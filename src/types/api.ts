@@ -57,6 +57,10 @@ export interface APIKeyResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  user_id: string | null; // UUID
+  /** Display name of the owning user; null when the key is unowned. */
+  user_name: string | null;
   access_mode: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
   allowed_models: string[] | null;
