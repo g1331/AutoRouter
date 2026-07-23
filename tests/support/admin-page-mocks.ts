@@ -187,6 +187,9 @@ const KEYS_PAGE = {
       is_quota_exceeded: false,
       is_active: true,
       disabled_by_admin: false,
+      // 全局密钥列表默认只列无归属密钥，固定为无归属以保持基线稳定。
+      user_id: null,
+      user_name: null,
       expires_at: null,
       created_at: new Date("2026-06-01T00:00:00.000Z").toISOString(),
       updated_at: new Date("2026-06-10T00:00:00.000Z").toISOString(),
@@ -583,6 +586,13 @@ export async function mockAdminApis(page: Page): Promise<void> {
     fulfillJson(route, 200, LIVE_PULSE_SNAPSHOT)
   );
   await page.route("**/api/admin/keys?**", (route) => fulfillJson(route, 200, KEYS_PAGE));
+  // 设置页的成员上游可见性开关：默认关闭，基线里开关始终处于 unchecked。
+  await page.route("**/api/admin/portal-settings", (route) =>
+    fulfillJson(route, 200, {
+      expose_upstreams: false,
+      updated_at: new Date("2026-06-10T00:00:00.000Z").toISOString(),
+    })
+  );
   await page.route(`**/api/admin/keys/${KEY_DETAIL.id}`, (route) =>
     fulfillJson(route, 200, KEY_DETAIL)
   );

@@ -61,6 +61,17 @@ describe("PortalKeysTable", () => {
     expect(screen.getByText("personal key")).toBeInTheDocument();
     // sk-auto-abcdef123456 → first 8 + *** + last 4
     expect(screen.getByText("sk-auto-***3456")).toBeInTheDocument();
+    expect(screen.getByText("keys.restrictedAccessCount")).toBeInTheDocument();
+  });
+
+  it("labels a key as auto-routed when no upstream is exposed", () => {
+    render(
+      <PortalKeysTable keys={[makeKey({ upstream_ids: [] })]} onEdit={vi.fn()} onRevoke={vi.fn()} />
+    );
+
+    // 上游隐藏时后端不返回 upstream_ids，表格不得暴露数量，只显示自动路由。
+    expect(screen.getByText("portal.keys.autoRouted")).toBeInTheDocument();
+    expect(screen.queryByText("keys.restrictedAccessCount")).not.toBeInTheDocument();
   });
 
   it("invokes the edit and revoke callbacks for a row", () => {

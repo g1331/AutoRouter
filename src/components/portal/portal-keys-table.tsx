@@ -91,8 +91,12 @@ export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps
               {maskKeyPrefix(key.key_prefix)}
             </TableCell>
             <TableCell className="hidden lg:table-cell">
-              <Badge variant="info">
-                {t("restrictedAccessCount", { count: key.upstream_ids.length })}
+              {/* No upstream ids means the gateway routes inside the granted
+                  set without exposing it (upstream visibility is off). */}
+              <Badge variant={key.upstream_ids.length === 0 ? "neutral" : "info"}>
+                {key.upstream_ids.length === 0
+                  ? tPortal("keys.autoRouted")
+                  : t("restrictedAccessCount", { count: key.upstream_ids.length })}
               </Badge>
             </TableCell>
             <TableCell>

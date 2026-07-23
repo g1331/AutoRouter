@@ -24,6 +24,8 @@ import { toast } from "sonner";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 
+export type KeyOwnerScope = "unowned" | "all";
+
 interface KeysTableProps {
   keys: APIKey[];
   onRevoke: (key: APIKey, source: HTMLElement | null) => void;
@@ -33,6 +35,12 @@ interface KeysTableProps {
    */
   searchQuery?: string;
   onSearchQueryChange?: (value: string) => void;
+  /**
+   * Owner scope of the current list. The switch only renders when the parent
+   * supplies a change handler — a per-user list has a fixed scope.
+   */
+  ownerScope?: KeyOwnerScope;
+  onOwnerScopeChange?: (scope: KeyOwnerScope) => void;
 }
 
 function formatAccessModeLabel(key: APIKey, t: ReturnType<typeof useTranslations>): string {
@@ -75,6 +83,8 @@ export function KeysTable({
   onRevoke,
   searchQuery = "",
   onSearchQueryChange,
+  ownerScope = "unowned",
+  onOwnerScopeChange,
 }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
@@ -349,7 +359,7 @@ export function KeysTable({
   };
 
   const searchBar = (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <Input
         type="text"
         placeholder={t("searchKeys")}
@@ -357,6 +367,26 @@ export function KeysTable({
         onChange={(e) => handleSearchInputChange(e.target.value)}
         className="max-w-sm"
       />
+      {onOwnerScopeChange && (
+        <div
+          role="group"
+          aria-label={t("ownerScopeLabel")}
+          className="flex items-center gap-1 rounded-cf-md border border-divider bg-surface-200 p-1"
+        >
+          {(["unowned", "all"] as const).map((scope) => (
+            <Button
+              key={scope}
+              type="button"
+              size="sm"
+              variant={ownerScope === scope ? "default" : "ghost"}
+              aria-pressed={ownerScope === scope}
+              onClick={() => onOwnerScopeChange(scope)}
+            >
+              {scope === "unowned" ? t("ownerScopeUnowned") : t("ownerScopeAll")}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -406,6 +436,11 @@ export function KeysTable({
                   <p className="type-body-small text-muted-foreground">{key.description || "-"}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
+                  {key.user_name ? (
+                    <Badge variant="neutral" className="shrink-0">
+                      {key.user_name}
+                    </Badge>
+                  ) : null}
                   <Badge variant={key.is_active ? "success" : "neutral"} className="shrink-0">
                     {key.is_active ? t("enabled") : t("disabled")}
                   </Badge>
@@ -590,7 +625,16 @@ export function KeysTable({
                           ) : (
                             <span className="w-4 shrink-0" />
                           )}
-                          <span className="truncate">{key.name}</span>
+                          {/* 归属人放在名称下方而非同一行：名称列仅 200px，
+                              并排的徽章会把密钥名挤成省略号。 */}
+                          <div className="min-w-0">
+                            <span className="block truncate">{key.name}</span>
+                            {key.user_name ? (
+                              <span className="block truncate type-caption font-normal text-muted-foreground">
+                                {key.user_name}
+                              </span>
+                            ) : null}
+                          </div>
                           <span
                             className={cn(
                               "h-2 w-2 shrink-0 rounded-full",

@@ -79,7 +79,10 @@ async function mockPortalApis(page: Page): Promise<void> {
     })
   );
   await page.route("**/api/user/upstreams", (route) =>
-    fulfillJson(route, 200, { items: [{ id: "upstream-1", name: "alpha" }] })
+    fulfillJson(route, 200, {
+      upstreams_visible: true,
+      items: [{ id: "upstream-1", name: "alpha" }],
+    })
   );
 }
 
@@ -123,5 +126,49 @@ test.describe("Portal self-service", () => {
 
     await expect.poll(() => putBodies.length).toBeGreaterThan(0);
     expect(putBodies[0]).toEqual({ is_active: false });
+  });
+
+  test("hidden upstreams expose no upstream identity and create a key without picking one", async ({
+    page,
+  }) => {
+    // 管理员未开放上游可见性：接口只回可见性开关，不带任何上游身份。
+    await page.route("**/api/user/upstreams", (route) =>
+      fulfillJson(route, 200, { upstreams_visible: false, items: [] })
+    );
+
+    const postBodies: Array<Record<string, unknown>> = [];
+    await page.route("**/api/user/keys**", async (route) => {
+      const request = route.request();
+      if (request.method() === "POST") {
+        postBodies.push(request.postDataJSON() as Record<string, unknown>);
+        return fulfillJson(route, 200, {
+          ...PORTAL_KEY,
+          upstream_ids: [],
+          key_value: "sk-test-full-value",
+        });
+      }
+      return fulfillJson(route, 200, {
+        items: [{ ...PORTAL_KEY, upstream_ids: [] }],
+        total: 1,
+        page: 1,
+        page_size: 10,
+        total_pages: 1,
+      });
+    });
+
+    await page.goto("/en/portal/keys");
+
+    await expect(page.getByText("my-portal-key")).toBeVisible();
+    await expect(page.getByText("Auto-routed").first()).toBeVisible();
+    await expect(page.getByText("alpha")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Create API Key" }).click();
+    await page.getByPlaceholder("e.g., Production API Key").fill("hidden-mode key");
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+
+    await expect.poll(() => postBodies.length).toBeGreaterThan(0);
+    expect(postBodies[0]).not.toHaveProperty("upstream_ids");
+    expect(postBodies[0]).toMatchObject({ name: "hidden-mode key" });
   });
 });

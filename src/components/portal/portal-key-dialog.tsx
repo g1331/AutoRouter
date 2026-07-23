@@ -138,10 +138,16 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
   const updateMutation = useUpdatePortalKey();
   const { data: upstreamOptions, isLoading: upstreamsLoading } = usePortalUpstreamOptions();
 
+  // While the options are still loading, assume upstreams are visible so the
+  // required-field rule is never relaxed on a guess.
+  const upstreamsVisible = upstreamOptions?.upstreams_visible ?? true;
+
   const keyFormSchema = z.object({
     name: z.string().min(1, t("keyNameRequired")).max(100),
     description: z.string().max(500).optional(),
-    upstream_ids: z.array(z.string()).min(1, t("selectUpstreamsRequired")),
+    upstream_ids: upstreamsVisible
+      ? z.array(z.string()).min(1, t("selectUpstreamsRequired"))
+      : z.array(z.string()),
     rpm_limit: portalRateLimitSchema,
     tpm_limit: portalRateLimitSchema,
   });
@@ -173,7 +179,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
   // if all of them were stale, upstream_ids becomes empty and the required-field
   // validation correctly asks the member to pick from the visible options.
   useEffect(() => {
-    if (mode !== "edit" || !upstreamOptions) {
+    if (mode !== "edit" || !upstreamOptions || !upstreamsVisible) {
       return;
     }
     const allowedIds = new Set(upstreamOptions.items.map((item) => item.id));
@@ -182,7 +188,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
     if (reconciled.length !== current.length) {
       form.setValue("upstream_ids", reconciled);
     }
-  }, [upstreamOptions, mode, form]);
+  }, [upstreamOptions, upstreamsVisible, mode, form]);
 
   const parseSpendingRules = (): APIKeySpendingRule[] | null | undefined => {
     const parsed: APIKeySpendingRule[] = [];
@@ -240,10 +246,14 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
     }
 
     try {
+      // While upstreams are hidden the member never picks a subset: omit the
+      // field so the server binds (and keeps) the admin-granted set.
+      const upstreamPayload = upstreamsVisible ? { upstream_ids: data.upstream_ids } : {};
+
       if (mode === "create") {
         const result = await createMutation.mutateAsync({
           name: data.name,
-          upstream_ids: data.upstream_ids,
+          ...upstreamPayload,
           description: data.description || null,
           spending_rules: rules,
           rpm_limit: data.rpm_limit,
@@ -256,7 +266,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
           data: {
             name: data.name,
             description: data.description || null,
-            upstream_ids: data.upstream_ids,
+            ...upstreamPayload,
             spending_rules: rules,
             rpm_limit: data.rpm_limit,
             tpm_limit: data.tpm_limit,
@@ -320,54 +330,65 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="upstream_ids"
-              render={() => (
-                <FormItem>
-                  <FormLabel>{t("selectUpstreams")} *</FormLabel>
-                  <FormDescription>{tPortal("keys.upstreamsDesc")}</FormDescription>
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-divider-subtle bg-surface-200 p-3">
-                    {upstreamsLoading ? (
-                      <div className="py-4 text-center type-body-medium text-muted-foreground">
-                        {tCommon("loading")}
-                      </div>
-                    ) : !upstreamOptions || upstreamOptions.items.length === 0 ? (
-                      <div className="py-4 text-center type-body-medium text-muted-foreground">
-                        {tPortal("keys.noGrantedUpstreams")}
-                      </div>
-                    ) : (
-                      upstreamOptions.items.map((upstream) => (
-                        <FormField
-                          key={upstream.id}
-                          control={form.control}
-                          name="upstream_ids"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-3 space-y-0 rounded-cf-md p-2 transition-colors hover:bg-foreground/10">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(upstream.id)}
-                                  onCheckedChange={(checked) => {
-                                    const updated = checked
-                                      ? [...(field.value || []), upstream.id]
-                                      : field.value?.filter((id) => id !== upstream.id);
-                                    field.onChange(updated);
-                                  }}
-                                />
-                              </FormControl>
-                              <label className="cursor-pointer type-body-medium text-foreground">
-                                {upstream.name}
-                              </label>
-                            </FormItem>
-                          )}
-                        />
-                      ))
-                    )}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {!upstreamsVisible ? (
+              <div className="space-y-1 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
+                <p className="type-body-medium text-foreground">
+                  {tPortal("keys.autoRoutedTitle")}
+                </p>
+                <p className="type-body-small text-muted-foreground">
+                  {tPortal("keys.autoRoutedDesc")}
+                </p>
+              </div>
+            ) : (
+              <FormField
+                control={form.control}
+                name="upstream_ids"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>{t("selectUpstreams")} *</FormLabel>
+                    <FormDescription>{tPortal("keys.upstreamsDesc")}</FormDescription>
+                    <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-divider-subtle bg-surface-200 p-3">
+                      {upstreamsLoading ? (
+                        <div className="py-4 text-center type-body-medium text-muted-foreground">
+                          {tCommon("loading")}
+                        </div>
+                      ) : !upstreamOptions || upstreamOptions.items.length === 0 ? (
+                        <div className="py-4 text-center type-body-medium text-muted-foreground">
+                          {tPortal("keys.noGrantedUpstreams")}
+                        </div>
+                      ) : (
+                        upstreamOptions.items.map((upstream) => (
+                          <FormField
+                            key={upstream.id}
+                            control={form.control}
+                            name="upstream_ids"
+                            render={({ field }) => (
+                              <FormItem className="flex items-center space-x-3 space-y-0 rounded-cf-md p-2 transition-colors hover:bg-foreground/10">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(upstream.id)}
+                                    onCheckedChange={(checked) => {
+                                      const updated = checked
+                                        ? [...(field.value || []), upstream.id]
+                                        : field.value?.filter((id) => id !== upstream.id);
+                                      field.onChange(updated);
+                                    }}
+                                  />
+                                </FormControl>
+                                <label className="cursor-pointer type-body-medium text-foreground">
+                                  {upstream.name}
+                                </label>
+                              </FormItem>
+                            )}
+                          />
+                        ))
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
               <div>
