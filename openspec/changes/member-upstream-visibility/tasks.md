@@ -2,13 +2,13 @@
 
 ## 1. 设置存储与管理端入口
 
-- [ ] 1.1 在 PG 与 SQLite schema 中新增 `portal_settings` 单例表并生成双方言迁移，实现 `portal-settings-service`（读取即建默认行、更新、切换到隐藏时全量重对齐成员密钥），补服务测试。
-- [ ] 1.2 新增 `GET/PATCH /api/admin/portal-settings` 路由（requireAdmin + zod），补路由测试；运行迁移一致性校验，通过后提交。
+- [x] 1.1 在 PG 与 SQLite schema 中新增 `portal_settings` 单例表并生成双方言迁移，实现 `portal-settings-service`（读取即建默认行、更新、切换到隐藏时全量重对齐成员密钥），补服务测试。
+- [x] 1.2 新增 `GET/PATCH /api/admin/portal-settings` 路由（requireAdmin + zod），补路由测试；运行迁移一致性校验，通过后提交。
 
 ## 2. 成员侧隐藏行为
 
-- [ ] 2.1 `GET /api/user/upstreams` 返回 `upstreams_visible` 标志，隐藏时不出上游选项；成员密钥创建/更新在隐藏模式下忽略 `upstream_ids` 并自动绑定授权全集（空授权集拒绝创建），密钥响应置空 `upstream_ids`；`setUserUpstreams` 在隐藏模式下重同步该用户密钥；补服务与路由测试。
-- [ ] 2.2 `GET /api/user/logs` 在隐藏模式下抹除上游身份字段，补路由测试；运行本阶段相关测试，通过后提交。
+- [x] 2.1 `GET /api/user/upstreams` 返回 `upstreams_visible` 标志，隐藏时不出上游选项；成员密钥创建/更新在隐藏模式下忽略 `upstream_ids` 并自动绑定授权全集（空授权集拒绝创建），密钥响应置空 `upstream_ids`；`setUserUpstreams` 在隐藏模式下重同步该用户密钥；补服务与路由测试。
+- [x] 2.2 `GET /api/user/logs` 在隐藏模式下抹除上游身份字段，补路由测试；运行本阶段相关测试，通过后提交。
 
 ## 3. 密钥归属分离（后端）
 

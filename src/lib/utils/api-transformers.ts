@@ -934,6 +934,24 @@ export function transformPaginatedRequestLogs(
 }
 
 /**
+ * Strip every upstream identity from a request log before it reaches a member.
+ * Applied while the portal keeps upstreams hidden: the member sees what their
+ * own request did (timings, tokens, status, cost, how many failovers happened)
+ * but never which upstream served it or how the gateway chose one.
+ */
+export function scrubUpstreamIdentityFromLog(log: RequestLogApiResponse): RequestLogApiResponse {
+  return {
+    ...log,
+    upstream_id: null,
+    upstream_name: null,
+    group_name: null,
+    failover_history: null,
+    routing_decision: null,
+    upstream_error: null,
+  };
+}
+
+/**
  * Transform window-scoped request log stats to API response format.
  */
 export function transformRequestLogWindowStats(

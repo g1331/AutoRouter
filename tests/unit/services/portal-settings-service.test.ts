@@ -243,6 +243,35 @@ describe("alignMemberKeysToGrants", () => {
     expect(result).toEqual({ inspectedKeys: 1, alignedKeys: 0 });
   });
 
+  it("only drops revoked upstreams in intersect mode", async () => {
+    const member = await seedUser("member-a");
+    const kept = await seedUpstream("kept");
+    const revoked = await seedUpstream("revoked");
+    const neverPicked = await seedUpstream("never-picked");
+    await grantUpstreams(member.id, [kept.id, neverPicked.id]);
+    const key = await seedKey("member key", {
+      userId: member.id,
+      upstreamIds: [kept.id, revoked.id],
+    });
+
+    await alignMemberKeysToGrants(member.id, { mode: "intersect" });
+
+    expect(await linkedUpstreamIds(key.id)).toEqual([kept.id]);
+  });
+
+  it("skips keys owned by an admin", async () => {
+    const admin = await seedUser("admin-a", "admin");
+    const granted = await seedUpstream("granted");
+    const other = await seedUpstream("other");
+    await grantUpstreams(admin.id, [granted.id]);
+    const key = await seedKey("admin key", { userId: admin.id, upstreamIds: [other.id] });
+
+    const result = await alignMemberKeysToGrants(admin.id);
+
+    expect(result).toEqual({ inspectedKeys: 0, alignedKeys: 0 });
+    expect(await linkedUpstreamIds(key.id)).toEqual([other.id]);
+  });
+
   it("runs inside a caller-supplied transaction", async () => {
     const member = await seedUser("member-a");
     const granted = await seedUpstream("granted");
@@ -250,7 +279,7 @@ describe("alignMemberKeysToGrants", () => {
     const key = await seedKey("member key", { userId: member.id });
 
     await db.transaction(async (tx) => {
-      await alignMemberKeysToGrants(member.id, tx);
+      await alignMemberKeysToGrants(member.id, { executor: tx });
     });
 
     expect(await linkedUpstreamIds(key.id)).toEqual([granted.id]);

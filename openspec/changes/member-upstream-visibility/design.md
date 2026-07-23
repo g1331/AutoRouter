@@ -33,9 +33,16 @@ portal_settings
 - A. 物化（选用）：密钥的 `api_key_upstreams` 始终显式存储，在三个写入口保持与授权集一致——成员建密钥时绑全量授权集、管理员改授权时重同步该用户密钥、开关切到隐藏时全量重对齐。
 - B. 代理时动态解析：路由候选构建阶段对成员密钥改查 `user_upstreams`。
 
-选 A 的原因：不触碰代理热路径（最关键路径零风险、零额外查询）；密钥数据自洽，管理端密钥详情看到的授权集即真实路由集；开关切换的影响在切换动作内一次性完成、可观察。代价是多一个写路径（`setUserUpstreams` 内循环 `updateApiKey`），成员/密钥规模小，可接受。
+选 A 的原因：不触碰代理热路径（最关键路径零风险、零额外查询）；密钥数据自洽，管理端密钥详情看到的授权集即真实路由集；开关切换的影响在切换动作内一次性完成、可观察。代价是多一个写路径（`setUserUpstreams` 内做一次批量对齐），成员/密钥规模小，可接受。
 
 管理员通过管理端密钥 API 单独改某把成员密钥的上游集合时不做强制对齐——那是管理员的显式意图。
+
+对齐有两种模式，都只作用于 `role='member'` 的归属人名下的密钥：
+
+- `replace`（隐藏模式）：密钥上游集合 = 授权全集。
+- `intersect`（可见模式）：只剔除已被收回的上游，成员自选的其余部分保留。
+
+`intersect` 顺带补上一处既有缺口：代理侧的授权集只读 `api_key_upstreams`，此前管理员收回授权并不会同步收回已建密钥上的该上游，被收回的上游仍可继续路由。两种模式都在 `setUserUpstreams` 的同一个事务内完成，授权变更与密钥收敛要么一起生效、要么一起回滚。
 
 ## 行为矩阵
 
@@ -46,7 +53,7 @@ portal_settings
 | PUT /api/user/keys/[id] | 可改 `upstream_ids`（子集校验） | 忽略 `upstream_ids` |
 | 成员密钥响应 | 原样返回 `upstream_ids` | `upstream_ids: []` |
 | GET /api/user/logs | 原样 | 抹除 `upstream_id`、`upstream_name`、`group_name`、`failover_history`、`routing_decision`、`upstream_error` |
-| PATCH admin 授权上游 | 仅换授权集 | 换授权集后，重同步该用户名下密钥为新授权集 |
+| PATCH admin 授权上游 | 换授权集后，从该用户名下密钥中剔除被收回的上游（保留成员自选的其余部分） | 换授权集后，重同步该用户名下密钥为新授权集 |
 | PATCH 开关 → 隐藏 | — | 全量重对齐所有成员名下密钥到各自授权全集 |
 
 `failover_attempts` 计数、时延、token、计费字段不含上游身份，保留。`/api/user/logs/stats` 为窗口聚合，无上游字段，不动。

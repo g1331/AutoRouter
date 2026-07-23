@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, apiKeys, apiKeyUpstreams, userUpstreams, users } from "../db";
 import { createLogger } from "../utils/logger";
 
@@ -17,8 +17,27 @@ const log = createLogger("member-key-alignment");
 // access_mode is always forced back to "restricted" — an owned key left
 // unrestricted with no links would be readable by the proxy as "every active
 // upstream is allowed".
+//
+// Only keys owned by a user with the `member` role are touched. Admin-owned
+// keys are managed from the admin console, which keeps full upstream
+// visibility, and unowned keys have no grant set to align to.
 
 type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * - `replace`: the key's upstream set becomes the owner's whole grant set.
+ *   Used when upstreams are hidden, where the member never picks a subset.
+ * - `intersect`: revoked upstreams are dropped and the member's own selection
+ *   is otherwise preserved. Used when upstreams are visible, so an admin
+ *   revoking a grant also revokes it on keys that already reference it.
+ */
+export type MemberKeyAlignmentMode = "replace" | "intersect";
+
+export interface MemberKeyAlignmentOptions {
+  mode?: MemberKeyAlignmentMode;
+  /** Surrounding transaction, when the caller is already rewriting grants. */
+  executor?: DbExecutor;
+}
 
 export interface MemberKeyAlignmentResult {
   /** Owned keys inspected. */
@@ -43,7 +62,8 @@ function sameIdSet(current: string[], next: string[]): boolean {
 
 async function alignOwnedKeys(
   tx: DbExecutor,
-  ownedKeys: OwnedKeyRow[]
+  ownedKeys: OwnedKeyRow[],
+  mode: MemberKeyAlignmentMode
 ): Promise<MemberKeyAlignmentResult> {
   if (ownedKeys.length === 0) {
     return { inspectedKeys: 0, alignedKeys: 0 };
@@ -88,7 +108,8 @@ async function alignOwnedKeys(
   for (const key of ownedKeys) {
     const granted = key.userId ? (grantsByUser.get(key.userId) ?? []) : [];
     const current = linksByKey.get(key.id) ?? [];
-    const linksMatch = sameIdSet(current, granted);
+    const next = mode === "replace" ? granted : current.filter((id) => granted.includes(id));
+    const linksMatch = sameIdSet(current, next);
     const accessModeMatches = key.accessMode === "restricted";
 
     if (linksMatch && accessModeMatches) {
@@ -97,9 +118,9 @@ async function alignOwnedKeys(
 
     if (!linksMatch) {
       await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, key.id));
-      if (granted.length > 0) {
+      if (next.length > 0) {
         await tx.insert(apiKeyUpstreams).values(
-          granted.map((upstreamId) => ({
+          next.map((upstreamId) => ({
             apiKeyId: key.id,
             upstreamId,
             createdAt: now,
@@ -119,24 +140,26 @@ async function alignOwnedKeys(
 }
 
 /**
- * Realign every API key owned by one user to that user's current upstream
- * grant set. Pass the surrounding transaction when the caller is already
- * rewriting the grants, so the grant swap and the key alignment commit
+ * Realign every member key owned by one user against that user's current
+ * upstream grant set. Pass the surrounding transaction when the caller is
+ * already rewriting the grants, so the grant swap and the key alignment commit
  * together.
  */
 export async function alignMemberKeysToGrants(
   userId: string,
-  executor?: DbExecutor
+  options: MemberKeyAlignmentOptions = {}
 ): Promise<MemberKeyAlignmentResult> {
+  const mode = options.mode ?? "replace";
   const run = async (tx: DbExecutor) => {
     const ownedKeys = await tx
       .select({ id: apiKeys.id, userId: apiKeys.userId, accessMode: apiKeys.accessMode })
       .from(apiKeys)
-      .where(eq(apiKeys.userId, userId));
-    return alignOwnedKeys(tx, ownedKeys);
+      .innerJoin(users, eq(apiKeys.userId, users.id))
+      .where(and(eq(apiKeys.userId, userId), eq(users.role, "member")));
+    return alignOwnedKeys(tx, ownedKeys, mode);
   };
 
-  const result = executor ? await run(executor) : await db.transaction(run);
+  const result = options.executor ? await run(options.executor) : await db.transaction(run);
 
   if (result.alignedKeys > 0) {
     log.info(
@@ -161,7 +184,7 @@ export async function alignAllMemberKeysToGrants(): Promise<MemberKeyAlignmentRe
       .from(apiKeys)
       .innerJoin(users, eq(apiKeys.userId, users.id))
       .where(eq(users.role, "member"));
-    return alignOwnedKeys(tx, ownedKeys);
+    return alignOwnedKeys(tx, ownedKeys, "replace");
   });
 
   log.info(result, "aligned all member keys to granted upstreams");

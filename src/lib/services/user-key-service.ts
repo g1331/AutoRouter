@@ -11,6 +11,7 @@ import {
   type PaginatedApiKeys,
 } from "./key-manager";
 import { getUserUpstreams } from "./user-service";
+import { getPortalSettings } from "./portal-settings-service";
 import { parseSpendingRules } from "./spending-rules";
 import { parseApiKeyRateLimit } from "./api-key-rate-limits";
 import type { SpendingRule } from "./upstream-quota-tracker";
@@ -31,6 +32,12 @@ const log = createLogger("user-key-service");
 //   raised, and a non-empty rule set cannot be cleared.
 // - rate-limit dimensions can only be tightened: an existing RPM/TPM value
 //   cannot be removed or raised.
+//
+// When the admin keeps upstreams hidden from members (the default), the
+// upstream set stops being a member-facing dimension altogether: a new key is
+// bound to the owner's whole grant set, `upstreamIds` on update is ignored,
+// and the set is blanked out of every response so no upstream identity — not
+// even a count — reaches the portal.
 
 /**
  * Raised when a key does not exist or is not owned by the caller. The two
@@ -92,7 +99,8 @@ export class AdminLockedKeyError extends Error {
 
 export interface UserKeyCreateInput {
   name: string;
-  upstreamIds: string[];
+  /** Ignored while upstreams are hidden from members. */
+  upstreamIds?: string[];
   description?: string | null;
   spendingRules?: SpendingRule[] | null;
   rpmLimit?: number | null;
@@ -176,6 +184,38 @@ async function assertUpstreamsAllowed(userId: string, upstreamIds: string[]): Pr
   }
 }
 
+/**
+ * Blank the upstream set on a member-facing payload. Callers apply it only
+ * while upstreams are hidden, where the routing set is not the member's to see.
+ */
+function withoutUpstreams<T extends { upstreamIds: string[] }>(item: T): T {
+  return { ...item, upstreamIds: [] };
+}
+
+/**
+ * Resolve the upstream set a new member key must be bound to.
+ */
+async function resolveUpstreamsForNewKey(
+  userId: string,
+  requested: string[] | undefined,
+  exposeUpstreams: boolean
+): Promise<string[]> {
+  if (!exposeUpstreams) {
+    const granted = await getUserUpstreams(userId);
+    if (granted.length === 0) {
+      throw new UpstreamNotAllowedError("No upstreams are granted to this user");
+    }
+    return granted;
+  }
+
+  const upstreamIds = requested ?? [];
+  if (upstreamIds.length === 0) {
+    throw new UpstreamNotAllowedError("At least one upstream must be selected");
+  }
+  await assertUpstreamsAllowed(userId, upstreamIds);
+  return upstreamIds;
+}
+
 async function requireOwnedKey(userId: string, keyId: string) {
   const key = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, keyId) });
   if (!key || key.userId !== userId) {
@@ -192,7 +232,14 @@ export async function listOwnApiKeys(
   page: number = 1,
   pageSize: number = 20
 ): Promise<PaginatedApiKeys> {
-  return listApiKeys(page, pageSize, { userId });
+  const [result, { exposeUpstreams }] = await Promise.all([
+    listApiKeys(page, pageSize, { userId }),
+    getPortalSettings(),
+  ]);
+  if (exposeUpstreams) {
+    return result;
+  }
+  return { ...result, items: result.items.map(withoutUpstreams) };
 }
 
 /**
@@ -203,11 +250,12 @@ export async function createOwnApiKey(
   userId: string,
   input: UserKeyCreateInput
 ): Promise<ApiKeyCreateResult> {
-  await assertUpstreamsAllowed(userId, input.upstreamIds);
+  const { exposeUpstreams } = await getPortalSettings();
+  const upstreamIds = await resolveUpstreamsForNewKey(userId, input.upstreamIds, exposeUpstreams);
 
   const result = await createApiKey({
     name: input.name,
-    upstreamIds: input.upstreamIds,
+    upstreamIds,
     accessMode: "restricted",
     userId,
     description: input.description ?? null,
@@ -217,7 +265,7 @@ export async function createOwnApiKey(
   });
 
   log.info({ userId, keyPrefix: result.keyPrefix }, "user created self-service API key");
-  return result;
+  return exposeUpstreams ? result : withoutUpstreams(result);
 }
 
 /**
@@ -241,8 +289,14 @@ export async function updateOwnApiKey(
     );
   }
 
-  if (input.upstreamIds !== undefined) {
-    await assertUpstreamsAllowed(userId, input.upstreamIds);
+  // While upstreams are hidden the member has no say over the routing set, so
+  // any submitted upstream_ids is dropped rather than rejected: the key keeps
+  // the set the admin's grants materialised for it.
+  const { exposeUpstreams } = await getPortalSettings();
+  const upstreamIds = exposeUpstreams ? input.upstreamIds : undefined;
+
+  if (upstreamIds !== undefined) {
+    await assertUpstreamsAllowed(userId, upstreamIds);
   }
 
   if (input.spendingRules !== undefined) {
@@ -259,14 +313,14 @@ export async function updateOwnApiKey(
   if (input.name !== undefined) update.name = input.name;
   if (input.description !== undefined) update.description = input.description;
   if (input.isActive !== undefined) update.isActive = input.isActive;
-  if (input.upstreamIds !== undefined) update.upstreamIds = input.upstreamIds;
+  if (upstreamIds !== undefined) update.upstreamIds = upstreamIds;
   if (input.spendingRules !== undefined) update.spendingRules = input.spendingRules;
   if (input.rpmLimit !== undefined) update.rpmLimit = input.rpmLimit;
   if (input.tpmLimit !== undefined) update.tpmLimit = input.tpmLimit;
 
   const result = await updateApiKey(keyId, update);
   log.info({ userId, keyPrefix: result.keyPrefix }, "user updated self-service API key");
-  return result;
+  return exposeUpstreams ? result : withoutUpstreams(result);
 }
 
 /**
