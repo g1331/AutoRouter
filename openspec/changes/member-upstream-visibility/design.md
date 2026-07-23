@@ -1,4 +1,4 @@
-# Design: 成员上游可见性开关
+# Design: 成员信息边界——上游可见性开关与密钥归属分离
 
 ## 背景与目标
 
@@ -71,10 +71,42 @@ portal_settings
 - 请求记录表：上游身份字段为 null 时 `LogsTable` 已有空值降级（显示占位符），不改组件。
 - 管理端设置页 `settingsItems` 增加一项内联 Switch（成员上游可见性），配 `GET/PATCH /api/admin/portal-settings` 的 hooks；切到隐藏为带副作用操作（重对齐密钥），Switch 直接执行、toast 反馈结果。
 
+## 密钥归属分离
+
+### 约束：按归属划分，而非按创建者
+
+`api_keys` 没有创建者字段，成员自建与管理员分配的密钥落库后不可区分。分离维度取 `user_id` 归属：无归属（`user_id IS NULL`）留在全局密钥页；有归属归入该用户的按人视图。管理员把密钥分配给某人后，密钥从全局列表移入该用户名下，模型自洽。
+
+### 后端
+
+- `listApiKeys` 的过滤器增加 `unowned: true`（`user_id IS NULL`）；`/api/admin/keys` 增加 `owner_scope=unowned|all` 查询参数，默认 `unowned`。
+- `ApiKeyListItem` / `ApiKeyApiResponse` 增加 `userId`/`user_id` 与 `userName`/`user_name`（按页内密钥的归属人一次性批量查 users 表装配，无 N+1）。
+- 按人列表复用既有 `listApiKeys(page, pageSize, { userId })`，走 `GET /api/admin/keys?user_id=<id>`（与 `owner_scope` 互斥，指定 `user_id` 时忽略范围参数）。
+
+### 前端
+
+```
+密钥页（默认：未归属）                     用户管理页
+┌─ 密钥 ──────── [范围: 未归属 ▾] ─┐      ┌─ 用户列表 ──────────────────┐
+│ name-a  sk-…a1  ● active         │      │ alice  member  密钥×3  [⋯] │
+│ name-b  sk-…b2  ● disabled       │      │   └ 行菜单: …「查看密钥」   │
+└──────────────────────────────────┘      └─────────────┬───────────────┘
+        范围切“全部”后：                                 ▼
+┌─ 密钥 ────────── [范围: 全部 ▾] ─┐      ┌─ alice 的密钥 ─────────────┐
+│ name-a  sk-…a1  ● active         │      │ portal-key sk-…c3 ● active │
+│ name-c  sk-…c3  ● active 👤alice │      │ assigned-k sk-…d4 ● locked │
+└──────────────────────────────────┘      │  （点击行 → 密钥详情页）    │
+                                          └────────────────────────────┘
+```
+
+- 密钥页加范围切换（默认“未归属”，可切“全部”），“全部”视图为有归属密钥显示归属徽章（用户名）。
+- 用户行菜单加“查看密钥”，弹窗列出该用户名下密钥（名称、前缀、启停/管理员锁定状态、额度状态），点击行跳转既有密钥详情页做完整管理。
+- 分配密钥对话框候选列表改为只请求无归属密钥（`owner_scope=unowned`），消除静默改走他人密钥归属的坑。
+
 ## 测试与兼容
 
-- 服务层：`portal-settings-service`（默认行、更新、切隐藏触发重对齐）；`setUserUpstreams` 隐藏模式重同步。
-- 路由层：成员三端点在两种模式下的行为分支；管理端 portal-settings 路由鉴权与校验。
-- 组件：门户密钥对话框隐藏模式渲染与提交载荷、密钥表格“自动路由”展示。
+- 服务层：`portal-settings-service`（默认行、更新、切隐藏触发重对齐）；`setUserUpstreams` 隐藏模式重同步；`listApiKeys` 的 `unowned` 过滤与归属装配。
+- 路由层：成员三端点在两种模式下的行为分支；管理端 portal-settings 路由鉴权与校验；`/api/admin/keys` 的 `owner_scope` 与 `user_id` 参数分支。
+- 组件：门户密钥对话框隐藏模式渲染与提交载荷、密钥表格“自动路由”展示；管理台密钥页范围切换与归属徽章、用户密钥弹窗、分配对话框仅列无归属密钥。
 - E2E：现有 portal/设置页 spec 的页面级 mock 需补 `/api/admin/portal-settings` 与新版 `/api/user/upstreams` 响应桩。
 - 升级兼容：默认值为隐藏，升级后即生效（这正是需求语义）；已存在的成员密钥在管理员下一次改授权或切换开关时被对齐，读路径不依赖对齐是否发生。
