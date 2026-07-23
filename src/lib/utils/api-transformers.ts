@@ -69,6 +69,7 @@ import type {
   TrafficRecordingSettingsValue,
   TrafficRecordingStats,
 } from "@/lib/services/traffic-recording-service";
+import type { PortalSettingsValue } from "@/lib/services/portal-settings-service";
 import type { UserListItem, PaginatedUsers } from "@/lib/services/user-service";
 import type {
   UserOverview,
@@ -1053,6 +1054,22 @@ export function transformPaginatedTrafficRecordingsToApi(
     page_size: result.pageSize,
     total_pages: result.totalPages,
     stats: transformTrafficRecordingStatsToApi(result.stats),
+  };
+}
+
+// ========== Portal Settings API Response Types ==========
+
+export interface PortalSettingsApiResponse {
+  expose_upstreams: boolean;
+  updated_at: string;
+}
+
+export function transformPortalSettingsToApi(
+  settings: PortalSettingsValue
+): PortalSettingsApiResponse {
+  return {
+    expose_upstreams: settings.exposeUpstreams,
+    updated_at: settings.updatedAt.toISOString(),
   };
 }
 

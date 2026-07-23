@@ -405,6 +405,16 @@ export const trafficRecordingSettings = pgTable("traffic_recording_settings", {
 });
 
 /**
+ * Runtime configuration for the member self-service portal.
+ */
+export const portalSettings = pgTable("portal_settings", {
+  id: varchar("id", { length: 32 }).primaryKey().default("default"),
+  exposeUpstreams: boolean("expose_upstreams").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Searchable index for recorded traffic fixture files.
  */
 export const trafficRecordings = pgTable(
@@ -868,6 +878,8 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type TrafficRecordingSettings = typeof trafficRecordingSettings.$inferSelect;
 export type NewTrafficRecordingSettings = typeof trafficRecordingSettings.$inferInsert;
+export type PortalSettings = typeof portalSettings.$inferSelect;
+export type NewPortalSettings = typeof portalSettings.$inferInsert;
 export type TrafficRecording = typeof trafficRecordings.$inferSelect;
 export type NewTrafficRecording = typeof trafficRecordings.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
