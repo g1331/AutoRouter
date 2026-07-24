@@ -22,4 +22,4 @@
 
 ## 5. 整体验证与交接
 
-- [ ] 5.1 运行相关 Vitest、迁移一致性、lint、format check、tsc；复核 OpenSpec 规格与实现一致性，提交并推送分支、创建 draft PR。
+- [x] 5.1 运行相关 Vitest、迁移一致性、lint、format check、tsc；复核 OpenSpec 规格与实现一致性，提交并推送分支、创建 draft PR。
