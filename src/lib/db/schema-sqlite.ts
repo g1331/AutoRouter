@@ -423,6 +423,16 @@ export const trafficRecordingSettings = sqliteTable("traffic_recording_settings"
 });
 
 /**
+ * Runtime configuration for the member self-service portal.
+ */
+export const portalSettings = sqliteTable("portal_settings", {
+  id: text("id").primaryKey().default("default"),
+  exposeUpstreams: integer("expose_upstreams", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+});
+
+/**
  * Searchable index for recorded traffic fixture files.
  */
 export const trafficRecordings = sqliteTable(
@@ -904,6 +914,8 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type TrafficRecordingSettings = typeof trafficRecordingSettings.$inferSelect;
 export type NewTrafficRecordingSettings = typeof trafficRecordingSettings.$inferInsert;
+export type PortalSettings = typeof portalSettings.$inferSelect;
+export type NewPortalSettings = typeof portalSettings.$inferInsert;
 export type TrafficRecording = typeof trafficRecordings.$inferSelect;
 export type NewTrafficRecording = typeof trafficRecordings.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;

@@ -57,6 +57,10 @@ export interface APIKeyResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  user_id: string | null; // UUID
+  /** Display name of the owning user; null when the key is unowned. */
+  user_name: string | null;
   access_mode: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
   allowed_models: string[] | null;
@@ -1336,7 +1340,22 @@ export interface PortalUpstreamOption {
   name: string;
 }
 
+export interface PortalSettingsResponse {
+  /** True when members may see which upstreams their keys route to. */
+  expose_upstreams: boolean;
+  updated_at: string; // ISO 8601 date string
+}
+
+export interface PortalSettingsUpdate {
+  expose_upstreams?: boolean;
+}
+
 export interface PortalUpstreamOptionsResponse {
+  /**
+   * False when the admin keeps upstreams hidden from members: `items` is then
+   * empty and keys route inside the granted set without exposing it.
+   */
+  upstreams_visible: boolean;
   items: PortalUpstreamOption[];
 }
 
@@ -1344,7 +1363,8 @@ export interface PortalUpstreamOptionsResponse {
 // server-side, and unknown fields are stripped by the API schema.
 export interface PortalKeyCreate {
   name: string;
-  upstream_ids: string[]; // UUID[]
+  // Omitted while upstreams are hidden; the server binds the granted set.
+  upstream_ids?: string[]; // UUID[]
   description?: string | null;
   spending_rules?: APIKeySpendingRule[] | null;
   rpm_limit?: number | null;

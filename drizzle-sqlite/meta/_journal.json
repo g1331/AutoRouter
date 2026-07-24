@@ -141,6 +141,13 @@
       "when": 1784644976990,
       "tag": "0019_solid_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1784818496148,
+      "tag": "0020_illegal_edwin_jarvis",
+      "breakpoints": true
     }
   ]
 }

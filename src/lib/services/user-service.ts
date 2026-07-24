@@ -3,6 +3,8 @@ import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashPassword, isPasswordStrong, normalizeUsername, verifyPassword } from "../utils/auth";
 import { getUsersMonthUsage } from "./user-data-service";
+import { alignMemberKeysToGrants } from "./member-key-alignment";
+import { getPortalSettings } from "./portal-settings-service";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("user-service");
@@ -643,6 +645,7 @@ export async function getUserUpstreams(userId: string): Promise<string[]> {
 export async function setUserUpstreams(userId: string, upstreamIds: string[]): Promise<string[]> {
   const normalizedIds = Array.from(new Set(upstreamIds));
   const now = new Date();
+  const { exposeUpstreams } = await getPortalSettings();
 
   const persisted = await db.transaction(async (tx) => {
     const user = await tx.query.users.findFirst({ where: eq(users.id, userId) });
@@ -681,6 +684,15 @@ export async function setUserUpstreams(userId: string, upstreamIds: string[]): P
         throw err;
       }
     }
+
+    // Keys owned by the user follow the grant set inside the same transaction.
+    // While upstreams are hidden the key set *is* the grant set; while they are
+    // visible the member's own selection is kept, minus whatever was revoked —
+    // otherwise a revoked upstream would stay routable through existing keys.
+    await alignMemberKeysToGrants(userId, {
+      mode: exposeUpstreams ? "intersect" : "replace",
+      executor: tx,
+    });
 
     return normalizedIds;
   });

@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   ArrowLeftRight,
   DatabaseZap,
+  Eye,
   Globe,
   Github,
   LogOut,
@@ -25,6 +26,8 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { IconBox } from "@/components/ui/icon-box";
+import { Switch } from "@/components/ui/switch";
+import { usePortalSettings, useUpdatePortalSettings } from "@/hooks/use-portal-settings";
 import { Link } from "@/i18n/navigation";
 import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 import { useAuth } from "@/providers/auth-provider";
@@ -44,6 +47,10 @@ export default function SettingsPage() {
   const tFailureRules = useTranslations("upstreamFailureRules");
   const tUsers = useTranslations("users");
   const tCliproxy = useTranslations("cliproxy");
+  const tPortalSettings = useTranslations("portalSettings");
+
+  const { data: portalSettings, isLoading: portalSettingsLoading } = usePortalSettings();
+  const updatePortalSettings = useUpdatePortalSettings();
 
   const settingsItems = [
     {
@@ -57,6 +64,19 @@ export default function SettingsPage() {
       title: tTheme("toggle"),
       description: tTheme("dark"),
       action: <ThemeToggle />,
+    },
+    {
+      icon: Eye,
+      title: tPortalSettings("exposeUpstreams"),
+      description: tPortalSettings("exposeUpstreamsDesc"),
+      action: (
+        <Switch
+          checked={portalSettings?.expose_upstreams ?? false}
+          disabled={portalSettingsLoading || updatePortalSettings.isPending}
+          onCheckedChange={(checked) => updatePortalSettings.mutate({ expose_upstreams: checked })}
+          aria-label={tPortalSettings("exposeUpstreams")}
+        />
+      ),
     },
   ];
 

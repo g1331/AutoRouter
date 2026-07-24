@@ -288,6 +288,13 @@
       "when": 1784636412616,
       "tag": "0040_burly_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1784818487791,
+      "tag": "0041_high_epoch",
+      "breakpoints": true
     }
   ]
 }

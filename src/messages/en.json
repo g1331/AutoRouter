@@ -211,6 +211,10 @@
     "assignKeys": "Assign API Keys",
     "assignKeysTitle": "Assign API Keys",
     "assignKeysDesc": "Assign existing API keys to this user as their owner.",
+    "viewKeys": "View API Keys",
+    "userKeysTitle": "User's API Keys",
+    "userKeysDesc": "API keys owned by {name}, including the ones they created themselves.",
+    "revokeKeyOwnership": "Unassign",
     "assign": "Assign",
     "assigned": "Assigned",
     "enable": "Enable",
@@ -497,6 +501,9 @@
     "noKeys": "No API Keys yet",
     "noKeysDesc": "Create your first client Key so external apps can call the proxy API via Bearer Token. To limit which upstreams the Key can reach, switch to \"Specific Upstreams\" at creation time and tick the allowed ones.",
     "searchKeys": "Search keys by name...",
+    "ownerScopeLabel": "Owner scope",
+    "ownerScopeUnowned": "Unassigned",
+    "ownerScopeAll": "All keys",
     "noKeysFound": "NO MATCHING KEYS",
     "noKeysFoundDesc": "No API Keys match your search criteria",
     "tableKeyPrefix": "Key",
@@ -1938,7 +1945,10 @@
       "quotaUnlimited": "No limit",
       "quotaRuleCount": "{count} rules",
       "disabledByAdmin": "Disabled by admin",
-      "disabledByAdminHint": "An administrator disabled this key. Contact your administrator to restore it."
+      "disabledByAdminHint": "An administrator disabled this key. Contact your administrator to restore it.",
+      "autoRouted": "Auto-routed",
+      "autoRoutedTitle": "Upstreams are assigned by the gateway",
+      "autoRoutedDesc": "This key routes automatically within the scope your administrator granted; just use the single access endpoint."
     },
     "password": {
       "pageTitle": "Change Password",
@@ -1956,5 +1966,11 @@
       "changeSuccess": "Password changed",
       "changeFailed": "Failed to change password"
     }
+  },
+  "portalSettings": {
+    "exposeUpstreams": "Show upstreams to members",
+    "exposeUpstreamsDesc": "Off by default: members only see the single access endpoint, and their keys route inside the granted scope.",
+    "saved": "Portal settings saved",
+    "saveFailed": "Failed to save portal settings"
   }
 }

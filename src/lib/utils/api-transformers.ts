@@ -69,6 +69,7 @@ import type {
   TrafficRecordingSettingsValue,
   TrafficRecordingStats,
 } from "@/lib/services/traffic-recording-service";
+import type { PortalSettingsValue } from "@/lib/services/portal-settings-service";
 import type { UserListItem, PaginatedUsers } from "@/lib/services/user-service";
 import type {
   UserOverview,
@@ -302,6 +303,10 @@ export interface ApiKeyApiResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  user_id: string | null;
+  /** Display name of the owning user; null when the key is unowned. */
+  user_name: string | null;
   access_mode: "unrestricted" | "restricted";
   upstream_ids: string[];
   allowed_models: string[] | null;
@@ -359,6 +364,8 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     key_prefix: apiKey.keyPrefix,
     name: apiKey.name,
     description: apiKey.description,
+    user_id: apiKey.userId,
+    user_name: apiKey.userName,
     access_mode: apiKey.accessMode,
     upstream_ids: apiKey.upstreamIds,
     allowed_models: apiKey.allowedModels,
@@ -395,6 +402,8 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     key_prefix: result.keyPrefix,
     name: result.name,
     description: result.description,
+    user_id: result.userId,
+    user_name: result.userName,
     access_mode: result.accessMode,
     upstream_ids: result.upstreamIds,
     allowed_models: result.allowedModels,
@@ -933,6 +942,24 @@ export function transformPaginatedRequestLogs(
 }
 
 /**
+ * Strip every upstream identity from a request log before it reaches a member.
+ * Applied while the portal keeps upstreams hidden: the member sees what their
+ * own request did (timings, tokens, status, cost, how many failovers happened)
+ * but never which upstream served it or how the gateway chose one.
+ */
+export function scrubUpstreamIdentityFromLog(log: RequestLogApiResponse): RequestLogApiResponse {
+  return {
+    ...log,
+    upstream_id: null,
+    upstream_name: null,
+    group_name: null,
+    failover_history: null,
+    routing_decision: null,
+    upstream_error: null,
+  };
+}
+
+/**
  * Transform window-scoped request log stats to API response format.
  */
 export function transformRequestLogWindowStats(
@@ -1053,6 +1080,22 @@ export function transformPaginatedTrafficRecordingsToApi(
     page_size: result.pageSize,
     total_pages: result.totalPages,
     stats: transformTrafficRecordingStatsToApi(result.stats),
+  };
+}
+
+// ========== Portal Settings API Response Types ==========
+
+export interface PortalSettingsApiResponse {
+  expose_upstreams: boolean;
+  updated_at: string;
+}
+
+export function transformPortalSettingsToApi(
+  settings: PortalSettingsValue
+): PortalSettingsApiResponse {
+  return {
+    expose_upstreams: settings.exposeUpstreams,
+    updated_at: settings.updatedAt.toISOString(),
   };
 }
 

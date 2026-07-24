@@ -32,7 +32,16 @@ vi.mock("@/lib/db", async () => {
 });
 
 import { eq } from "drizzle-orm";
-import { db, users, apiKeys, upstreams, userUpstreams, requestLogs } from "@/lib/db";
+import {
+  db,
+  users,
+  apiKeys,
+  apiKeyUpstreams,
+  upstreams,
+  userUpstreams,
+  portalSettings,
+  requestLogs,
+} from "@/lib/db";
 import {
   createUser,
   listUsers,
@@ -97,12 +106,34 @@ async function seedUpstream(name: string): Promise<{ id: string }> {
   return row;
 }
 
+async function setExposeUpstreams(exposeUpstreams: boolean): Promise<void> {
+  await db.delete(portalSettings);
+  await db.insert(portalSettings).values({ id: "default", exposeUpstreams, updatedAt: new Date() });
+}
+
+async function linkKeyUpstreams(apiKeyId: string, upstreamIds: string[]): Promise<void> {
+  const now = new Date();
+  await db
+    .insert(apiKeyUpstreams)
+    .values(upstreamIds.map((upstreamId) => ({ apiKeyId, upstreamId, createdAt: now })));
+}
+
+async function keyUpstreamIds(apiKeyId: string): Promise<string[]> {
+  const rows = await db
+    .select({ upstreamId: apiKeyUpstreams.upstreamId })
+    .from(apiKeyUpstreams)
+    .where(eq(apiKeyUpstreams.apiKeyId, apiKeyId));
+  return rows.map((row) => row.upstreamId).sort();
+}
+
 beforeEach(async () => {
   await db.delete(requestLogs);
+  await db.delete(apiKeyUpstreams);
   await db.delete(userUpstreams);
   await db.delete(apiKeys);
   await db.delete(upstreams);
   await db.delete(users);
+  await db.delete(portalSettings);
 });
 
 describe("user-service", () => {
@@ -634,6 +665,48 @@ describe("user-service", () => {
       await expect(setUserUpstreams(u.id, [NONEXISTENT_ID])).rejects.toBeInstanceOf(
         UpstreamAssignmentError
       );
+    });
+
+    it("rebinds the owner's keys to the new grant set while upstreams are hidden", async () => {
+      await setExposeUpstreams(false);
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      const key = await seedApiKey({ name: "member key", userId: u.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      await setUserUpstreams(u.id, [up1.id, up2.id]);
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id, up2.id].sort());
+    });
+
+    it("drops revoked upstreams from the owner's keys while upstreams are visible", async () => {
+      await setExposeUpstreams(true);
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      const up3 = await seedUpstream("up3");
+      const key = await seedApiKey({ name: "member key", userId: u.id });
+      await linkKeyUpstreams(key.id, [up1.id, up2.id]);
+
+      // up2 is revoked, up3 newly granted: the member's own selection survives
+      // minus the revocation, and the new grant is not force-added.
+      await setUserUpstreams(u.id, [up1.id, up3.id]);
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
+
+    it("leaves keys owned by nobody alone", async () => {
+      await setExposeUpstreams(false);
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      const orphan = await seedApiKey({ name: "unowned key", userId: null });
+      await linkKeyUpstreams(orphan.id, [up1.id]);
+
+      await setUserUpstreams(u.id, [up1.id, up2.id]);
+
+      expect(await keyUpstreamIds(orphan.id)).toEqual([up1.id]);
     });
   });
 

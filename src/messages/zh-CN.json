@@ -211,6 +211,10 @@
     "assignKeys": "分配密钥",
     "assignKeysTitle": "分配密钥",
     "assignKeysDesc": "将已有的 API 密钥分配给该用户作为归属人。",
+    "viewKeys": "查看密钥",
+    "userKeysTitle": "用户名下密钥",
+    "userKeysDesc": "归属于 {name} 的 API 密钥，含其自行创建的密钥。",
+    "revokeKeyOwnership": "解除归属",
     "assign": "分配",
     "assigned": "已分配",
     "enable": "启用",
@@ -497,6 +501,9 @@
     "noKeys": "还没有 API Key",
     "noKeysDesc": "创建第一个客户端 Key，外部应用就可以通过 Bearer Token 调用代理 API。如需限制该 Key 可访问的上游范围，创建时切换为「指定上游」并勾选允许的上游。",
     "searchKeys": "按名称搜索...",
+    "ownerScopeLabel": "归属范围",
+    "ownerScopeUnowned": "未分配",
+    "ownerScopeAll": "全部密钥",
     "noKeysFound": "NO MATCHING KEYS",
     "noKeysFoundDesc": "没有符合搜索条件的 API Key",
     "tableKeyPrefix": "密钥",
@@ -1938,7 +1945,10 @@
       "quotaUnlimited": "未设限额",
       "quotaRuleCount": "{count} 条规则",
       "disabledByAdmin": "已被管理员停用",
-      "disabledByAdminHint": "此密钥已被管理员停用，如需恢复请联系管理员。"
+      "disabledByAdminHint": "此密钥已被管理员停用，如需恢复请联系管理员。",
+      "autoRouted": "自动路由",
+      "autoRoutedTitle": "上游由网关自动分配",
+      "autoRoutedDesc": "此密钥会在管理员为你开放的范围内自动路由，你只需使用统一的访问地址。"
     },
     "password": {
       "pageTitle": "修改密码",
@@ -1956,5 +1966,11 @@
       "changeSuccess": "密码修改成功",
       "changeFailed": "密码修改失败"
     }
+  },
+  "portalSettings": {
+    "exposeUpstreams": "向成员展示上游",
+    "exposeUpstreamsDesc": "默认关闭：成员只看到统一访问入口，密钥在管理员开放的范围内自动路由。",
+    "saved": "门户设置已保存",
+    "saveFailed": "门户设置保存失败"
   }
 }

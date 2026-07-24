@@ -13,20 +13,41 @@ import type {
 import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
+export interface APIKeysScope {
+  /**
+   * Which keys to list. The API defaults to "unowned", so member-owned keys
+   * stay out of the global list and are managed from the owner's view.
+   */
+  ownerScope?: "unowned" | "all";
+  /** List one user's keys; takes precedence over ownerScope. */
+  userId?: string;
+}
+
 /**
  * Fetch paginated API keys with an optional server-side name search
  */
-export function useAPIKeys(page: number = 1, pageSize: number = 10, search: string = "") {
+export function useAPIKeys(
+  page: number = 1,
+  pageSize: number = 10,
+  search: string = "",
+  scope: APIKeysScope = {}
+) {
   const { apiClient } = useAuth();
+  const { ownerScope, userId } = scope;
 
   return useQuery({
-    queryKey: ["api-keys", page, pageSize, search],
+    queryKey: ["api-keys", page, pageSize, search, ownerScope ?? null, userId ?? null],
     queryFn: () => {
       const params = new URLSearchParams();
       params.set("page", String(page));
       params.set("page_size", String(pageSize));
       if (search) {
         params.set("search", search);
+      }
+      if (userId) {
+        params.set("user_id", userId);
+      } else if (ownerScope) {
+        params.set("owner_scope", ownerScope);
       }
       return apiClient.get<PaginatedAPIKeysResponse>(`/admin/keys?${params.toString()}`);
     },

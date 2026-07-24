@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 
 import SettingsPage from "@/app/[locale]/(dashboard)/settings/page";
 import { APP_REPOSITORY_URL } from "@/lib/app-version";
@@ -7,6 +7,19 @@ import { APP_REPOSITORY_URL } from "@/lib/app-version";
 vi.mock("next-intl", () => ({
   useTranslations: (namespace?: string) => (key: string) =>
     namespace ? `${namespace}.${key}` : key,
+}));
+
+const portalSettingsQuery = vi.hoisted(() => ({
+  data: { expose_upstreams: false, updated_at: "2026-07-01T00:00:00.000Z" } as
+    | { expose_upstreams: boolean; updated_at: string }
+    | undefined,
+  isLoading: false,
+}));
+const updatePortalSettingsMutate = vi.hoisted(() => vi.fn());
+
+vi.mock("@/hooks/use-portal-settings", () => ({
+  usePortalSettings: () => portalSettingsQuery,
+  useUpdatePortalSettings: () => ({ mutate: updatePortalSettingsMutate, isPending: false }),
 }));
 
 vi.mock("@/providers/auth-provider", () => ({
@@ -83,6 +96,7 @@ vi.mock("lucide-react", () => ({
   ArrowUpRight: () => <svg data-testid="icon-arrow-up-right" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
   DatabaseZap: () => <svg data-testid="icon-database-zap" />,
+  Eye: () => <svg data-testid="icon-eye" />,
   Globe: () => <svg data-testid="icon-globe" />,
   Github: () => <svg data-testid="icon-github" />,
   LogOut: () => <svg data-testid="icon-logout" />,
@@ -96,6 +110,12 @@ vi.mock("lucide-react", () => ({
 }));
 
 describe("SettingsPage", () => {
+  beforeEach(() => {
+    portalSettingsQuery.data = { expose_upstreams: false, updated_at: "2026-07-01T00:00:00.000Z" };
+    portalSettingsQuery.isLoading = false;
+    updatePortalSettingsMutate.mockClear();
+  });
+
   it("renders repository card as an external link", () => {
     render(<SettingsPage />);
 
@@ -137,6 +157,26 @@ describe("SettingsPage", () => {
     const usersLink = screen.getByRole("link", { name: /nav.users/i });
     expect(usersLink).toHaveAttribute("href", "/system/users");
     expect(screen.getByText("users.managementDesc")).toBeInTheDocument();
+  });
+
+  it("keeps the member upstream visibility toggle off by default and saves when switched on", () => {
+    render(<SettingsPage />);
+
+    const toggle = screen.getByRole("switch", { name: "portalSettings.exposeUpstreams" });
+    expect(toggle).toHaveAttribute("data-state", "unchecked");
+    expect(screen.getByText("portalSettings.exposeUpstreamsDesc")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(updatePortalSettingsMutate).toHaveBeenCalledWith({ expose_upstreams: true });
+  });
+
+  it("disables the visibility toggle until the current setting is loaded", () => {
+    portalSettingsQuery.data = undefined;
+    portalSettingsQuery.isLoading = true;
+
+    render(<SettingsPage />);
+
+    expect(screen.getByRole("switch", { name: "portalSettings.exposeUpstreams" })).toBeDisabled();
   });
 
   it("renders CLIProxyAPI settings entry", () => {
