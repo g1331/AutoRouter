@@ -21,7 +21,7 @@ export function HeroTerminal() {
       className="animate-hero-rise mx-auto mt-14 w-full max-w-2xl"
       style={{ animationDelay: "340ms" }}
     >
-      <div className="overflow-hidden rounded-cf-md border border-border/70 bg-surface-300/80 text-left shadow-cf-glow-medium backdrop-blur-sm">
+      <div className="overflow-hidden rounded-cf-md border border-transparent/70 bg-surface-400 text-left shadow-cf-glow-medium backdrop-blur-sm">
         {/* 窗口头：三色点 + 文件名 + 状态徽标 */}
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
           <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/25" aria-hidden="true" />

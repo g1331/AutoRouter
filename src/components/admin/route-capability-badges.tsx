@@ -268,7 +268,7 @@ export function RouteCapabilityMultiSelect({
                 {t("selected")}
               </span>
             ) : (
-              <span className="ml-auto inline-flex shrink-0 items-center rounded-cf-sm border border-divider px-1.5 py-0.5 text-[10px] text-muted-foreground max-sm:ml-0 max-sm:mt-1">
+              <span className="ml-auto inline-flex shrink-0 items-center rounded-cf-sm border border-transparent px-1.5 py-0.5 text-[10px] text-muted-foreground max-sm:ml-0 max-sm:mt-1 bg-surface-400">
                 {t("select")}
               </span>
             )}

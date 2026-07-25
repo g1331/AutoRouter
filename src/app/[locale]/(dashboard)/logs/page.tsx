@@ -395,7 +395,7 @@ export default function LogsPage() {
             {!focusId && data && data.total_pages > 1 && (
               <Card
                 variant="filled"
-                className={cn("border border-divider", LOGS_SECTION_ENTER_CLASS)}
+                className={cn("border border-transparent bg-surface-400", LOGS_SECTION_ENTER_CLASS)}
                 style={{ animationDelay: "140ms" }}
               >
                 <PaginationControls

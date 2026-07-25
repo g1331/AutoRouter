@@ -108,7 +108,7 @@ function SourceList({ sources, onChange }: SourceListProps) {
             setOverIndex(null);
           }}
           className={cn(
-            "flex items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/50 px-2 py-1.5 text-xs",
+            "flex items-center gap-2 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5 text-xs",
             overIndex === idx && dragIndex !== idx && "border-amber-500/50 bg-amber-500/5"
           )}
         >
@@ -343,7 +343,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
   return (
     <div
       data-morph-source
-      className="rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]"
+      className="rounded-cf-sm border border-transparent bg-surface-400 shadow-[var(--vr-shadow-xs)]"
     >
       <div className="flex items-center gap-3 border-b border-divider/80 bg-card px-3 py-2">
         <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -388,7 +388,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
             return (
               <span
                 key={cap}
-                className="inline-flex items-center gap-1 rounded-cf-sm border border-divider bg-surface-400/30 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="inline-flex items-center gap-1 rounded-cf-sm border border-transparent bg-surface-400 px-1.5 py-0.5 text-[10px] text-muted-foreground"
               >
                 <span
                   className={cn(
@@ -470,7 +470,7 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
   const enabledRules = rules.filter((r) => r.enabled);
 
   return (
-    <div className="rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]">
+    <div className="rounded-cf-sm border border-transparent bg-surface-400 shadow-[var(--vr-shadow-xs)]">
       <div className="border-b border-divider/80 bg-card px-3 py-1.5">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
           {t("capabilityMatrix")}
@@ -643,7 +643,7 @@ export default function HeaderCompensationPage() {
             {Array.from({ length: 2 }).map((_, i) => (
               <div
                 key={`skeleton-${i}`}
-                className="h-32 animate-pulse rounded-cf-sm border border-divider bg-surface-300/40"
+                className="h-32 animate-pulse rounded-cf-sm border border-transparent bg-surface-400"
               />
             ))}
           </div>

@@ -282,7 +282,7 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
         </div>
 
         {savedProbeCapabilities.length === 0 ? (
-          <p className="rounded-cf-sm border border-divider bg-surface-200/45 px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2 text-xs text-muted-foreground">
             {t("probeNoSupportedCapability")}
           </p>
         ) : selectedProbeCapabilityDefinition ? (
@@ -297,7 +297,7 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
         ) : null}
 
         {latestProbe ? (
-          <div className="min-w-0 space-y-3 overflow-hidden rounded-cf-sm border border-divider bg-surface-200/45 p-3">
+          <div className="min-w-0 space-y-3 overflow-hidden rounded-cf-sm border border-transparent bg-surface-400 p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={latestProbe.success ? "success" : "destructive"}>
                 {t(`probeStatus.${latestProbe.status}`)}
@@ -391,13 +391,13 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
                   {t("probeUpstreamResponseFullHint")}
                 </p>
               )}
-              <pre className="mt-2 max-h-56 w-full max-w-full overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-cf-sm border border-divider bg-surface-300/65 p-3 font-mono text-[11px] leading-relaxed text-foreground">
+              <pre className="mt-2 max-h-56 w-full max-w-full overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-cf-sm border border-transparent bg-surface-400 p-3 font-mono text-[11px] leading-relaxed text-foreground">
                 {visibleProbeResponseText}
               </pre>
             </div>
           </div>
         ) : (
-          <p className="rounded-cf-sm border border-divider bg-surface-200/45 px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2 text-xs text-muted-foreground">
             {t("probeNoResult")}
           </p>
         )}

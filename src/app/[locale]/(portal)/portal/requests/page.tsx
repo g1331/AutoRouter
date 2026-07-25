@@ -108,7 +108,7 @@ export default function PortalRequestsPage() {
             />
 
             {data && data.total_pages > 1 && (
-              <Card variant="filled" className="border border-divider">
+              <Card variant="filled" className="border border-transparent bg-surface-400">
                 <PaginationControls
                   total={data.total}
                   page={page}

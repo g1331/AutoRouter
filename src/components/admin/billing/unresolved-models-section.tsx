@@ -236,7 +236,7 @@ function UnresolvedRepairTable({
         return (
           <div
             key={row.model}
-            className="rounded-cf-sm border border-divider bg-surface-300/45 p-3"
+            className="rounded-cf-sm border border-transparent bg-surface-400 p-3"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>

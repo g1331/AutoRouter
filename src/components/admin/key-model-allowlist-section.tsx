@@ -107,7 +107,7 @@ function VirtualModelList({
   return (
     <div
       ref={scrollRef}
-      className="max-h-40 overflow-auto rounded-cf-sm border border-divider/70"
+      className="max-h-40 overflow-auto rounded-cf-sm border border-transparent bg-surface-400"
       onScroll={virtualRows.onScroll}
     >
       <div className="relative" style={{ height: virtualRows.totalHeight }}>
@@ -276,7 +276,7 @@ export function KeyModelAllowlistSection({
   };
 
   return (
-    <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
+    <div className="space-y-3 rounded-cf-md border border-transparent bg-surface-400 p-4">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge variant={value.length > 0 ? "info" : "neutral"}>
           {value.length > 0

@@ -201,7 +201,7 @@ export function AccessGrantsSection({ apiKey }: { apiKey: APIKeyResponse }) {
                       })}
                     </p>
                   )}
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-divider-subtle bg-surface-200 p-3">
+                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-transparent bg-surface-400 p-3">
                     {upstreamsLoading ? (
                       <div className="py-4 text-center type-body-medium text-muted-foreground">
                         {tCommon("loading")}

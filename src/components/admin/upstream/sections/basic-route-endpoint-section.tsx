@@ -112,11 +112,11 @@ export function BasicRouteEndpointSection({ upstream }: { upstream: Upstream }) 
             <span>{t("baseUrlDuplicateV1Warning")}</span>
           </div>
         )}
-        <div className="rounded-cf-sm border border-divider bg-surface-200/45 px-3 py-2.5">
+        <div className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2.5">
           <div className="text-xs font-medium text-muted-foreground">
             {t("finalRequestPreview")}
           </div>
-          <code className="mt-1 block break-all rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1 font-mono text-[11px] text-foreground">
+          <code className="mt-1 block break-all rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1 font-mono text-[11px] text-foreground">
             {endpointPreview?.previewUrl ?? t("finalRequestPreviewEmpty")}
           </code>
           <p className="mt-1 text-[11px] text-muted-foreground">

@@ -187,7 +187,7 @@ const DESKTOP_TABLE_BASE_WIDTHS = {
 } as const;
 
 const DETAIL_PANEL_CLASS =
-  "overflow-hidden rounded-cf-md border border-divider/80 bg-surface-200/82 shadow-[var(--vr-shadow-xs)]";
+  "overflow-hidden rounded-cf-md border border-transparent bg-surface-400 shadow-[var(--vr-shadow-xs)]";
 const DETAIL_PANEL_HEADER_CLASS =
   "border-b border-divider/70 bg-surface-300/72 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground";
 const DETAIL_PANEL_BODY_CLASS = "px-4 py-3";
@@ -1275,7 +1275,7 @@ export function LogsTable({
         ),
         content: (
           <>
-            <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+            <div className="rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
               <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
                 {t("journeyRequestArrived")}
               </div>
@@ -1319,7 +1319,7 @@ export function LogsTable({
               </div>
             </div>
 
-            <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+            <div className="rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
               <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
                 {t("journeySelectionBasis")}
               </div>
@@ -1344,7 +1344,7 @@ export function LogsTable({
                   </div>
                 ) : null}
 
-                <div className="space-y-2 rounded-cf-sm border border-divider/80 bg-surface-300/65 p-2">
+                <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 p-2">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     {t("timelineSessionAffinity")}
                   </div>
@@ -1380,7 +1380,7 @@ export function LogsTable({
               </div>
             </div>
 
-            <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+            <div className="rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
               <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
                 {t("journeyDecisionResult")}
               </div>
@@ -1430,7 +1430,7 @@ export function LogsTable({
                           >
                             {t("circuitState." + candidate.circuit_state)}
                           </Badge>
-                          <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          <span className="rounded-cf-sm border border-transparent bg-surface-400 px-1.5 py-0.5 text-[10px] text-muted-foreground">
                             {"w:" + String(candidate.weight)}
                           </span>
                           {isSelected ? (
@@ -1498,12 +1498,12 @@ export function LogsTable({
           </>
         ),
         content: (
-          <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+          <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               {t("timelineExecutionRetries")}
             </div>
             {queueLog && queueStatusLabel && queueLifecycleLabel ? (
-              <div className="space-y-2 rounded-cf-sm border border-divider/70 bg-surface-300/65 p-2">
+              <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 p-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge
                     variant={getQueueStatusVariant(queueLog.status)}
@@ -1577,7 +1577,7 @@ export function LogsTable({
                       key={
                         (attempt.upstream_id ?? attempt.upstream_name ?? "attempt") + "-" + index
                       }
-                      className="rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5"
+                      className="rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-foreground">
@@ -1681,7 +1681,7 @@ export function LogsTable({
         content: (
           <div className="space-y-2">
             {ttftMs != null ? (
-              <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+              <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-[11px]">
                   <span className="text-foreground">{t("journeyFirstOutput")}</span>
                   <span className="text-muted-foreground">{t("perfTtft")}</span>
@@ -1704,7 +1704,7 @@ export function LogsTable({
                 ) : null}
               </div>
             ) : genMs != null ? (
-              <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+              <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-[11px]">
                   <span className="text-foreground">{t("journeyGenerationFinished")}</span>
                   <span className="text-muted-foreground">
@@ -1862,7 +1862,7 @@ export function LogsTable({
                 </div>
                 {errorSummaryLines.length > 0 ? (
                   <div className="mt-3 space-y-2 border-t border-divider/35 pt-3">
-                    <div className="rounded-cf-sm border border-divider/70 bg-surface-300/58 px-3 py-2 text-[10px] text-muted-foreground">
+                    <div className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2 text-[10px] text-muted-foreground">
                       {errorSummaryLines.map((line) => (
                         <div key={line}>{line}</div>
                       ))}
@@ -2114,7 +2114,7 @@ export function LogsTable({
                           </div>
                         </div>
 
-                        <div className="rounded-cf-sm border border-divider/45 bg-surface-300/48 p-3">
+                        <div className="rounded-cf-sm border border-transparent bg-surface-400 p-3">
                           <div className="mb-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/78">
                             {t("billingFormulaTitle")}
                           </div>
@@ -2711,7 +2711,7 @@ export function LogsTable({
         >
           <div
             className={cn(
-              "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80",
+              "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400",
               LOGS_CARD_ENTER_CLASS
             )}
           >
@@ -2791,7 +2791,7 @@ export function LogsTable({
                           </div>
 
                           <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                            <code className="shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
+                            <code className="shrink-0 rounded-cf-sm border border-transparent bg-surface-400 px-1.5 py-0.5 font-mono text-xs text-foreground">
                               {log.method || "-"}
                             </code>
                             <RequestModeBadge isStream={log.is_stream} />
@@ -2927,7 +2927,7 @@ export function LogsTable({
                           type="button"
                           onClick={() => toggleRow(log.id)}
                           className={cn(
-                            "mt-3 inline-flex w-full items-center justify-between rounded-cf-sm border border-divider bg-surface-300/70 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-surface-300",
+                            "mt-3 inline-flex w-full items-center justify-between rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-surface-300",
                             LOGS_COLOR_TRANSITION_CLASS
                           )}
                           aria-expanded={isExpanded}
@@ -3097,7 +3097,7 @@ export function LogsTable({
                               </TableCell>
                               <TableCell className="w-[60px] px-1.5 py-1">
                                 <div className="flex flex-col items-start gap-0.5">
-                                  <code className="rounded-cf-sm border border-divider bg-surface-300 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
+                                  <code className="rounded-cf-sm border border-transparent bg-surface-400 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
                                     {log.method || "-"}
                                   </code>
                                   <RequestModeBadge isStream={log.is_stream} compact />

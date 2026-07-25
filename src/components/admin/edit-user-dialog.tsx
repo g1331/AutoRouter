@@ -160,7 +160,7 @@ export function EditUserDialog({
               control={form.control}
               name="is_active"
               render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-cf-sm border border-divider px-3 py-2">
+                <FormItem className="flex items-center justify-between rounded-cf-sm border border-transparent px-3 py-2 bg-surface-400">
                   <div className="space-y-0.5">
                     <FormLabel>{t("status")}</FormLabel>
                     <p className="type-caption text-muted-foreground">
@@ -182,7 +182,7 @@ export function EditUserDialog({
                 control={form.control}
                 name="expose_upstreams"
                 render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-cf-sm border border-divider px-3 py-2">
+                  <FormItem className="flex items-center justify-between rounded-cf-sm border border-transparent px-3 py-2 bg-surface-400">
                     <div className="space-y-0.5">
                       <FormLabel>{t("exposeUpstreams")}</FormLabel>
                       <p className="type-caption text-muted-foreground">

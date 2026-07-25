@@ -105,7 +105,7 @@ export function CliproxyAuthFileUploadDialog({
           <DialogDescription>{t("uploadAuthFileDescription")}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex w-full overflow-hidden rounded-cf-sm border border-border">
+        <div className="flex w-full overflow-hidden rounded-cf-sm border border-transparent bg-surface-400">
           <ModeButton active={mode === "file"} onClick={() => setMode("file")}>
             {t("uploadAuthFileMethodFile")}
           </ModeButton>

@@ -189,7 +189,7 @@ function UsageChartLoading({ loadingLabel }: { loadingLabel: string }) {
     <DashboardLoadingSurface
       loadingLabel={loadingLabel}
       data-testid="usage-chart-loading-skeleton"
-      className="flex h-full w-full flex-col gap-4 rounded-cf-md border border-divider/75 bg-surface-200/55 p-4"
+      className="flex h-full w-full flex-col gap-4 rounded-cf-md border border-transparent bg-surface-400 p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -198,26 +198,26 @@ function UsageChartLoading({ loadingLabel }: { loadingLabel: string }) {
           <DashboardLoadingBlock className="h-3 w-14" />
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 rounded-cf-sm border border-divider/70 bg-surface-300/45 p-1">
+          <div className="flex items-center gap-1.5 rounded-cf-sm border border-transparent bg-surface-400 p-1">
             <DashboardLoadingBlock tone="accent" className="h-7 w-16" />
             <DashboardLoadingBlock className="h-7 w-14" />
             <DashboardLoadingBlock className="h-7 w-12" />
           </div>
-          <div className="flex items-center gap-1.5 rounded-cf-sm border border-divider/70 bg-surface-300/45 p-1">
+          <div className="flex items-center gap-1.5 rounded-cf-sm border border-transparent bg-surface-400 p-1">
             <DashboardLoadingBlock tone="accent" className="h-7 w-16" />
             <DashboardLoadingBlock className="h-7 w-16" />
           </div>
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-[36px_minmax(0,1fr)] gap-3 rounded-cf-md border border-divider/65 bg-card/55 p-3">
+      <div className="grid flex-1 grid-cols-[36px_minmax(0,1fr)] gap-3 rounded-cf-md border border-transparent bg-surface-400 p-3">
         <div className="flex flex-col justify-between py-1.5">
           {Array.from({ length: 4 }).map((_, index) => (
             <DashboardLoadingBlock key={`usage-chart-axis-${index}`} className="h-2.5 w-full" />
           ))}
         </div>
 
-        <div className="relative overflow-hidden rounded-cf-sm border border-divider/60 bg-surface-200/40 px-3 pb-3 pt-4">
+        <div className="relative overflow-hidden rounded-cf-sm border border-transparent bg-surface-400 px-3 pb-3 pt-4">
           <div className="absolute inset-x-0 top-4 h-px bg-divider/55" />
           <div className="absolute inset-x-0 top-1/2 h-px bg-divider/45" />
           <div className="absolute inset-x-0 bottom-9 h-px bg-divider/55" />

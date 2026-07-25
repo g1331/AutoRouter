@@ -330,7 +330,10 @@ export function BackgroundSyncTasksPanel() {
 
       <div className="space-y-3 lg:hidden">
         {rows.map((task) => (
-          <div key={task.task_name} className="rounded-cf-sm border border-divider p-3">
+          <div
+            key={task.task_name}
+            className="rounded-cf-sm border border-transparent p-3 bg-surface-400"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1.5">
                 <p className="text-sm font-medium leading-5 text-foreground">{getTitle(task)}</p>

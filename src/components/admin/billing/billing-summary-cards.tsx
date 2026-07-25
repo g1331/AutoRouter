@@ -60,7 +60,7 @@ export function BillingSummaryCards({
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Card variant="filled" className="border border-divider">
+        <Card variant="filled" className="border border-transparent bg-surface-400">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("todayCost")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
@@ -68,7 +68,7 @@ export function BillingSummaryCards({
             </p>
           </CardContent>
         </Card>
-        <Card variant="filled" className="border border-divider">
+        <Card variant="filled" className="border border-transparent bg-surface-400">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("monthCost")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
@@ -76,7 +76,7 @@ export function BillingSummaryCards({
             </p>
           </CardContent>
         </Card>
-        <Card variant="filled" className="border border-divider">
+        <Card variant="filled" className="border border-transparent bg-surface-400">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("unresolvedModels")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
@@ -84,7 +84,7 @@ export function BillingSummaryCards({
             </p>
           </CardContent>
         </Card>
-        <Card variant="filled" className="border border-divider">
+        <Card variant="filled" className="border border-transparent bg-surface-400">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("latestSync")}</p>
             <div className="mt-1 flex items-center gap-2">

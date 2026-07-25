@@ -302,8 +302,9 @@ describe("Sidebar", () => {
       renderSidebar();
 
       const dashboardLinks = screen.getAllByRole("link", { name: /dashboard/i });
-      expect(dashboardLinks[0].className).toContain("border");
-      expect(dashboardLinks[0].className).toContain("border-amber-500/45");
+      // 选中态不再靠 amber 描边，改为提一档表面明度
+      expect(dashboardLinks[0].className).toContain("border-transparent");
+      expect(dashboardLinks[0].className).toContain("bg-surface-400");
     });
 
     it("applies standard border to inactive items", () => {
@@ -328,8 +329,8 @@ describe("Sidebar", () => {
         const { unmount } = renderSidebar();
 
         const activeLinks = screen.getAllByRole("link", { name });
-        expect(activeLinks[0].className).toContain("border");
-        expect(activeLinks[0].className).toContain("border-amber-500/45");
+        expect(activeLinks[0].className).toContain("border-transparent");
+        expect(activeLinks[0].className).toContain("bg-surface-400");
 
         unmount();
       });

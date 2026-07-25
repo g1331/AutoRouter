@@ -174,7 +174,7 @@ export function CliproxyOAuthLoginDialog({
             <div className="space-y-3">
               <div className="space-y-1">
                 <p className="type-body-small text-muted-foreground">{t("oauthAuthUrlLabel")}</p>
-                <code className="block break-all rounded-cf-sm border border-border bg-surface-200 p-2 type-body-small font-mono">
+                <code className="block break-all rounded-cf-sm border border-transparent bg-surface-400 p-2 type-body-small font-mono">
                   {session.url}
                 </code>
               </div>
@@ -201,7 +201,7 @@ export function CliproxyOAuthLoginDialog({
                         : (statusQuery.data?.error ?? t("oauthLoginError"))}
                     </p>
                   </div>
-                  <div className="space-y-2 rounded-cf-sm border border-border p-3">
+                  <div className="space-y-2 rounded-cf-sm border border-transparent p-3 bg-surface-400">
                     <div>
                       <p className="type-label-large text-foreground">{t("oauthManualCallback")}</p>
                       <p className="type-body-small text-muted-foreground">

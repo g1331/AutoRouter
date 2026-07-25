@@ -271,7 +271,7 @@ export function KeysTable({
 
     if (key.spending_rule_statuses.length === 0) {
       return (
-        <div className="rounded-cf-sm border border-divider/80 bg-surface-300/70 px-3 py-2">
+        <div className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2">
           <p className="type-body-small text-muted-foreground">{t("quotaStatusPending")}</p>
         </div>
       );
@@ -371,7 +371,7 @@ export function KeysTable({
         <div
           role="group"
           aria-label={t("ownerScopeLabel")}
-          className="flex items-center gap-1 rounded-cf-md border border-divider bg-surface-200 p-1"
+          className="flex items-center gap-1 rounded-cf-md border border-transparent bg-surface-400 p-1"
         >
           {(["unowned", "all"] as const).map((scope) => (
             <Button
@@ -395,7 +395,7 @@ export function KeysTable({
   if (keys.length === 0 && !searchQuery && !searchInput) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400">
           <Key className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
         <h3 className="type-title-medium mb-2 text-foreground">{t("noKeys")}</h3>
@@ -409,7 +409,7 @@ export function KeysTable({
       <div className="space-y-4">
         {searchBar}
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400">
             <Key className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
           <h3 className="type-title-medium mb-2 text-foreground">{t("noKeysFound")}</h3>
@@ -455,7 +455,7 @@ export function KeysTable({
               <div className="flex items-center gap-2">
                 <code
                   className={cn(
-                    "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground",
+                    "block min-w-0 flex-1 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1 font-mono text-xs text-foreground",
                     visibleKeyIds.has(key.id)
                       ? "whitespace-normal break-all"
                       : "truncate whitespace-nowrap"
@@ -653,7 +653,7 @@ export function KeysTable({
                         <div className="flex min-w-0 items-center gap-2">
                           <code
                             className={cn(
-                              "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 align-middle font-mono text-[11px] text-foreground",
+                              "block min-w-0 flex-1 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1 align-middle font-mono text-[11px] text-foreground",
                               visibleKeyIds.has(key.id)
                                 ? "overflow-x-auto overflow-y-hidden whitespace-nowrap"
                                 : "truncate whitespace-nowrap"

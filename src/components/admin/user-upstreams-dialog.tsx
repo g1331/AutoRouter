@@ -114,7 +114,7 @@ export function UserUpstreamsDialog({
             })}
           </p>
 
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-cf-sm border border-divider bg-surface-200/60 p-3">
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3">
             {isLoading ? (
               <div className="py-6 text-center type-body-small text-muted-foreground">
                 {tCommon("loading")}

@@ -333,7 +333,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
             />
 
             {!upstreamsVisible ? (
-              <div className="space-y-1 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
+              <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-4">
                 <p className="type-body-medium text-foreground">
                   {tPortal("keys.autoRoutedTitle")}
                 </p>
@@ -349,7 +349,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                   <FormItem>
                     <FormLabel>{t("selectUpstreams")} *</FormLabel>
                     <FormDescription>{tPortal("keys.upstreamsDesc")}</FormDescription>
-                    <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-divider-subtle bg-surface-200 p-3">
+                    <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-transparent bg-surface-400 p-3">
                       {upstreamsLoading ? (
                         <div className="py-4 text-center type-body-medium text-muted-foreground">
                           {tCommon("loading")}
@@ -392,7 +392,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
               />
             )}
 
-            <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
+            <div className="space-y-3 rounded-cf-md border border-transparent bg-surface-400 p-4">
               <div>
                 <p className="type-body-medium text-foreground">{t("rateLimits")}</p>
                 <p className="mt-1 type-body-small text-muted-foreground">
@@ -453,7 +453,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
               </div>
             </div>
 
-            <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
+            <div className="space-y-3 rounded-cf-md border border-transparent bg-surface-400 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="type-body-medium text-foreground">{t("spendingRules")}</p>
@@ -487,7 +487,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                   {spendingRules.map((rule, index) => (
                     <div
                       key={`portal-spending-rule-${index}`}
-                      className="space-y-3 rounded-cf-md border border-divider-subtle bg-background/70 p-3"
+                      className="space-y-3 rounded-cf-md border border-transparent bg-surface-400 p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="type-body-medium text-foreground">

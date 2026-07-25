@@ -81,6 +81,17 @@ const NAV_ICON_COLOR = {
   changePassword: "text-[#4C6480] dark:text-[#9BB0C9]",
 } as const;
 
+/**
+ * 侧栏底部工具项的着重色：与上方导航同一套规则，避免这一组仍是清一色灰。
+ * 登出用错误色，因为它是唯一有破坏性的操作。
+ */
+const UTILITY_ICON_COLOR = {
+  language: "text-[#2A7595] dark:text-[#6FC3E8]",
+  theme: "text-[#8A6A12] dark:text-[#E0B341]",
+  repository: "text-[#4C6480] dark:text-[#9BB0C9]",
+  logout: "text-status-error",
+} as const;
+
 type NavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
@@ -182,7 +193,7 @@ function LanguageItem({ collapsed }: { collapsed: boolean }) {
           className={baseControlItemClass(collapsed)}
           title={tLanguage("switch")}
         >
-          <Globe className="h-4 w-4 flex-shrink-0" />
+          <Globe className={cn("h-4 w-4 flex-shrink-0", UTILITY_ICON_COLOR.language)} />
           {!collapsed && <span className="type-body-small truncate">{tLanguage("current")}</span>}
         </Button>
       </DropdownMenuTrigger>
@@ -225,9 +236,9 @@ function ThemeItem({ collapsed }: { collapsed: boolean }) {
           title={tTheme("toggle")}
         >
           {resolvedTheme === "dark" ? (
-            <Moon className="h-4 w-4 flex-shrink-0" />
+            <Moon className={cn("h-4 w-4 flex-shrink-0", UTILITY_ICON_COLOR.theme)} />
           ) : (
-            <Sun className="h-4 w-4 flex-shrink-0" />
+            <Sun className={cn("h-4 w-4 flex-shrink-0", UTILITY_ICON_COLOR.theme)} />
           )}
           {!collapsed && <span className="type-body-small truncate">{tTheme("toggle")}</span>}
         </Button>
@@ -291,7 +302,10 @@ function RepositoryItem({ collapsed }: { collapsed: boolean }) {
       title={tRepository("open")}
       aria-label={tRepository("open")}
     >
-      <Github className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+      <Github
+        className={cn("h-4 w-4 flex-shrink-0", UTILITY_ICON_COLOR.repository)}
+        aria-hidden="true"
+      />
       {!collapsed && <span className="type-body-small truncate">{tRepository("title")}</span>}
     </a>
   );
@@ -370,7 +384,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           size="icon"
           onClick={onToggleCollapse}
           className={cn(
-            "absolute -right-3 top-[4.3rem] z-50 hidden h-6 w-6 rounded-full border border-divider bg-background text-muted-foreground",
+            "absolute -right-3 top-[4.3rem] z-50 hidden h-6 w-6 rounded-full border border-transparent bg-surface-400 text-muted-foreground",
             "hover:border-divider-subtle hover:text-foreground md:flex"
           )}
           aria-label={collapsed ? tCommon("expand") : tCommon("collapse")}
@@ -465,7 +479,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             className={baseControlItemClass(collapsed)}
             title={tNav("logout")}
           >
-            <LogOut className="h-4 w-4 flex-shrink-0" />
+            <LogOut className={cn("h-4 w-4 flex-shrink-0", UTILITY_ICON_COLOR.logout)} />
             {!collapsed && <span className="type-body-small truncate">{tNav("logout")}</span>}
           </Button>
         </div>

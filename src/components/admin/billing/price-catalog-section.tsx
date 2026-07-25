@@ -605,7 +605,7 @@ export function PriceCatalogSection({
                   <div
                     key={override.id}
                     className={[
-                      "rounded-cf-sm border border-divider bg-surface-300/30 p-3",
+                      "rounded-cf-sm border border-transparent bg-surface-400 p-3",
                       recentlySavedModel === override.model ? "ring-1 ring-amber-500/50" : "",
                     ].join(" ")}
                   >
@@ -792,7 +792,7 @@ export function PriceCatalogSection({
                   return (
                     <div
                       key={model}
-                      className="rounded-cf-sm border border-divider bg-surface-300/30 p-3"
+                      className="rounded-cf-sm border border-transparent bg-surface-400 p-3"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -871,7 +871,7 @@ export function PriceCatalogSection({
                     <div
                       key={item.id}
                       className={[
-                        "rounded-cf-sm border border-divider bg-surface-300/30 p-3",
+                        "rounded-cf-sm border border-transparent bg-surface-400 p-3",
                         recentlySavedModel === item.model ? "ring-1 ring-amber-500/50" : "",
                       ].join(" ")}
                     >

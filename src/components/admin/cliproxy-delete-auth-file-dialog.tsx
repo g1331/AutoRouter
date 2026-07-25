@@ -60,7 +60,7 @@ export function CliproxyDeleteAuthFileDialog({
 
         {account ? (
           <div className="py-2">
-            <div className="rounded-cf-sm border border-border p-3">
+            <div className="rounded-cf-sm border border-transparent p-3 bg-surface-400">
               <div className="flex justify-between gap-3">
                 <span className="type-label-large text-muted-foreground">
                   {t("accountFileLabel")}

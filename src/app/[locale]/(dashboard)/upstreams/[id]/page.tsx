@@ -247,7 +247,7 @@ export default function UpstreamDetailPage() {
               <aside className="hidden lg:block lg:w-56 lg:shrink-0">
                 <nav
                   aria-label={t("detailTitle")}
-                  className="sticky top-14 space-y-4 rounded-cf-md border border-divider bg-surface-200/55 p-3"
+                  className="sticky top-14 space-y-4 rounded-cf-md border border-transparent bg-surface-400 p-3"
                 >
                   {groupedSections.map((group) => (
                     <div key={group.category} className="space-y-1">

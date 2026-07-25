@@ -208,7 +208,7 @@ function RegexPreview({
   );
 
   return (
-    <div className="space-y-2 rounded-cf-sm border border-divider/60 bg-surface-300/35 px-3 py-3">
+    <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 px-3 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs font-medium text-foreground">{label}</div>
         {pattern.trim() ? (
@@ -318,7 +318,7 @@ export function UpstreamFailureRulesEditor({
 
   if (scope === "upstream" && !upstreamId) {
     return (
-      <div className="rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3 py-3 text-xs text-muted-foreground">
+      <div className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-3 text-xs text-muted-foreground">
         {t("localFailureRulesCreateModeHint")}
       </div>
     );
@@ -390,7 +390,7 @@ export function UpstreamFailureRulesEditor({
                 return (
                   <div
                     key={rule.id}
-                    className="rounded-cf-sm border border-divider bg-surface-300/55 px-3 py-3"
+                    className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-3"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
@@ -423,7 +423,7 @@ export function UpstreamFailureRulesEditor({
                             {conditionDetails.map((detail) => (
                               <div
                                 key={detail.key}
-                                className="rounded-cf-sm border border-divider/70 bg-surface-200/45 px-2 py-1.5"
+                                className="rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5"
                               >
                                 <div className="text-[10px] uppercase text-muted-foreground">
                                   {detail.label}
@@ -514,7 +514,7 @@ export function UpstreamFailureRulesEditor({
             onChange={(event) => setName(event.target.value)}
             placeholder={t("failureRuleNamePlaceholder")}
           />
-          <label className="flex h-11 items-center gap-2 rounded-cf-sm border border-divider/60 bg-surface-300/35 px-3 text-sm font-medium text-foreground">
+          <label className="flex h-11 items-center gap-2 rounded-cf-sm border border-transparent bg-surface-400 px-3 text-sm font-medium text-foreground">
             <Checkbox
               checked={enabled}
               onCheckedChange={(checked) => setEnabled(checked === true)}

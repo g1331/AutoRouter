@@ -90,7 +90,7 @@ export function VirtualCatalogEntryList({
   return (
     <div
       ref={scrollRef}
-      className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-divider/70 bg-card/15"
+      className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-transparent bg-surface-400"
       onScroll={virtualRows.onScroll}
     >
       <div className="relative" style={{ height: virtualRows.totalHeight }}>
