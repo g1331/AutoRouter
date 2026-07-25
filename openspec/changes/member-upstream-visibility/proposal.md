@@ -11,7 +11,7 @@
 ## What Changes
 
 - 在 `users` 表新增 `expose_upstreams` 布尔列，默认 `false`（隐藏），按用户独立配置。移除全局单例方案（不再引入 `portal_settings` 表与 `/api/admin/portal-settings` 端点）。
-- 管理端写入口：单用户走 `PATCH /api/admin/users/{id}`（携带 `expose_upstreams`）；批量走新增的 `PATCH /api/admin/users/upstream-visibility`（对指定用户集或全体成员一次性设置）。
+- 管理端写入口：单用户走 `PUT /api/admin/users/{id}`（携带 `expose_upstreams`）；批量走新增的 `PATCH /api/admin/users/upstream-visibility`（对指定用户集或全体成员一次性设置）。
 - 隐藏态成员的成员侧行为（按该成员自身设置判定）：
   - `GET /api/user/upstreams` 不再返回上游选项，返回 `upstreams_visible: false` 与空列表；
   - 成员创建自助密钥不再提交上游子集，服务端自动绑定该用户当前的完整授权集（授权集为空时拒绝创建）；成员更新密钥时忽略 `upstream_ids`；
@@ -43,7 +43,7 @@
 
 - 数据模型与 PostgreSQL/SQLite 迁移：`users` 表新增 `expose_upstreams` 列（不再引入 `portal_settings` 表）。
 - `user-service` 增加：`createUser` 默认隐藏、`updateUser` 支持单用户可见性并在切到隐藏时重对齐其密钥、批量 `setUsersUpstreamVisibility`；`setUserUpstreams` 按该用户可见性决定密钥同步模式；`/api/user/upstreams`、`/api/user/keys*`、`/api/user/logs` 按当前登录成员自身设置分支。
-- 管理端：`PATCH /api/admin/users/{id}` 增加 `expose_upstreams`；新增批量路由 `PATCH /api/admin/users/upstream-visibility`；用户管理页编辑对话框开关、批量入口、TanStack Query hooks 与中英文文案。
+- 管理端：`PUT /api/admin/users/{id}` 增加 `expose_upstreams`；新增批量路由 `PATCH /api/admin/users/upstream-visibility`；用户管理页编辑对话框开关、批量入口、TanStack Query hooks 与中英文文案。
 - 门户密钥对话框与密钥表格适配隐藏态；E2E 页面级 mock 需补充用户可见性字段与批量端点桩。
 - `key-manager.listApiKeys` 增加无归属过滤与归属人信息装配；`/api/admin/keys` 与 API 转换器、TypeScript 类型补归属字段；密钥页、用户页与分配对话框相应调整。
 - 新增设置服务、管理端路由、成员端路由与门户/管理台组件的聚焦测试，并执行数据库迁移一致性校验。

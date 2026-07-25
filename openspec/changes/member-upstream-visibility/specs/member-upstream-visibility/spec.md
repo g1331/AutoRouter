@@ -2,7 +2,7 @@
 
 ### Requirement: 成员上游可见性按用户配置
 
-系统 SHALL 为每个用户持久化一个「上游可见性」布尔属性（`users.expose_upstreams`），默认值 MUST 为隐藏（`false`）。该属性仅影响对应成员侧（`/api/user/*` 与门户 UI）的上游信息暴露，管理端行为 MUST 不受影响。系统 SHALL 提供仅管理员可用的写入口：单用户（`PATCH /api/admin/users/{id}` 携带 `expose_upstreams`）与批量（`PATCH /api/admin/users/upstream-visibility`，可对指定用户集或全体成员一次性设置）。非管理员访问上述写入口 MUST 被拒绝。
+系统 SHALL 为每个用户持久化一个「上游可见性」布尔属性（`users.expose_upstreams`），默认值 MUST 为隐藏（`false`）。该属性仅影响对应成员侧（`/api/user/*` 与门户 UI）的上游信息暴露，管理端行为 MUST 不受影响。系统 SHALL 提供仅管理员可用的写入口：单用户（`PUT /api/admin/users/{id}` 携带 `expose_upstreams`）与批量（`PATCH /api/admin/users/upstream-visibility`，可对指定用户集或全体成员一次性设置）。非管理员访问上述写入口 MUST 被拒绝。
 
 #### Scenario: 新用户默认隐藏
 

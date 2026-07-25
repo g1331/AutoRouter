@@ -79,7 +79,7 @@ users（新增一列）
 
 管理端用户管理页：
 
-- 编辑用户对话框加“上游可见”开关，走既有 `PATCH /api/admin/users/{id}`（`updateUser` 增 `exposeUpstreams`）。切到隐藏为带副作用操作（重对齐该用户密钥）。
+- 编辑用户对话框加“上游可见”开关，走既有 `PUT /api/admin/users/{id}`（`updateUser` 增 `exposeUpstreams`）。切到隐藏为带副作用操作（重对齐该用户密钥）。
 - 页面加批量入口：对全体成员一次性设为可见/隐藏，走新增 `PATCH /api/admin/users/upstream-visibility`；批量以确认对话框防误触，成功后 toast 反馈受影响用户数。端点 body 支持可选 `user_ids`（省略即全体成员），UI 先落地“全体成员”粒度，按需再加子集选择。
 
 ## 密钥归属分离
@@ -117,7 +117,7 @@ users（新增一列）
 ## 测试与兼容
 
 - 服务层：`user-service` 的 `createUser` 默认隐藏、`updateUser` 切隐藏触发重对齐、批量 `setUsersUpstreamVisibility`；`setUserUpstreams` 按该用户可见性选择对齐模式；`listApiKeys` 的 `unowned` 过滤与归属装配。
-- 路由层：成员三端点按当前登录成员自身可见性分支；`PATCH /api/admin/users/{id}` 的 `expose_upstreams`；批量 `/api/admin/users/upstream-visibility` 鉴权与校验；`/api/admin/keys` 的 `owner_scope` 与 `user_id` 参数分支。
+- 路由层：成员三端点按当前登录成员自身可见性分支；`PUT /api/admin/users/{id}` 的 `expose_upstreams`；批量 `/api/admin/users/upstream-visibility` 鉴权与校验；`/api/admin/keys` 的 `owner_scope` 与 `user_id` 参数分支。
 - 组件：门户密钥对话框隐藏态渲染与提交载荷、密钥表格“自动路由”展示；用户管理页编辑对话框可见性开关、批量入口；管理台密钥页范围切换与归属徽章、用户密钥弹窗、分配对话框仅列无归属密钥。
 - E2E：现有 portal spec 的 `/api/user/upstreams` 桩沿用 `{upstreams_visible, items}`；admin-page-mocks 的用户 fixture 补 `expose_upstreams`，移除 portal-settings 桩。
 - 升级兼容：新列默认隐藏，升级后既有用户即为隐藏（这正是需求语义）；已存在的成员密钥在管理员下一次改授权或切换该用户可见性时被对齐，读路径不依赖对齐是否发生。

@@ -16,7 +16,7 @@
 
 ## 4. 管理端 API：单用户 + 批量
 
-- [x] 4.1 `PATCH /api/admin/users/{id}` 增加 `expose_upstreams`（requireAdmin + zod）；新增 `PATCH /api/admin/users/upstream-visibility` 批量路由；移除 `/api/admin/portal-settings` 路由及其测试；`api-transformers` 用户响应补 `expose_upstreams`。补路由测试，通过后提交。
+- [x] 4.1 `PUT /api/admin/users/{id}` 增加 `expose_upstreams`（requireAdmin + zod）；新增 `PATCH /api/admin/users/upstream-visibility` 批量路由；移除 `/api/admin/portal-settings` 路由及其测试；`api-transformers` 用户响应补 `expose_upstreams`。补路由测试，通过后提交。
 
 ## 5. 前端：设置页回退 + 用户管理页可见性
 
@@ -31,4 +31,4 @@
 
 ## 7. 整体验证与交接
 
-- [ ] 7.1 运行相关 Vitest、迁移一致性、lint、format check、tsc；复核 OpenSpec 规格与实现一致性，本地刷新 dev 环境验证；提交并推送分支、更新 draft PR #239。
+- [x] 7.1 运行相关 Vitest、迁移一致性、lint、format check、tsc；复核 OpenSpec 规格与实现一致性，本地刷新 dev 环境验证；提交并推送分支、更新 draft PR #239。
