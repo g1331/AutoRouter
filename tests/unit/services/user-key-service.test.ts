@@ -44,15 +44,7 @@ vi.mock("@/lib/db", async () => {
 });
 
 import { eq } from "drizzle-orm";
-import {
-  db,
-  users,
-  apiKeys,
-  upstreams,
-  userUpstreams,
-  apiKeyUpstreams,
-  portalSettings,
-} from "@/lib/db";
+import { db, users, apiKeys, upstreams, userUpstreams, apiKeyUpstreams } from "@/lib/db";
 import {
   listOwnApiKeys,
   createOwnApiKey,
@@ -65,6 +57,14 @@ import {
   AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 
+// 上游可见性是 users 表上的 per-user 列。各 suite 仍用 setExposeUpstreams 表达
+// “这一组用例下成员能否看到上游”，由 seedUser 把该值写进被创建用户的列里。
+let seedExposeUpstreams = true;
+
+function setExposeUpstreams(exposeUpstreams: boolean): void {
+  seedExposeUpstreams = exposeUpstreams;
+}
+
 async function seedUser(username: string): Promise<{ id: string }> {
   const now = new Date();
   const [row] = await db
@@ -73,6 +73,7 @@ async function seedUser(username: string): Promise<{ id: string }> {
       username,
       passwordHash: "hashed:pw",
       displayName: username,
+      exposeUpstreams: seedExposeUpstreams,
       createdAt: now,
       updatedAt: now,
     })
@@ -102,11 +103,6 @@ async function grantUpstreams(userId: string, upstreamIds: string[]): Promise<vo
     .values(upstreamIds.map((upstreamId) => ({ userId, upstreamId, createdAt: now })));
 }
 
-async function setExposeUpstreams(exposeUpstreams: boolean): Promise<void> {
-  await db.delete(portalSettings);
-  await db.insert(portalSettings).values({ id: "default", exposeUpstreams, updatedAt: new Date() });
-}
-
 beforeEach(async () => {
   await db.delete(apiKeyUpstreams);
   await db.delete(apiKeys);
@@ -116,7 +112,7 @@ beforeEach(async () => {
   // The upstream subset is a member-facing dimension only while the admin
   // exposes upstreams; the suites below assert that surface, and the hidden
   // default gets its own suite at the end of this file.
-  await setExposeUpstreams(true);
+  setExposeUpstreams(true);
 });
 
 describe("createOwnApiKey", () => {
@@ -456,8 +452,8 @@ describe("listOwnApiKeys", () => {
 });
 
 describe("with upstreams hidden from members", () => {
-  beforeEach(async () => {
-    await setExposeUpstreams(false);
+  beforeEach(() => {
+    setExposeUpstreams(false);
   });
 
   it("binds a new key to the owner's whole grant set and ignores the submitted subset", async () => {

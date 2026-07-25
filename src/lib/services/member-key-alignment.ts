@@ -171,22 +171,42 @@ export async function alignMemberKeysToGrants(
 }
 
 /**
- * Realign every member-owned API key to its owner's grant set. Used when the
- * portal upstream visibility toggle is switched off, so keys created while
- * members could pick their own subset fall back under admin control.
- * Admin-owned keys are left alone: those are managed from the admin console,
- * which keeps full upstream visibility.
+ * Realign the member-owned API keys of a specific set of users to their
+ * owners' grant sets. Used by the bulk visibility control, which flips
+ * `expose_upstreams` for many members at once and must realign each member
+ * switched to hidden so their keys fall back under admin control. Pass the
+ * surrounding transaction so the flag flip and the key alignment commit
+ * together. Admin-owned and unowned keys are untouched: the inner join keeps
+ * only keys whose owner is a `member`.
  */
-export async function alignAllMemberKeysToGrants(): Promise<MemberKeyAlignmentResult> {
-  const result = await db.transaction(async (tx) => {
+export async function alignMemberKeysForUsers(
+  userIds: string[],
+  options: MemberKeyAlignmentOptions = {}
+): Promise<MemberKeyAlignmentResult> {
+  if (userIds.length === 0) {
+    return { inspectedKeys: 0, alignedKeys: 0 };
+  }
+  const mode = options.mode ?? "replace";
+  const run = async (tx: DbExecutor) => {
     const ownedKeys = await tx
       .select({ id: apiKeys.id, userId: apiKeys.userId, accessMode: apiKeys.accessMode })
       .from(apiKeys)
       .innerJoin(users, eq(apiKeys.userId, users.id))
-      .where(eq(users.role, "member"));
-    return alignOwnedKeys(tx, ownedKeys, "replace");
-  });
+      .where(and(inArray(apiKeys.userId, userIds), eq(users.role, "member")));
+    return alignOwnedKeys(tx, ownedKeys, mode);
+  };
 
-  log.info(result, "aligned all member keys to granted upstreams");
+  const result = options.executor ? await run(options.executor) : await db.transaction(run);
+
+  if (result.alignedKeys > 0) {
+    log.info(
+      {
+        users: userIds.length,
+        inspectedKeys: result.inspectedKeys,
+        alignedKeys: result.alignedKeys,
+      },
+      "aligned member keys for users"
+    );
+  }
   return result;
 }

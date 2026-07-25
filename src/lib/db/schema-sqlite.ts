@@ -41,6 +41,10 @@ export const users = sqliteTable(
     displayName: text("display_name").notNull(),
     role: text("role").notNull().default("member"), // 'admin' | 'member'
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    // Per-user upstream visibility. Default hidden: members see no upstream
+    // identity and their keys route inside the granted scope until an admin
+    // exposes upstreams for this user.
+    exposeUpstreams: integer("expose_upstreams", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
@@ -425,13 +429,6 @@ export const trafficRecordingSettings = sqliteTable("traffic_recording_settings"
 /**
  * Runtime configuration for the member self-service portal.
  */
-export const portalSettings = sqliteTable("portal_settings", {
-  id: text("id").primaryKey().default("default"),
-  exposeUpstreams: integer("expose_upstreams", { mode: "boolean" }).notNull().default(false),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
-});
-
 /**
  * Searchable index for recorded traffic fixture files.
  */
@@ -914,8 +911,6 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type TrafficRecordingSettings = typeof trafficRecordingSettings.$inferSelect;
 export type NewTrafficRecordingSettings = typeof trafficRecordingSettings.$inferInsert;
-export type PortalSettings = typeof portalSettings.$inferSelect;
-export type NewPortalSettings = typeof portalSettings.$inferInsert;
 export type TrafficRecording = typeof trafficRecordings.$inferSelect;
 export type NewTrafficRecording = typeof trafficRecordings.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;

@@ -10,8 +10,7 @@ import {
   type ApiKeyUpdateInput,
   type PaginatedApiKeys,
 } from "./key-manager";
-import { getUserUpstreams } from "./user-service";
-import { getPortalSettings } from "./portal-settings-service";
+import { getUserUpstreams, getUserExposeUpstreams } from "./user-service";
 import { parseSpendingRules } from "./spending-rules";
 import { parseApiKeyRateLimit } from "./api-key-rate-limits";
 import type { SpendingRule } from "./upstream-quota-tracker";
@@ -232,9 +231,9 @@ export async function listOwnApiKeys(
   page: number = 1,
   pageSize: number = 20
 ): Promise<PaginatedApiKeys> {
-  const [result, { exposeUpstreams }] = await Promise.all([
+  const [result, exposeUpstreams] = await Promise.all([
     listApiKeys(page, pageSize, { userId }),
-    getPortalSettings(),
+    getUserExposeUpstreams(userId),
   ]);
   if (exposeUpstreams) {
     return result;
@@ -250,7 +249,7 @@ export async function createOwnApiKey(
   userId: string,
   input: UserKeyCreateInput
 ): Promise<ApiKeyCreateResult> {
-  const { exposeUpstreams } = await getPortalSettings();
+  const exposeUpstreams = await getUserExposeUpstreams(userId);
   const upstreamIds = await resolveUpstreamsForNewKey(userId, input.upstreamIds, exposeUpstreams);
 
   const result = await createApiKey({
@@ -292,7 +291,7 @@ export async function updateOwnApiKey(
   // While upstreams are hidden the member has no say over the routing set, so
   // any submitted upstream_ids is dropped rather than rejected: the key keeps
   // the set the admin's grants materialised for it.
-  const { exposeUpstreams } = await getPortalSettings();
+  const exposeUpstreams = await getUserExposeUpstreams(userId);
   const upstreamIds = exposeUpstreams ? input.upstreamIds : undefined;
 
   if (upstreamIds !== undefined) {

@@ -38,12 +38,12 @@ vi.mock("@/lib/services/user-data-service", () => ({
   listUserUpstreamOptions: vi.fn(),
 }));
 
-vi.mock("@/lib/services/portal-settings-service", () => ({
-  getPortalSettings: vi.fn(),
+vi.mock("@/lib/services/user-service", () => ({
+  getUserExposeUpstreams: vi.fn(),
 }));
 
 import * as userDataService from "@/lib/services/user-data-service";
-import { getPortalSettings } from "@/lib/services/portal-settings-service";
+import { getUserExposeUpstreams } from "@/lib/services/user-service";
 import { GET as overviewRoute } from "@/app/api/user/overview/route";
 import { GET as logsRoute } from "@/app/api/user/logs/route";
 import { GET as logsStatsRoute } from "@/app/api/user/logs/stats/route";
@@ -129,10 +129,7 @@ function makeUsage() {
 }
 
 function setExposeUpstreams(exposeUpstreams: boolean): void {
-  vi.mocked(getPortalSettings).mockResolvedValue({
-    exposeUpstreams,
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  vi.mocked(getUserExposeUpstreams).mockResolvedValue(exposeUpstreams);
 }
 
 beforeEach(() => {

@@ -3,8 +3,7 @@ import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashPassword, isPasswordStrong, normalizeUsername, verifyPassword } from "../utils/auth";
 import { getUsersMonthUsage } from "./user-data-service";
-import { alignMemberKeysToGrants } from "./member-key-alignment";
-import { getPortalSettings } from "./portal-settings-service";
+import { alignMemberKeysToGrants, alignMemberKeysForUsers } from "./member-key-alignment";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("user-service");
@@ -134,6 +133,12 @@ export interface UserUpdateInput {
   displayName?: string;
   role?: UserRole;
   isActive?: boolean;
+  /**
+   * Per-user upstream visibility. Switching it off (visible → hidden) realigns
+   * the user's member keys to their full grant set inside the same transaction,
+   * so the gateway resumes routing the whole granted scope on its own.
+   */
+  exposeUpstreams?: boolean;
 }
 
 export interface UserListItem {
@@ -142,6 +147,8 @@ export interface UserListItem {
   displayName: string;
   role: UserRole;
   isActive: boolean;
+  /** Whether this member may see upstream identities and pick key subsets. */
+  exposeUpstreams: boolean;
   apiKeyCount: number;
   /** Month-to-date request count over the request_logs user_id snapshot. */
   monthRequests: number;
@@ -177,6 +184,7 @@ function toListItem(
     displayName: row.displayName,
     role: normalizeRole(row.role),
     isActive: row.isActive,
+    exposeUpstreams: row.exposeUpstreams,
     apiKeyCount,
     monthRequests: monthUsage?.requests ?? 0,
     monthCostUsd: monthUsage?.costUsd ?? 0,
@@ -282,6 +290,7 @@ export async function listUsers(
         displayName: users.displayName,
         role: users.role,
         isActive: users.isActive,
+        exposeUpstreams: users.exposeUpstreams,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
         apiKeyCount: count(apiKeys.id),
@@ -306,6 +315,7 @@ export async function listUsers(
         displayName: row.displayName,
         role: row.role,
         isActive: row.isActive,
+        exposeUpstreams: row.exposeUpstreams,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       },
@@ -393,6 +403,7 @@ export async function updateUser(
       displayName: string;
       role: UserRole;
       isActive: boolean;
+      exposeUpstreams: boolean;
       updatedAt: Date;
     }> = { updatedAt: now };
     if (input.displayName !== undefined) {
@@ -404,10 +415,23 @@ export async function updateUser(
     if (input.isActive !== undefined) {
       updateData.isActive = input.isActive;
     }
+    if (input.exposeUpstreams !== undefined) {
+      updateData.exposeUpstreams = input.exposeUpstreams;
+    }
 
     const [row] = await tx.update(users).set(updateData).where(eq(users.id, id)).returning();
     if (!row) {
       throw new UserNotFoundError(`User not found: ${id}`);
+    }
+
+    // Switching a member from visible to hidden hands routing back to the
+    // gateway: realign their keys to the full grant set inside this transaction
+    // so the flag flip and the key convergence commit together. The alignment
+    // query filters to member-role owners, so calling it for an admin is a
+    // no-op. Hidden → visible needs no realignment: the key set was already the
+    // full grant set, a valid subset the member can later narrow.
+    if (input.exposeUpstreams === false && target.exposeUpstreams) {
+      await alignMemberKeysToGrants(id, { mode: "replace", executor: tx });
     }
     return row;
   });
@@ -645,7 +669,6 @@ export async function getUserUpstreams(userId: string): Promise<string[]> {
 export async function setUserUpstreams(userId: string, upstreamIds: string[]): Promise<string[]> {
   const normalizedIds = Array.from(new Set(upstreamIds));
   const now = new Date();
-  const { exposeUpstreams } = await getPortalSettings();
 
   const persisted = await db.transaction(async (tx) => {
     const user = await tx.query.users.findFirst({ where: eq(users.id, userId) });
@@ -686,11 +709,12 @@ export async function setUserUpstreams(userId: string, upstreamIds: string[]): P
     }
 
     // Keys owned by the user follow the grant set inside the same transaction.
-    // While upstreams are hidden the key set *is* the grant set; while they are
-    // visible the member's own selection is kept, minus whatever was revoked —
-    // otherwise a revoked upstream would stay routable through existing keys.
+    // The mode is driven by the user's own visibility: while upstreams are
+    // hidden the key set *is* the grant set; while they are visible the
+    // member's own selection is kept, minus whatever was revoked — otherwise a
+    // revoked upstream would stay routable through existing keys.
     await alignMemberKeysToGrants(userId, {
-      mode: exposeUpstreams ? "intersect" : "replace",
+      mode: user.exposeUpstreams ? "intersect" : "replace",
       executor: tx,
     });
 
@@ -699,4 +723,90 @@ export async function setUserUpstreams(userId: string, upstreamIds: string[]): P
 
   log.info({ userId, upstreams: persisted.length }, "set user available upstreams");
   return persisted;
+}
+
+/**
+ * Read a single user's upstream visibility. Member self-service endpoints call
+ * this with the authenticated principal's id to decide whether to expose
+ * upstream identities. Fail closed: a missing user reads as hidden.
+ *
+ * @param userId - The user id
+ * @returns Whether upstreams are exposed to this user
+ */
+export async function getUserExposeUpstreams(userId: string): Promise<boolean> {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  return user?.exposeUpstreams ?? false;
+}
+
+/**
+ * Result of a bulk visibility change.
+ */
+export interface BulkUpstreamVisibilityResult {
+  /** Member users whose visibility flag was set. */
+  affected: number;
+  /** Member keys realigned because their owner switched to hidden. */
+  alignedKeys: number;
+}
+
+/**
+ * Set upstream visibility across many members at once. Without `userIds` the
+ * change targets every member; with it, only the members in that subset (any
+ * non-member id is ignored — visibility is a member-only dimension). Members
+ * switched from visible to hidden have their keys realigned to the full grant
+ * set inside the same transaction, so the flag flip and the key convergence
+ * commit together.
+ *
+ * @param exposeUpstreams - The visibility value to apply
+ * @param userIds - Optional member subset; omit to target all members
+ * @returns The affected member count and the number of keys realigned
+ */
+export async function setUsersUpstreamVisibility(
+  exposeUpstreams: boolean,
+  userIds?: string[]
+): Promise<BulkUpstreamVisibilityResult> {
+  const now = new Date();
+
+  const result = await db.transaction(async (tx) => {
+    const scope =
+      userIds && userIds.length > 0
+        ? and(eq(users.role, "member"), inArray(users.id, userIds))
+        : eq(users.role, "member");
+
+    const targets = await tx
+      .select({ id: users.id, exposeUpstreams: users.exposeUpstreams })
+      .from(users)
+      .where(scope);
+    if (targets.length === 0) {
+      return { affected: 0, alignedKeys: 0 };
+    }
+
+    const targetIds = targets.map((row) => row.id);
+    // Only members flipping visible → hidden need realignment; the others keep
+    // a key set that is already a valid subset of their grants.
+    const switchedToHidden = exposeUpstreams
+      ? []
+      : targets.filter((row) => row.exposeUpstreams).map((row) => row.id);
+
+    await tx
+      .update(users)
+      .set({ exposeUpstreams, updatedAt: now })
+      .where(inArray(users.id, targetIds));
+
+    let alignedKeys = 0;
+    if (switchedToHidden.length > 0) {
+      const alignment = await alignMemberKeysForUsers(switchedToHidden, {
+        mode: "replace",
+        executor: tx,
+      });
+      alignedKeys = alignment.alignedKeys;
+    }
+
+    return { affected: targetIds.length, alignedKeys };
+  });
+
+  log.info(
+    { exposeUpstreams, affected: result.affected, alignedKeys: result.alignedKeys },
+    "bulk set user upstream visibility"
+  );
+  return result;
 }

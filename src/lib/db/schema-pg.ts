@@ -50,6 +50,10 @@ export const users = pgTable(
     displayName: varchar("display_name", { length: 255 }).notNull(),
     role: varchar("role", { length: 16 }).notNull().default("member"), // 'admin' | 'member'
     isActive: boolean("is_active").notNull().default(true),
+    // Per-user upstream visibility. Default hidden: members see no upstream
+    // identity and their keys route inside the granted scope until an admin
+    // exposes upstreams for this user.
+    exposeUpstreams: boolean("expose_upstreams").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -407,13 +411,6 @@ export const trafficRecordingSettings = pgTable("traffic_recording_settings", {
 /**
  * Runtime configuration for the member self-service portal.
  */
-export const portalSettings = pgTable("portal_settings", {
-  id: varchar("id", { length: 32 }).primaryKey().default("default"),
-  exposeUpstreams: boolean("expose_upstreams").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
 /**
  * Searchable index for recorded traffic fixture files.
  */
@@ -878,8 +875,6 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type TrafficRecordingSettings = typeof trafficRecordingSettings.$inferSelect;
 export type NewTrafficRecordingSettings = typeof trafficRecordingSettings.$inferInsert;
-export type PortalSettings = typeof portalSettings.$inferSelect;
-export type NewPortalSettings = typeof portalSettings.$inferInsert;
 export type TrafficRecording = typeof trafficRecordings.$inferSelect;
 export type NewTrafficRecording = typeof trafficRecordings.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;

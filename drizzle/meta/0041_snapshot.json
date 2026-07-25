@@ -1,5 +1,5 @@
 {
-  "id": "61991297-2da1-485b-852b-d5148601e588",
+  "id": "6d1b2277-8cbe-46ff-ab44-485cbc7fbf7b",
   "prevId": "12581c9d-bb40-4663-ad19-aa1c64612908",
   "version": "7",
   "dialect": "postgresql",
@@ -1516,47 +1516,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.portal_settings": {
-      "name": "portal_settings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(32)",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "'default'"
-        },
-        "expose_upstreams": {
-          "name": "expose_upstreams",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -3490,6 +3449,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "expose_upstreams": {
+          "name": "expose_upstreams",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "created_at": {
           "name": "created_at",

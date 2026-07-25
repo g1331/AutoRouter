@@ -586,13 +586,6 @@ export async function mockAdminApis(page: Page): Promise<void> {
     fulfillJson(route, 200, LIVE_PULSE_SNAPSHOT)
   );
   await page.route("**/api/admin/keys?**", (route) => fulfillJson(route, 200, KEYS_PAGE));
-  // 设置页的成员上游可见性开关：默认关闭，基线里开关始终处于 unchecked。
-  await page.route("**/api/admin/portal-settings", (route) =>
-    fulfillJson(route, 200, {
-      expose_upstreams: false,
-      updated_at: new Date("2026-06-10T00:00:00.000Z").toISOString(),
-    })
-  );
   await page.route(`**/api/admin/keys/${KEY_DETAIL.id}`, (route) =>
     fulfillJson(route, 200, KEY_DETAIL)
   );

@@ -39,7 +39,6 @@ import {
   apiKeyUpstreams,
   upstreams,
   userUpstreams,
-  portalSettings,
   requestLogs,
 } from "@/lib/db";
 import {
@@ -55,6 +54,8 @@ import {
   revokeApiKeyOwnership,
   getUserUpstreams,
   setUserUpstreams,
+  getUserExposeUpstreams,
+  setUsersUpstreamVisibility,
   isUniqueViolation,
   isForeignKeyViolation,
   UserNotFoundError,
@@ -106,9 +107,8 @@ async function seedUpstream(name: string): Promise<{ id: string }> {
   return row;
 }
 
-async function setExposeUpstreams(exposeUpstreams: boolean): Promise<void> {
-  await db.delete(portalSettings);
-  await db.insert(portalSettings).values({ id: "default", exposeUpstreams, updatedAt: new Date() });
+async function setExposeUpstreams(userId: string, exposeUpstreams: boolean): Promise<void> {
+  await db.update(users).set({ exposeUpstreams }).where(eq(users.id, userId));
 }
 
 async function linkKeyUpstreams(apiKeyId: string, upstreamIds: string[]): Promise<void> {
@@ -133,7 +133,6 @@ beforeEach(async () => {
   await db.delete(apiKeys);
   await db.delete(upstreams);
   await db.delete(users);
-  await db.delete(portalSettings);
 });
 
 describe("user-service", () => {
@@ -668,8 +667,8 @@ describe("user-service", () => {
     });
 
     it("rebinds the owner's keys to the new grant set while upstreams are hidden", async () => {
-      await setExposeUpstreams(false);
       const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await setExposeUpstreams(u.id, false);
       const up1 = await seedUpstream("up1");
       const up2 = await seedUpstream("up2");
       const key = await seedApiKey({ name: "member key", userId: u.id });
@@ -681,8 +680,8 @@ describe("user-service", () => {
     });
 
     it("drops revoked upstreams from the owner's keys while upstreams are visible", async () => {
-      await setExposeUpstreams(true);
       const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await setExposeUpstreams(u.id, true);
       const up1 = await seedUpstream("up1");
       const up2 = await seedUpstream("up2");
       const up3 = await seedUpstream("up3");
@@ -697,8 +696,8 @@ describe("user-service", () => {
     });
 
     it("leaves keys owned by nobody alone", async () => {
-      await setExposeUpstreams(false);
       const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await setExposeUpstreams(u.id, false);
       const up1 = await seedUpstream("up1");
       const up2 = await seedUpstream("up2");
       const orphan = await seedApiKey({ name: "unowned key", userId: null });
@@ -707,6 +706,165 @@ describe("user-service", () => {
       await setUserUpstreams(u.id, [up1.id, up2.id]);
 
       expect(await keyUpstreamIds(orphan.id)).toEqual([up1.id]);
+    });
+  });
+
+  describe("getUserExposeUpstreams", () => {
+    it("defaults to hidden for a freshly created member", async () => {
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+
+      expect(await getUserExposeUpstreams(u.id)).toBe(false);
+    });
+
+    it("reads back the stored flag", async () => {
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await setExposeUpstreams(u.id, true);
+
+      expect(await getUserExposeUpstreams(u.id)).toBe(true);
+    });
+
+    // Fail closed: an unknown principal must never be treated as allowed to see
+    // upstream identity.
+    it("returns hidden for a missing user", async () => {
+      expect(await getUserExposeUpstreams(NONEXISTENT_ID)).toBe(false);
+    });
+  });
+
+  describe("setUsersUpstreamVisibility", () => {
+    it("targets every member and leaves admins untouched", async () => {
+      const admin = await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const bob = await createUser({
+        username: "bob",
+        password: "password123",
+        displayName: "Bob",
+      });
+
+      const result = await setUsersUpstreamVisibility(true);
+
+      expect(result.affected).toBe(2);
+      expect(await getUserExposeUpstreams(alice.id)).toBe(true);
+      expect(await getUserExposeUpstreams(bob.id)).toBe(true);
+      expect(await getUserExposeUpstreams(admin.id)).toBe(false);
+    });
+
+    it("narrows the change to the given member subset", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const bob = await createUser({
+        username: "bob",
+        password: "password123",
+        displayName: "Bob",
+      });
+
+      const result = await setUsersUpstreamVisibility(true, [alice.id]);
+
+      expect(result.affected).toBe(1);
+      expect(await getUserExposeUpstreams(alice.id)).toBe(true);
+      expect(await getUserExposeUpstreams(bob.id)).toBe(false);
+    });
+
+    it("ignores non-member ids in the subset", async () => {
+      const admin = await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+
+      const result = await setUsersUpstreamVisibility(true, [admin.id]);
+
+      expect(result.affected).toBe(0);
+      expect(await getUserExposeUpstreams(admin.id)).toBe(false);
+    });
+
+    it("rebinds keys of members switched from visible to hidden", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id, up2.id]);
+      await setExposeUpstreams(alice.id, true);
+      const key = await seedApiKey({ name: "member key", userId: alice.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      const result = await setUsersUpstreamVisibility(false);
+
+      expect(result.affected).toBe(1);
+      expect(result.alignedKeys).toBe(1);
+      // Hidden means the key routes across the owner's whole grant set.
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id, up2.id].sort());
+    });
+
+    it("does not realign keys when switching to visible", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id, up2.id]);
+      const key = await seedApiKey({ name: "member key", userId: alice.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      const result = await setUsersUpstreamVisibility(true);
+
+      expect(result.affected).toBe(1);
+      expect(result.alignedKeys).toBe(0);
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
+
+    it("leaves admin-owned keys alone when hiding upstreams", async () => {
+      const admin = await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      await setExposeUpstreams(alice.id, true);
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(admin.id, [up1.id, up2.id]);
+      const adminKey = await seedApiKey({ name: "admin key", userId: admin.id });
+      await linkKeyUpstreams(adminKey.id, [up1.id]);
+
+      await setUsersUpstreamVisibility(false);
+
+      expect(await keyUpstreamIds(adminKey.id)).toEqual([up1.id]);
+    });
+
+    it("reports zero affected when there are no members", async () => {
+      await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+
+      const result = await setUsersUpstreamVisibility(false);
+
+      expect(result).toEqual({ affected: 0, alignedKeys: 0 });
     });
   });
 

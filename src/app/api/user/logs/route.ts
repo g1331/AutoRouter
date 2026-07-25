@@ -6,7 +6,7 @@ import {
   scrubUpstreamIdentityFromLog,
   transformPaginatedRequestLogs,
 } from "@/lib/utils/api-transformers";
-import { getPortalSettings } from "@/lib/services/portal-settings-service";
+import { getUserExposeUpstreams } from "@/lib/services/user-service";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("user-logs");
@@ -42,9 +42,9 @@ export async function GET(request: NextRequest) {
       return errorResponse(parsed.error, 400);
     }
 
-    const [result, { exposeUpstreams }] = await Promise.all([
+    const [result, exposeUpstreams] = await Promise.all([
       listUserRequestLogs(auth.userId, page, pageSize, parsed.filters, parsed.sort),
-      getPortalSettings(),
+      getUserExposeUpstreams(auth.userId),
     ]);
 
     const payload = transformPaginatedRequestLogs(result);

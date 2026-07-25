@@ -24,6 +24,7 @@ const usersState = vi.hoisted(() => ({
 }));
 vi.mock("@/hooks/use-users", () => ({
   useUsers: () => usersState.current,
+  useSetUsersUpstreamVisibility: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 // useAuth：默认账号登录的管理员（不豁免），用例可切换为 ADMIN_TOKEN
@@ -68,6 +69,9 @@ vi.mock("@/components/admin/users-table", () => ({
 vi.mock("@/components/admin/create-user-dialog", () => ({
   CreateUserDialog: () => <div data-testid="create-user-dialog" />,
 }));
+vi.mock("@/components/admin/bulk-upstream-visibility-dialog", () => ({
+  BulkUpstreamVisibilityDialog: () => <div data-testid="bulk-upstream-visibility-dialog" />,
+}));
 vi.mock("@/components/admin/pagination-controls", () => ({
   PaginationControls: () => <div data-testid="pagination" />,
 }));
@@ -88,6 +92,7 @@ function makeUser(overrides: Partial<User>): User {
     display_name: "Alice",
     role: "member",
     is_active: true,
+    expose_upstreams: false,
     api_key_count: 0,
     created_at: "2024-01-01T00:00:00.000Z",
     updated_at: "2024-01-01T00:00:00.000Z",
@@ -112,7 +117,7 @@ describe("UsersPage", () => {
     expect(screen.queryByTestId("users-table")).not.toBeInTheDocument();
   });
 
-  it("渲染标题、新建入口并向表格传入启用管理员数量", () => {
+  it("渲染标题、新建入口、批量可见性入口并向表格传入启用管理员数量", () => {
     usersState.current = {
       data: {
         items: [
@@ -132,6 +137,7 @@ describe("UsersPage", () => {
 
     expect(screen.getByTestId("topbar")).toHaveTextContent("pageTitle");
     expect(screen.getByTestId("create-user-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("bulk-upstream-visibility-dialog")).toBeInTheDocument();
     expect(screen.getByTestId("users-table")).toBeInTheDocument();
     expect(tableProps.current?.users).toHaveLength(3);
     // 仅统计启用状态的管理员，停用管理员不计入

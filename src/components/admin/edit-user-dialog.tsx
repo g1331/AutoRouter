@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
@@ -66,6 +66,7 @@ export function EditUserDialog({
     display_name: z.string().min(1, t("displayNameRequired")).max(255),
     role: z.enum(["admin", "member"]),
     is_active: z.boolean(),
+    expose_upstreams: z.boolean(),
   });
   type FormValues = z.infer<typeof schema>;
 
@@ -75,6 +76,7 @@ export function EditUserDialog({
       display_name: user.display_name,
       role: user.role,
       is_active: user.is_active,
+      expose_upstreams: user.expose_upstreams,
     },
   });
 
@@ -84,8 +86,12 @@ export function EditUserDialog({
       display_name: user.display_name,
       role: user.role,
       is_active: user.is_active,
+      expose_upstreams: user.expose_upstreams,
     });
   }, [user, form]);
+
+  // 上游可见性只作用于成员端点，管理员始终可见全部，故仅成员角色展示该开关。
+  const roleValue = useWatch({ control: form.control, name: "role" });
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -171,6 +177,29 @@ export function EditUserDialog({
                 </FormItem>
               )}
             />
+            {roleValue === "member" && (
+              <FormField
+                control={form.control}
+                name="expose_upstreams"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-cf-sm border border-divider px-3 py-2">
+                    <div className="space-y-0.5">
+                      <FormLabel>{t("exposeUpstreams")}</FormLabel>
+                      <p className="type-caption text-muted-foreground">
+                        {t("exposeUpstreamsDesc")}
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-label={t("exposeUpstreams")}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {tCommon("cancel")}

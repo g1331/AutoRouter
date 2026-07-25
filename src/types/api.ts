@@ -101,6 +101,8 @@ export interface User {
   display_name: string;
   role: UserRole;
   is_active: boolean;
+  /** Whether this member may see upstream identities and pick key subsets. */
+  expose_upstreams: boolean;
   api_key_count: number;
   /** Month-to-date request count. */
   month_requests: number;
@@ -131,6 +133,22 @@ export interface UserUpdate {
   display_name?: string;
   role?: UserRole;
   is_active?: boolean;
+  expose_upstreams?: boolean;
+}
+
+/**
+ * Bulk upstream-visibility change. Omit `user_ids` to target every member.
+ */
+export interface UserUpstreamVisibilityBulkUpdate {
+  expose_upstreams: boolean;
+  user_ids?: string[];
+}
+
+export interface UserUpstreamVisibilityBulkResult {
+  /** Member users whose visibility flag was set. */
+  affected: number;
+  /** Member keys realigned because their owner switched to hidden. */
+  aligned_keys: number;
 }
 
 export interface UserUpstreamsResponse {
@@ -1338,16 +1356,6 @@ export interface PortalUsageResponse {
 export interface PortalUpstreamOption {
   id: string; // UUID
   name: string;
-}
-
-export interface PortalSettingsResponse {
-  /** True when members may see which upstreams their keys route to. */
-  expose_upstreams: boolean;
-  updated_at: string; // ISO 8601 date string
-}
-
-export interface PortalSettingsUpdate {
-  expose_upstreams?: boolean;
 }
 
 export interface PortalUpstreamOptionsResponse {

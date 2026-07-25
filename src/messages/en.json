@@ -248,7 +248,15 @@
     "assignKeySuccess": "API key assigned",
     "assignKeyFailed": "Failed to assign API key",
     "revokeKeySuccess": "API key unassigned",
-    "revokeKeyFailed": "Failed to unassign API key"
+    "revokeKeyFailed": "Failed to unassign API key",
+    "exposeUpstreams": "Show upstreams",
+    "exposeUpstreamsDesc": "Off by default: the member only sees the single access endpoint, and their keys route inside the granted scope.",
+    "bulkVisibilityTitle": "Upstream visibility",
+    "bulkVisibilityDesc": "Apply upstream visibility to every member at once. Hiding upstreams realigns each member's keys to their full granted scope.",
+    "bulkVisibilityHideAll": "Hide from all",
+    "bulkVisibilityShowAll": "Show to all",
+    "bulkVisibilitySuccess": "Upstream visibility updated for {count} members",
+    "bulkVisibilityFailed": "Failed to update upstream visibility"
   },
   "repository": {
     "title": "Project Repository",
@@ -1966,11 +1974,5 @@
       "changeSuccess": "Password changed",
       "changeFailed": "Failed to change password"
     }
-  },
-  "portalSettings": {
-    "exposeUpstreams": "Show upstreams to members",
-    "exposeUpstreamsDesc": "Off by default: members only see the single access endpoint, and their keys route inside the granted scope.",
-    "saved": "Portal settings saved",
-    "saveFailed": "Failed to save portal settings"
   }
 }

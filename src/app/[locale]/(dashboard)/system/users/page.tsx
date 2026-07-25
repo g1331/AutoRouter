@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 
 import { AssignUserKeysDialog } from "@/components/admin/assign-user-keys-dialog";
+import { BulkUpstreamVisibilityDialog } from "@/components/admin/bulk-upstream-visibility-dialog";
 import { ChangeUsernameDialog } from "@/components/admin/change-username-dialog";
 import { CreateUserDialog } from "@/components/admin/create-user-dialog";
 import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
@@ -94,7 +95,10 @@ export default function UsersPage() {
             <Users className="h-4 w-4 text-amber-500" aria-hidden="true" />
             <span className="type-body-medium text-muted-foreground">{t("managementDesc")}</span>
           </div>
-          <CreateUserDialog />
+          <div className="flex items-center gap-2">
+            <BulkUpstreamVisibilityDialog />
+            <CreateUserDialog />
+          </div>
         </div>
 
         {isLoading ? (

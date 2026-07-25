@@ -69,7 +69,6 @@ import type {
   TrafficRecordingSettingsValue,
   TrafficRecordingStats,
 } from "@/lib/services/traffic-recording-service";
-import type { PortalSettingsValue } from "@/lib/services/portal-settings-service";
 import type { UserListItem, PaginatedUsers } from "@/lib/services/user-service";
 import type {
   UserOverview,
@@ -1083,22 +1082,6 @@ export function transformPaginatedTrafficRecordingsToApi(
   };
 }
 
-// ========== Portal Settings API Response Types ==========
-
-export interface PortalSettingsApiResponse {
-  expose_upstreams: boolean;
-  updated_at: string;
-}
-
-export function transformPortalSettingsToApi(
-  settings: PortalSettingsValue
-): PortalSettingsApiResponse {
-  return {
-    expose_upstreams: settings.exposeUpstreams,
-    updated_at: settings.updatedAt.toISOString(),
-  };
-}
-
 // ========== Billing API Response Types ==========
 
 export interface BillingOverviewApiResponse {
@@ -1814,6 +1797,8 @@ export interface UserApiResponse {
   display_name: string;
   role: "admin" | "member";
   is_active: boolean;
+  /** Whether this member may see upstream identities and pick key subsets. */
+  expose_upstreams: boolean;
   api_key_count: number;
   month_requests: number;
   month_cost_usd: number;
@@ -1832,6 +1817,7 @@ export function transformUserToApi(user: UserListItem): UserApiResponse {
     display_name: user.displayName,
     role: user.role,
     is_active: user.isActive,
+    expose_upstreams: user.exposeUpstreams,
     api_key_count: user.apiKeyCount,
     month_requests: user.monthRequests,
     month_cost_usd: user.monthCostUsd,
