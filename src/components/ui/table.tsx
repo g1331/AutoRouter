@@ -8,13 +8,15 @@ export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
 }
 
 const FRAME_CLASS: Record<NonNullable<TableProps["frame"]>, string> = {
-  amber: "border border-amber-500/45 shadow-cf-glow-subtle",
+  // 保留 amber 取值供个别需要强调的表格显式指定，但不再是默认值
+  amber: "border border-amber-500/45",
   subtle: "border border-divider",
-  none: "border-0",
+  none: "border-0 shadow-cf-glow-subtle",
 };
 
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
-  ({ className, frame = "amber", containerClassName, ...props }, ref) => {
+  // 默认不包边：表格自带 bg-card，靠背景明度差 + 阴影与页面底色区分
+  ({ className, frame = "none", containerClassName, ...props }, ref) => {
     warnIfForbiddenVisualStyle("Table", containerClassName);
     return (
       <div

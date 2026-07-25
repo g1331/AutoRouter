@@ -106,10 +106,7 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Link href="/keys" className="group block">
-              <Card
-                variant="outlined"
-                className="border-divider transition-all hover:border-amber-500/35"
-              >
+              <Card variant="outlined" className="transition-all">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
                     <IconBox size="md">
@@ -126,10 +123,7 @@ export default function DashboardPage() {
             </Link>
 
             <Link href="/upstreams" className="group block">
-              <Card
-                variant="outlined"
-                className="border-divider transition-all hover:border-amber-500/35"
-              >
+              <Card variant="outlined" className="transition-all">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
                     <IconBox size="md">

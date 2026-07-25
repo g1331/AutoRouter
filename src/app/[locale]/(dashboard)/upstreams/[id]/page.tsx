@@ -56,6 +56,12 @@ interface UpstreamDetailSection {
   id: string;
   labelKey: string;
   icon: LucideIcon;
+  /**
+   * 章节图标的着重色。13 个章节原先共用一个灰色，左侧目录扫下来只有文字能区分。
+   * 按语义分配色相（标识=蓝、链路=靛、凭证=青、金额=amber、可靠性=珊瑚/紫…），
+   * 浅色主题用深值保证白底对比，深色主题用亮值。
+   */
+  iconClass: string;
   category: UpstreamDetailCategory;
 }
 
@@ -63,72 +69,95 @@ interface UpstreamDetailSection {
 // across three categories). The section forms land in Phase B2 — B1 only renders
 // the navigation scaffold and per-section placeholders.
 const UPSTREAM_DETAIL_SECTIONS: UpstreamDetailSection[] = [
-  { id: "basic-name", labelKey: "upstreamName", icon: Type, category: "configCategoryBasic" },
+  {
+    id: "basic-name",
+    labelKey: "upstreamName",
+    icon: Type,
+    iconClass: "text-[#3D6E96] dark:text-[#7AA5C8]",
+    category: "configCategoryBasic",
+  },
   {
     id: "basic-profile",
     labelKey: "officialWebsiteUrl",
     icon: FileText,
+    iconClass: "text-[#4C6480] dark:text-[#9BB0C9]",
     category: "configCategoryBasic",
   },
   {
     id: "basic-route-endpoint",
     labelKey: "baseUrl",
     icon: Link2,
+    iconClass: "text-[#4457B8] dark:text-[#8B9DF0]",
     category: "configCategoryBasic",
   },
-  { id: "basic-api-key", labelKey: "apiKey", icon: KeyRound, category: "configCategoryBasic" },
+  {
+    id: "basic-api-key",
+    labelKey: "apiKey",
+    icon: KeyRound,
+    iconClass: "text-[#1F7A5C] dark:text-[#5FCFA8]",
+    category: "configCategoryBasic",
+  },
   {
     id: "basic-diagnostics",
     labelKey: "probeDiagnostics",
     icon: CheckCircle2,
+    iconClass: "text-[#2A7A54] dark:text-[#7FD4A8]",
     category: "configCategoryBasic",
   },
   {
     id: "priority-weight",
     labelKey: "priorityAndWeight",
     icon: SlidersHorizontal,
+    iconClass: "text-[#2A7595] dark:text-[#6FC3E8]",
     category: "configCategoryStrategy",
   },
   {
     id: "model-routing",
     labelKey: "modelBasedRouting",
     icon: Route,
+    iconClass: "text-[#5D46A8] dark:text-[#B4A0E8]",
     category: "configCategoryStrategy",
   },
   {
     id: "billing-multipliers",
     labelKey: "billingMultipliers",
     icon: Coins,
+    iconClass: "text-[#9A6410] dark:text-[#F2A950]",
     category: "configCategoryStrategy",
   },
   {
     id: "spending-quota",
     labelKey: "spendingQuota",
     icon: Wallet,
+    iconClass: "text-[#8A6A12] dark:text-[#E0B341]",
     category: "configCategoryStrategy",
   },
   {
     id: "capacity-control",
     labelKey: "capacityAndQueue",
     icon: Gauge,
+    iconClass: "text-[#7A4A96] dark:text-[#C99BE0]",
     category: "configCategoryReliability",
   },
   {
     id: "circuit-breaker",
     labelKey: "circuitBreakerConfig",
     icon: Shield,
+    iconClass: "text-[#96436F] dark:text-[#DE9BC0]",
     category: "configCategoryReliability",
   },
   {
     id: "failure-rules",
     labelKey: "failureRulesConfig",
     icon: CircleAlert,
+    iconClass: "text-[#A53228] dark:text-[#F0917E]",
     category: "configCategoryReliability",
   },
   {
     id: "affinity-migration",
     labelKey: "affinityMigrationConfig",
     icon: Shuffle,
+    iconClass: "text-[#2A7595] dark:text-[#6FC3E8]",
     category: "configCategoryReliability",
   },
 ];
@@ -186,14 +215,14 @@ export default function UpstreamDetailPage() {
         </Button>
 
         {notFound ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="bg-card">
             <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <h2 className="type-title-medium text-foreground">{t("upstreamNotFound")}</h2>
               <p className="type-body-medium text-muted-foreground">{t("upstreamNotFoundHint")}</p>
             </CardContent>
           </Card>
         ) : loadFailed ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="bg-card">
             <CardContent className="flex flex-col items-center justify-center gap-4 py-16 text-center">
               <div className="space-y-2">
                 <h2 className="type-title-medium text-foreground">{t("upstreamLoadFailed")}</h2>
@@ -229,7 +258,10 @@ export default function UpstreamDetailPage() {
                           href={`#${section.id}`}
                           className="flex items-center gap-2 rounded-cf-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-cf-fast hover:bg-surface-300/65 hover:text-foreground"
                         >
-                          <section.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <section.icon
+                            className={`h-3.5 w-3.5 shrink-0 ${section.iconClass}`}
+                            aria-hidden="true"
+                          />
                           <span className="truncate">{t(section.labelKey)}</span>
                         </a>
                       ))}
@@ -244,7 +276,7 @@ export default function UpstreamDetailPage() {
                   return (
                     <section key={section.id} id={section.id} className="scroll-mt-14">
                       {isLoading || !upstream ? (
-                        <Card variant="outlined" className="border-divider bg-surface-200/70">
+                        <Card variant="outlined" className="bg-card">
                           <div className="flex items-center gap-3 border-b border-divider px-5 py-3.5">
                             <IconBox>
                               <section.icon className="h-4 w-4" aria-hidden="true" />

@@ -179,7 +179,7 @@ export function UsersTable({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">{searchBar}</div>
-      <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+      <div className="overflow-hidden rounded-cf-md border bg-card">
         <Table frame="none" containerClassName="rounded-none bg-transparent">
           <TableHeader>
             <TableRow>

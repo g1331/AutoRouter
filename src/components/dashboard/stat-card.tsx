@@ -30,11 +30,7 @@ export function StatCard({
   style,
 }: StatCardProps) {
   return (
-    <Card
-      variant="outlined"
-      className={cn("border-divider bg-surface-200/70", className)}
-      style={style}
-    >
+    <Card variant="outlined" className={cn("bg-card", className)} style={style}>
       <CardContent className="space-y-2 p-4">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Icon className="h-4 w-4 text-amber-500" aria-hidden="true" />

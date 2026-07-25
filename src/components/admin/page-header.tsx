@@ -17,7 +17,7 @@ interface PageHeaderProps {
  */
 export function PageHeader({ icon: Icon, title, description, actions }: PageHeaderProps) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex items-center gap-3">
           {Icon && (

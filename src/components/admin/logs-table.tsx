@@ -2477,12 +2477,7 @@ export function LogsTable({
   ] as const;
 
   return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-cf-md border border-divider bg-surface-200/70",
-        LOGS_SECTION_ENTER_CLASS
-      )}
-    >
+    <div className={cn("overflow-hidden rounded-cf-md border bg-card", LOGS_SECTION_ENTER_CLASS)}>
       {/* Filter Controls */}
       <div
         className={cn("border-b border-divider bg-surface-200 p-4", LOGS_SECTION_ENTER_CLASS)}
@@ -2682,10 +2677,7 @@ export function LogsTable({
 
       {windowStats !== undefined && (
         <div
-          className={cn(
-            "border-b border-divider bg-surface-200/70 px-4 py-3",
-            LOGS_SECTION_ENTER_CLASS
-          )}
+          className={cn("border-b bg-card px-4 py-3", LOGS_SECTION_ENTER_CLASS)}
           style={{ animationDelay: "90ms" }}
         >
           <p className="type-caption mb-2 text-muted-foreground">{windowStatsLabel}</p>
@@ -2754,7 +2746,7 @@ export function LogsTable({
                     <div
                       key={log.id}
                       className={cn(
-                        "rounded-cf-md border border-divider bg-surface-200/70 p-3 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
+                        "rounded-cf-md border bg-card p-3 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
                         LOGS_SURFACE_TRANSITION_CLASS,
                         mobileEntryMotionClass,
                         isError && "border-l-2 border-l-status-error/45",

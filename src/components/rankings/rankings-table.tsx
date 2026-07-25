@@ -270,7 +270,7 @@ export function RankingsTable({
     dimension === "models" ? t("distribution.upstreams") : t("distribution.models");
 
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70 overflow-hidden">
+    <Card variant="outlined" className="bg-card overflow-hidden">
       <Table frame="none" containerClassName="rounded-none border-0 bg-transparent">
         <TableHeader>
           <TableRow>

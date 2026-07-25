@@ -428,7 +428,7 @@ export function KeysTable({
             <div
               key={key.id}
               data-morph-source
-              className="space-y-3 rounded-cf-md border border-divider bg-surface-200/70 p-3"
+              className="space-y-3 rounded-cf-md border bg-card p-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 space-y-1">
@@ -582,7 +582,7 @@ export function KeysTable({
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+        <div className="overflow-hidden rounded-cf-md border bg-card">
           <Table frame="none" containerClassName="rounded-none bg-transparent">
             <TableHeader>
               <TableRow>

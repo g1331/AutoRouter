@@ -345,7 +345,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
       data-morph-source
       className="rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]"
     >
-      <div className="flex items-center gap-3 border-b border-divider/80 bg-surface-200/70 px-3 py-2">
+      <div className="flex items-center gap-3 border-b border-divider/80 bg-card px-3 py-2">
         <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-amber-500" />
         <span className="flex-1 truncate text-xs font-medium text-foreground">{rule.name}</span>
         <div className="flex items-center gap-1.5">
@@ -471,7 +471,7 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
 
   return (
     <div className="rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]">
-      <div className="border-b border-divider/80 bg-surface-200/70 px-3 py-1.5">
+      <div className="border-b border-divider/80 bg-card px-3 py-1.5">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
           {t("capabilityMatrix")}
         </span>

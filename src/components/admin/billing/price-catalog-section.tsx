@@ -349,7 +349,7 @@ export function PriceCatalogSection({
   };
 
   return (
-    <Card ref={priceCatalogRef} variant="outlined" className="border-divider bg-surface-200/70">
+    <Card ref={priceCatalogRef} variant="outlined" className="bg-card">
       <CardContent className="space-y-3 p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>

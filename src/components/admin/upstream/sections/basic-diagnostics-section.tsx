@@ -180,7 +180,7 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
   };
 
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <div className="flex flex-col gap-3 border-b border-divider px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h3 className="type-label-medium text-foreground">{t("probeDiagnostics")}</h3>

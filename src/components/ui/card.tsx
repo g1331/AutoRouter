@@ -12,8 +12,11 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-card border-border hover:border-amber-400/35 hover:shadow-cf-glow-subtle",
-        outlined: "bg-transparent border-border hover:bg-surface-200/70",
+        // 卡片不再用 amber 描边：默认无边框，靠 bg-card 的明度差 + 阴影脱离页面底色。
+        // outlined 原先是 bg-transparent，会直接露出页面背景，看上去和背景糊在一起，
+        // 改为同样吃 bg-card；显式在 className 里写了背景的调用点仍然覆盖它。
+        default: "bg-card border-transparent hover:shadow-cf-glow-subtle",
+        outlined: "bg-card border-transparent hover:bg-surface-300",
         filled: "bg-surface-300 border-transparent shadow-[var(--vr-shadow-xs)]",
       },
     },

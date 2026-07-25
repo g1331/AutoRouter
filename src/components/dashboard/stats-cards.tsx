@@ -204,10 +204,8 @@ function StatCard({
     <Card
       data-alert={alert || undefined}
       className={cn(
-        "h-full border-border bg-card shadow-[var(--vr-shadow-sm)]",
-        alert
-          ? "border-status-error/60 hover:border-status-error"
-          : "hover:border-amber-500/35 hover:shadow-cf-glow-subtle"
+        "h-full border-transparent bg-card shadow-[var(--vr-shadow-sm)]",
+        alert ? "border-status-error/60 hover:border-status-error" : "hover:shadow-cf-glow-subtle"
       )}
       style={{ animationDelay: `${delay}ms` }}
     >

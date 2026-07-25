@@ -129,11 +129,7 @@ export default function SettingsPage() {
           {settingsItems.map((item) => {
             const Icon = item.icon;
             return (
-              <Card
-                key={item.title}
-                variant="outlined"
-                className="border-divider bg-surface-200/70"
-              >
+              <Card key={item.title} variant="outlined" className="bg-card">
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
@@ -158,10 +154,7 @@ export default function SettingsPage() {
               <Link key={item.href} href={item.href} className="block">
                 <Card
                   variant="outlined"
-                  className={cn(
-                    "group border-divider bg-surface-200/70 transition-colors",
-                    "hover:bg-surface-200/85"
-                  )}
+                  className={cn("group bg-card transition-colors", "hover:bg-surface-200/85")}
                 >
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-4">
@@ -199,10 +192,7 @@ export default function SettingsPage() {
               >
                 <Card
                   variant="outlined"
-                  className={cn(
-                    "group border-divider bg-surface-200/70 transition-colors",
-                    "hover:bg-surface-200/85"
-                  )}
+                  className={cn("group bg-card transition-colors", "hover:bg-surface-200/85")}
                 >
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-4">
@@ -227,7 +217,7 @@ export default function SettingsPage() {
             );
           })}
 
-          <Card variant="outlined" className="border-status-error/35 bg-surface-200/70">
+          <Card variant="outlined" className="border-status-error/35 bg-card">
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">

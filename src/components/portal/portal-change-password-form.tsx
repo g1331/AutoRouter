@@ -65,7 +65,7 @@ export function PortalChangePasswordForm() {
   };
 
   return (
-    <Card variant="outlined" className="max-w-xl border-divider bg-surface-200/70">
+    <Card variant="outlined" className="max-w-xl bg-card">
       <CardHeader>
         <CardTitle className="type-title-small">{t("password.cardTitle")}</CardTitle>
         <CardDescription>{t("password.cardDesc")}</CardDescription>

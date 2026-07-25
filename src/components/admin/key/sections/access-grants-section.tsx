@@ -165,7 +165,7 @@ export function AccessGrantsSection({ apiKey }: { apiKey: APIKeyResponse }) {
                         onChange={(event) => setUpstreamSearchQuery(event.target.value)}
                         placeholder={t("searchUpstreams")}
                         aria-label={t("searchUpstreams")}
-                        className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
+                        className="border-surface-400/70 bg-card pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
                       />
                     </div>
                     <Button

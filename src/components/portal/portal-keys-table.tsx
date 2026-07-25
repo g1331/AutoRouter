@@ -61,7 +61,7 @@ export function PortalKeysTable({
     return (
       <Card
         variant="outlined"
-        className="flex flex-col items-center gap-2 border-divider bg-surface-200/70 px-6 py-10 text-center"
+        className="flex flex-col items-center gap-2 bg-card px-6 py-10 text-center"
       >
         <Key className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
         <p className="type-body-medium text-foreground">{t("noKeys")}</p>

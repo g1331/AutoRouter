@@ -11,19 +11,22 @@
 
   /* Ops Console 2.0 暗色主人格：近黑冷灰基底 + amber 强调。
      Visual rule: neutral base + restrained accent. Avoid large blue/purple solids or flashy blue/purple gradients. */
-  --vr-surface-0: #0a0b0e;
-  --vr-surface-1: #101216;
-  --vr-surface-2: #15181d;
-  --vr-surface-3: #1a1e24;
-  --vr-surface-4: #20242b;
+  /* 容器不再用 amber 包边后，卡片必须靠明度差从底色里浮起来：原先 surface-2(#15181d)
+     与 surface-0(#0a0b0e) 几乎同色，卡片看上去糊在背景上。这里把底色压到近黑、
+     卡片只抬到 #191e25 —— 层级差约为原来的两倍，但卡片本身仍是深灰而非发白的中灰。 */
+  --vr-surface-0: #04050a;
+  --vr-surface-1: #0e1117;
+  --vr-surface-2: #191e25;
+  --vr-surface-3: #232932;
+  --vr-surface-4: #2e3540;
 
-  --vr-border: #21262e;
-  --vr-border-subtle: #2b323c;
+  --vr-border: #333b47;
+  --vr-border-subtle: #454f5d;
 
-  --vr-text: #e8e4da;
-  --vr-text-muted: #9aa2ae;
-  /* 3.48:1，仅限装饰/大字号；正文级弱文字用 #7d8794（5.15:1） */
-  --vr-text-dim: #626b78;
+  --vr-text: #f0f2f6;
+  --vr-text-muted: #a2abb9;
+  /* 仅限装饰/大字号 */
+  --vr-text-dim: #6c7583;
 
   --vr-accent-50: #fef7ec;
   --vr-accent-100: #fdeacf;
@@ -42,15 +45,17 @@
   --vr-glow: 0 0 14px color-mix(in srgb, var(--vr-accent-500) 22%, transparent);
   --vr-atmo: color-mix(in srgb, var(--vr-accent-500) 13%, transparent);
 
-  --vr-status-success: #46d68c;
-  --vr-status-warning: #ff9f43;
-  --vr-status-error: #ff6b5e;
-  --vr-status-info: #7aa5c8;
+  /* 提亮加饱和：容器装饰退成中性后，画面的色彩识别度改由「状态」承担，
+     底色也从 12% 提到 20%，让状态徽章在列表里能一眼扫到。 */
+  --vr-status-success: #3ddc97;
+  --vr-status-warning: #ffb347;
+  --vr-status-error: #ff7a6e;
+  --vr-status-info: #58a6ff;
 
-  --vr-status-success-muted: color-mix(in srgb, var(--vr-status-success) 12%, transparent);
-  --vr-status-warning-muted: color-mix(in srgb, var(--vr-status-warning) 12%, transparent);
-  --vr-status-error-muted: color-mix(in srgb, var(--vr-status-error) 12%, transparent);
-  --vr-status-info-muted: color-mix(in srgb, var(--vr-status-info) 12%, transparent);
+  --vr-status-success-muted: color-mix(in srgb, var(--vr-status-success) 20%, transparent);
+  --vr-status-warning-muted: color-mix(in srgb, var(--vr-status-warning) 20%, transparent);
+  --vr-status-error-muted: color-mix(in srgb, var(--vr-status-error) 20%, transparent);
+  --vr-status-info-muted: color-mix(in srgb, var(--vr-status-info) 20%, transparent);
 
   --vr-disabled-bg: #14171c;
   --vr-disabled-text: #626b78;
@@ -77,16 +82,14 @@
   --vr-focus-ring-offset: 2px;
   --vr-focus-ring-shadow: 0 0 0 3px color-mix(in srgb, var(--vr-accent-500) 38%, transparent);
 
-  --vr-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.22);
-  --vr-shadow-sm: 0 6px 18px rgb(0 0 0 / 0.24);
-  --vr-shadow-md: 0 10px 30px rgb(0 0 0 / 0.32);
-  --vr-shadow-lg: 0 18px 42px rgb(0 0 0 / 0.4);
-  --vr-shadow-glow-subtle:
-    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 22%, transparent),
-    0 10px 24px rgb(0 0 0 / 0.24);
-  --vr-shadow-glow-medium:
-    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 28%, transparent),
-    0 14px 30px rgb(0 0 0 / 0.34);
+  --vr-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.28);
+  --vr-shadow-sm: 0 6px 18px rgb(0 0 0 / 0.45);
+  --vr-shadow-md: 0 10px 30px rgb(0 0 0 / 0.55);
+  --vr-shadow-lg: 0 18px 42px rgb(0 0 0 / 0.6);
+  /* 原本是「1px amber 描边 + 阴影」，amber 退出容器包边后只保留阴影部分。
+     变量名沿用，避免改动 40+ 处 shadow-cf-glow-* 调用点。 */
+  --vr-shadow-glow-subtle: 0 10px 24px rgb(0 0 0 / 0.45);
+  --vr-shadow-glow-medium: 0 14px 30px rgb(0 0 0 / 0.55);
 
   --vr-motion-fast: 140ms;
   --vr-motion-normal: 220ms;
@@ -181,12 +184,9 @@
   --vr-shadow-sm: 0 8px 20px rgb(15 23 42 / 0.11);
   --vr-shadow-md: 0 12px 28px rgb(15 23 42 / 0.14);
   --vr-shadow-lg: 0 20px 44px rgb(15 23 42 / 0.18);
-  --vr-shadow-glow-subtle:
-    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 16%, transparent),
-    0 10px 24px rgb(15 23 42 / 0.1);
-  --vr-shadow-glow-medium:
-    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 20%, transparent),
-    0 14px 30px rgb(15 23 42 / 0.13);
+  /* 与暗色一致：去掉 amber 描边层，只留阴影 */
+  --vr-shadow-glow-subtle: 0 10px 24px rgb(15 23 42 / 0.12);
+  --vr-shadow-glow-medium: 0 14px 30px rgb(15 23 42 / 0.16);
 
   --secondary: var(--vr-surface-2);
   --muted: var(--vr-surface-2);

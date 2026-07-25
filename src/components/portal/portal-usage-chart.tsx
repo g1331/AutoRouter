@@ -81,7 +81,7 @@ export function PortalUsageChart({ data, isLoading, range, onRangeChange }: Port
   };
 
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="type-title-small">{t("overview.usageTrend")}</CardTitle>
         <div className="flex flex-wrap items-center gap-2">

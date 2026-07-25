@@ -337,7 +337,7 @@ export function UnresolvedModelsSection({
   onOverrideSaved?: (model: string) => void;
 }) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <CardContent className="space-y-3 p-5 sm:p-6">
         <div>
           <h3 className="type-label-medium text-foreground">{t("unresolvedTitle")}</h3>

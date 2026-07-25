@@ -54,6 +54,33 @@ import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 
+/**
+ * 导航图标的着重色。原先全部图标共用一个灰色、仅选中项染成 amber，一列扫下来
+ * 没有任何区分度。这里按功能语义分配色相（观测=蓝、凭证=青、资源=靛、记录=紫、
+ * 计费=amber、告警=珊瑚…），选中与否都保持自己的颜色，让位置本身可被记住。
+ * 每项给两档：浅色主题用深值保证白底对比，深色主题用亮值。
+ */
+const NAV_ICON_COLOR = {
+  dashboard: "text-[#3D6E96] dark:text-[#7AA5C8]",
+  rankings: "text-[#8A6A12] dark:text-[#E0B341]",
+  apiKeys: "text-[#1F7A5C] dark:text-[#5FCFA8]",
+  upstreams: "text-[#4457B8] dark:text-[#8B9DF0]",
+  logs: "text-[#7A4A96] dark:text-[#C99BE0]",
+  settings: "text-[#4C6480] dark:text-[#9BB0C9]",
+  users: "text-[#2A7595] dark:text-[#6FC3E8]",
+  billing: "text-[#9A6410] dark:text-[#F2A950]",
+  backgroundSync: "text-[#2A7A54] dark:text-[#7FD4A8]",
+  trafficRecording: "text-[#96436F] dark:text-[#DE9BC0]",
+  globalFailureRules: "text-[#A53228] dark:text-[#F0917E]",
+  headerCompensation: "text-[#4C6480] dark:text-[#9BB0C9]",
+  cliproxy: "text-[#5D46A8] dark:text-[#B4A0E8]",
+  // 门户侧导航与管理端语义一一对应，沿用同一色相
+  overview: "text-[#3D6E96] dark:text-[#7AA5C8]",
+  myRequests: "text-[#7A4A96] dark:text-[#C99BE0]",
+  myKeys: "text-[#1F7A5C] dark:text-[#5FCFA8]",
+  changePassword: "text-[#4C6480] dark:text-[#9BB0C9]",
+} as const;
+
 type NavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
@@ -317,7 +344,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             collapsed ? "justify-center px-2" : "px-4"
           )}
         >
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-cf-md border border-amber-500/45 bg-surface-300 text-amber-500 shadow-cf-glow-subtle">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-cf-md border border-transparent bg-amber-500/12 text-amber-500">
             <svg
               className="h-5 w-5"
               fill="none"
@@ -344,7 +371,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           onClick={onToggleCollapse}
           className={cn(
             "absolute -right-3 top-[4.3rem] z-50 hidden h-6 w-6 rounded-full border border-divider bg-background text-muted-foreground",
-            "hover:border-amber-500/45 hover:text-foreground md:flex"
+            "hover:border-divider-subtle hover:text-foreground md:flex"
           )}
           aria-label={collapsed ? tCommon("expand") : tCommon("collapse")}
           title={collapsed ? tCommon("expand") : tCommon("collapse")}
@@ -365,14 +392,14 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                   "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
                   collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                   active
-                    ? "border-amber-500/45 bg-surface-300 text-foreground shadow-cf-glow-subtle"
+                    ? "border-transparent bg-surface-400 text-foreground"
                     : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
                 )}
                 aria-current={active ? "page" : undefined}
                 title={item.label}
               >
                 <Icon
-                  className={cn("h-4 w-4 flex-shrink-0", active && "text-amber-500")}
+                  className={cn("h-4 w-4 flex-shrink-0", NAV_ICON_COLOR[item.labelKey])}
                   aria-hidden="true"
                 />
                 {!collapsed && <span className="truncate">{item.label}</span>}
@@ -403,14 +430,14 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                       "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
                       collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                       active
-                        ? "border-amber-500/45 bg-surface-300 text-foreground shadow-cf-glow-subtle"
+                        ? "border-transparent bg-surface-400 text-foreground"
                         : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
                     )}
                     aria-current={active ? "page" : undefined}
                     title={tNav(item.labelKey)}
                   >
                     <Icon
-                      className={cn("h-4 w-4 flex-shrink-0", active && "text-amber-500")}
+                      className={cn("h-4 w-4 flex-shrink-0", NAV_ICON_COLOR[item.labelKey])}
                       aria-hidden="true"
                     />
                     {!collapsed && <span className="truncate">{tNav(item.labelKey)}</span>}
@@ -467,11 +494,11 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                   "flex min-h-14 flex-col items-center justify-center gap-1 rounded-cf-sm border px-1.5 py-1.5",
                   "text-[11px] transition-all duration-cf-fast ease-cf-standard",
                   active
-                    ? "border-amber-500/45 bg-surface-300 text-foreground"
+                    ? "border-transparent bg-surface-400 text-foreground"
                     : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
                 )}
               >
-                <Icon className={cn("h-[18px] w-[18px]", active && "text-amber-500")} />
+                <Icon className={cn("h-[18px] w-[18px]", NAV_ICON_COLOR[item.labelKey])} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
