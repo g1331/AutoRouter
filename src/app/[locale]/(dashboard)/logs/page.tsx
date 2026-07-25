@@ -187,8 +187,11 @@ export default function LogsPage() {
 
   // Filter-select options; admin-only endpoints, so the portal never receives
   // these props. Keys are capped at the first 100 — acceptable for a selector.
+  // The scope is "all" on purpose: logs can belong to a member-owned key, so
+  // filtering by one has to be possible even though the keys page defaults to
+  // showing only unassigned keys.
   const { data: allUpstreams } = useAllUpstreams();
-  const { data: apiKeysData } = useAPIKeys(1, 100);
+  const { data: apiKeysData } = useAPIKeys(1, 100, "", { ownerScope: "all" });
   const upstreamFilterOptions = useMemo<LogsFilterOption[]>(
     () => (allUpstreams ?? []).map((upstream) => ({ id: upstream.id, name: upstream.name })),
     [allUpstreams]

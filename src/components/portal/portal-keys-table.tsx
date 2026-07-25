@@ -22,6 +22,12 @@ import type { APIKey } from "@/types/api";
 
 interface PortalKeysTableProps {
   keys: APIKey[];
+  /**
+   * Whether the admin exposed upstream identity to this member. It decides how
+   * an empty `upstream_ids` reads: hidden means "the gateway picks for you",
+   * visible means the key really has no routable upstream left.
+   */
+  upstreamsVisible: boolean;
   onEdit: (key: APIKey, source: HTMLElement | null) => void;
   onRevoke: (key: APIKey, source: HTMLElement | null) => void;
 }
@@ -38,7 +44,12 @@ function maskKeyPrefix(keyPrefix: string): string {
  * status, active toggle, and edit/delete actions. All mutations go through the
  * portal endpoints, so they are bounded to the caller's own keys server-side.
  */
-export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps) {
+export function PortalKeysTable({
+  keys,
+  upstreamsVisible,
+  onEdit,
+  onRevoke,
+}: PortalKeysTableProps) {
   const t = useTranslations("keys");
   const tPortal = useTranslations("portal");
   const tCommon = useTranslations("common");
@@ -91,13 +102,23 @@ export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps
               {maskKeyPrefix(key.key_prefix)}
             </TableCell>
             <TableCell className="hidden lg:table-cell">
-              {/* No upstream ids means the gateway routes inside the granted
-                  set without exposing it (upstream visibility is off). */}
-              <Badge variant={key.upstream_ids.length === 0 ? "neutral" : "info"}>
-                {key.upstream_ids.length === 0
-                  ? tPortal("keys.autoRouted")
-                  : t("restrictedAccessCount", { count: key.upstream_ids.length })}
-              </Badge>
+              {key.upstream_ids.length > 0 ? (
+                <Badge variant="info">
+                  {t("restrictedAccessCount", { count: key.upstream_ids.length })}
+                </Badge>
+              ) : upstreamsVisible ? (
+                // Upstreams are visible, so an empty set is the member's own
+                // (now empty) selection — the key cannot route anywhere.
+                <Badge variant="destructive" title={tPortal("keys.noRoutableUpstreamHint")}>
+                  {tPortal("keys.noRoutableUpstream")}
+                </Badge>
+              ) : (
+                // Upstreams are hidden: the gateway routes inside the granted
+                // set without exposing it.
+                <Badge variant="neutral" title={tPortal("keys.autoRoutedDesc")}>
+                  {tPortal("keys.autoRouted")}
+                </Badge>
+              )}
             </TableCell>
             <TableCell>
               {key.spending_rule_statuses.length === 0 ? (

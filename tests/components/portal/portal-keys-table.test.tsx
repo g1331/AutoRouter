@@ -48,14 +48,23 @@ describe("PortalKeysTable", () => {
   });
 
   it("renders an empty state when there are no keys", () => {
-    render(<PortalKeysTable keys={[]} onEdit={vi.fn()} onRevoke={vi.fn()} />);
+    render(
+      <PortalKeysTable keys={[]} upstreamsVisible={false} onEdit={vi.fn()} onRevoke={vi.fn()} />
+    );
 
     expect(screen.getByText("keys.noKeys")).toBeInTheDocument();
     expect(screen.getByText("portal.keys.noKeysDesc")).toBeInTheDocument();
   });
 
   it("renders key rows with a masked prefix and upstream count", () => {
-    render(<PortalKeysTable keys={[makeKey()]} onEdit={vi.fn()} onRevoke={vi.fn()} />);
+    render(
+      <PortalKeysTable
+        keys={[makeKey()]}
+        upstreamsVisible={false}
+        onEdit={vi.fn()}
+        onRevoke={vi.fn()}
+      />
+    );
 
     expect(screen.getByText("my key")).toBeInTheDocument();
     expect(screen.getByText("personal key")).toBeInTheDocument();
@@ -66,7 +75,12 @@ describe("PortalKeysTable", () => {
 
   it("labels a key as auto-routed when no upstream is exposed", () => {
     render(
-      <PortalKeysTable keys={[makeKey({ upstream_ids: [] })]} onEdit={vi.fn()} onRevoke={vi.fn()} />
+      <PortalKeysTable
+        keys={[makeKey({ upstream_ids: [] })]}
+        upstreamsVisible={false}
+        onEdit={vi.fn()}
+        onRevoke={vi.fn()}
+      />
     );
 
     // 上游隐藏时后端不返回 upstream_ids，表格不得暴露数量，只显示自动路由。
@@ -74,11 +88,28 @@ describe("PortalKeysTable", () => {
     expect(screen.queryByText("keys.restrictedAccessCount")).not.toBeInTheDocument();
   });
 
+  it("flags an empty upstream set as unroutable when upstreams are visible", () => {
+    render(
+      <PortalKeysTable
+        keys={[makeKey({ upstream_ids: [] })]}
+        upstreamsVisible={true}
+        onEdit={vi.fn()}
+        onRevoke={vi.fn()}
+      />
+    );
+
+    // 上游可见时，空集合就是成员自己的空选择：这把密钥无处可路由，不能说成自动路由。
+    expect(screen.getByText("portal.keys.noRoutableUpstream")).toBeInTheDocument();
+    expect(screen.queryByText("portal.keys.autoRouted")).not.toBeInTheDocument();
+  });
+
   it("invokes the edit and revoke callbacks for a row", () => {
     const onEdit = vi.fn();
     const onRevoke = vi.fn();
     const key = makeKey();
-    render(<PortalKeysTable keys={[key]} onEdit={onEdit} onRevoke={onRevoke} />);
+    render(
+      <PortalKeysTable keys={[key]} upstreamsVisible={false} onEdit={onEdit} onRevoke={onRevoke} />
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "keys.editKey" }));
     expect(onEdit).toHaveBeenCalledWith(key, expect.any(HTMLElement));
@@ -92,7 +123,14 @@ describe("PortalKeysTable", () => {
   });
 
   it("toggles the active state through the portal mutation", () => {
-    render(<PortalKeysTable keys={[makeKey()]} onEdit={vi.fn()} onRevoke={vi.fn()} />);
+    render(
+      <PortalKeysTable
+        keys={[makeKey()]}
+        upstreamsVisible={false}
+        onEdit={vi.fn()}
+        onRevoke={vi.fn()}
+      />
+    );
 
     fireEvent.click(screen.getByRole("switch"));
 
@@ -103,6 +141,7 @@ describe("PortalKeysTable", () => {
     render(
       <PortalKeysTable
         keys={[makeKey({ is_active: false, disabled_by_admin: true })]}
+        upstreamsVisible={false}
         onEdit={vi.fn()}
         onRevoke={vi.fn()}
       />
@@ -136,6 +175,7 @@ describe("PortalKeysTable", () => {
             ],
           }),
         ]}
+        upstreamsVisible={false}
         onEdit={vi.fn()}
         onRevoke={vi.fn()}
       />

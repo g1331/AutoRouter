@@ -424,14 +424,27 @@ export async function updateUser(
       throw new UserNotFoundError(`User not found: ${id}`);
     }
 
-    // Switching a member from visible to hidden hands routing back to the
-    // gateway: realign their keys to the full grant set inside this transaction
-    // so the flag flip and the key convergence commit together. The alignment
-    // query filters to member-role owners, so calling it for an admin is a
-    // no-op. Hidden → visible needs no realignment: the key set was already the
+    // Two edges hand a user's keys back under the member invariant and must
+    // realign inside this transaction, so the row update and the key
+    // convergence commit together:
+    //
+    // - visible → hidden: routing goes back to the gateway, so the key set
+    //   becomes the whole grant set (`replace`).
+    // - admin → member: keys that were managed from the admin console may be
+    //   unrestricted or reach outside the new owner's grants, which the proxy
+    //   would read as "every active upstream is allowed". Alignment forces them
+    //   restricted and inside the grant set.
+    //
+    // Hidden → visible alone needs no realignment: the key set was already the
     // full grant set, a valid subset the member can later narrow.
-    if (input.exposeUpstreams === false && target.exposeUpstreams) {
-      await alignMemberKeysToGrants(id, { mode: "replace", executor: tx });
+    const nextExposeUpstreams = input.exposeUpstreams ?? target.exposeUpstreams;
+    const becameMember = nextRole === "member" && target.role !== "member";
+    const switchedToHidden = input.exposeUpstreams === false && target.exposeUpstreams;
+    if (becameMember || switchedToHidden) {
+      await alignMemberKeysToGrants(id, {
+        mode: nextExposeUpstreams ? "intersect" : "replace",
+        executor: tx,
+      });
     }
     return row;
   });
@@ -620,6 +633,15 @@ export async function assignApiKeyOwnership(keyId: string, userId: string): Prom
     if (!row) {
       throw new ApiKeyOwnershipError(`API key not found: ${keyId}`);
     }
+
+    // A key handed to a member must obey the member invariant: restricted, and
+    // never reaching outside that member's grants. Without this an unrestricted
+    // admin key keeps its "every active upstream" reading in the proxy while the
+    // portal presents it as scoped to what the admin granted.
+    await alignMemberKeysToGrants(userId, {
+      mode: user.exposeUpstreams ? "intersect" : "replace",
+      executor: tx,
+    });
   });
 
   log.info({ keyId, userId }, "assigned API key ownership");
@@ -766,11 +788,17 @@ export async function setUsersUpstreamVisibility(
 ): Promise<BulkUpstreamVisibilityResult> {
   const now = new Date();
 
+  // An explicit empty subset targets nobody. Only an omitted subset means "all
+  // members" — conflating the two would let a client that builds `userIds` from
+  // an empty UI selection rewrite every member's visibility and keys.
+  if (userIds !== undefined && userIds.length === 0) {
+    return { affected: 0, alignedKeys: 0 };
+  }
+
   const result = await db.transaction(async (tx) => {
-    const scope =
-      userIds && userIds.length > 0
-        ? and(eq(users.role, "member"), inArray(users.id, userIds))
-        : eq(users.role, "member");
+    const scope = userIds
+      ? and(eq(users.role, "member"), inArray(users.id, userIds))
+      : eq(users.role, "member");
 
     const targets = await tx
       .select({ id: users.id, exposeUpstreams: users.exposeUpstreams })

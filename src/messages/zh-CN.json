@@ -1956,7 +1956,9 @@
       "disabledByAdminHint": "此密钥已被管理员停用，如需恢复请联系管理员。",
       "autoRouted": "自动路由",
       "autoRoutedTitle": "上游由网关自动分配",
-      "autoRoutedDesc": "此密钥会在管理员为你开放的范围内自动路由，你只需使用统一的访问地址。"
+      "autoRoutedDesc": "此密钥会在管理员为你开放的范围内自动路由，你只需使用统一的访问地址。",
+      "noRoutableUpstream": "无可用范围",
+      "noRoutableUpstreamHint": "此密钥当前没有可用的调用范围，调用会被拒绝，请联系管理员。"
     },
     "password": {
       "pageTitle": "修改密码",

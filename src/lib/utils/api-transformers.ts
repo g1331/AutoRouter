@@ -955,6 +955,15 @@ export function scrubUpstreamIdentityFromLog(log: RequestLogApiResponse): Reques
     failover_history: null,
     routing_decision: null,
     upstream_error: null,
+    // How the gateway picked an upstream is part of the routing decision, so it
+    // goes with it.
+    routing_type: null,
+    priority_tier: null,
+    lb_strategy: null,
+    // header_diff describes the *outbound* request: the provider-specific auth
+    // header name plus a masked but stable fingerprint of the upstream account's
+    // credential. That identifies the upstream as surely as its name does.
+    header_diff: null,
   };
 }
 

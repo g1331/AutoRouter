@@ -9,6 +9,7 @@ const usePortalOverviewMock = vi.fn();
 const usePortalUsageMock = vi.fn();
 const usePortalRequestLogsMock = vi.fn();
 const usePortalKeysMock = vi.fn();
+const usePortalUpstreamOptionsMock = vi.fn();
 
 vi.mock("next-intl", () => ({
   useTranslations: (namespace?: string) => (key: string) =>
@@ -40,6 +41,7 @@ vi.mock("@/hooks/use-request-log-stats", () => ({
 
 vi.mock("@/hooks/use-portal-keys", () => ({
   usePortalKeys: (...args: unknown[]) => usePortalKeysMock(...args),
+  usePortalUpstreamOptions: () => usePortalUpstreamOptionsMock(),
 }));
 
 vi.mock("@/components/admin/topbar", () => ({
@@ -83,8 +85,18 @@ vi.mock("@/components/admin/refresh-interval-select", () => ({
 }));
 
 vi.mock("@/components/portal/portal-keys-table", () => ({
-  PortalKeysTable: ({ keys }: { keys: Array<{ id: string }> }) => (
-    <div data-testid="portal-keys-table" data-key-count={keys.length} />
+  PortalKeysTable: ({
+    keys,
+    upstreamsVisible,
+  }: {
+    keys: Array<{ id: string }>;
+    upstreamsVisible: boolean;
+  }) => (
+    <div
+      data-testid="portal-keys-table"
+      data-key-count={keys.length}
+      data-upstreams-visible={String(upstreamsVisible)}
+    />
   ),
 }));
 
@@ -109,6 +121,7 @@ beforeEach(() => {
     refetch: vi.fn(),
   });
   usePortalKeysMock.mockReturnValue({ data: undefined, isLoading: true });
+  usePortalUpstreamOptionsMock.mockReturnValue({ data: undefined });
 });
 
 describe("PortalOverviewPage", () => {
@@ -171,9 +184,31 @@ describe("PortalKeysPage", () => {
     render(<PortalKeysPage />);
 
     expect(screen.getByTestId("portal-keys-table")).toHaveAttribute("data-key-count", "1");
+    // 可见性接口还没回数据时按不可见处理，避免把“网关自动路由”误报成无可用范围。
+    expect(screen.getByTestId("portal-keys-table")).toHaveAttribute(
+      "data-upstreams-visible",
+      "false"
+    );
     expect(screen.queryByTestId("portal-key-dialog-create")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /keys.createKey/ }));
     expect(screen.getByTestId("portal-key-dialog-create")).toBeInTheDocument();
+  });
+
+  it("passes the exposed visibility flag down to the table", () => {
+    usePortalKeysMock.mockReturnValue({
+      data: { items: [{ id: "key-1" }], total: 1, page: 1, page_size: 10, total_pages: 1 },
+      isLoading: false,
+    });
+    usePortalUpstreamOptionsMock.mockReturnValue({
+      data: { upstreams_visible: true, items: [{ id: "up-1", name: "alpha" }] },
+    });
+
+    render(<PortalKeysPage />);
+
+    expect(screen.getByTestId("portal-keys-table")).toHaveAttribute(
+      "data-upstreams-visible",
+      "true"
+    );
   });
 });

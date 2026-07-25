@@ -466,6 +466,16 @@ describe("PATCH /api/admin/users/upstream-visibility", () => {
     expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
   });
 
+  // An empty selection must not be read as "every member": a caller that built
+  // the list from an empty UI selection gets a 400 instead of a silent sweep.
+  it("returns 400 for an empty member subset", async () => {
+    const res = await bulkVisibilityRoute(
+      makeRequest(ADMIN, { expose_upstreams: false, user_ids: [] })
+    );
+    expect(res.status).toBe(400);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
   it("returns 400 for unknown fields", async () => {
     const res = await bulkVisibilityRoute(
       makeRequest(ADMIN, { expose_upstreams: true, role: "admin" })

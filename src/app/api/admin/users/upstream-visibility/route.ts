@@ -7,12 +7,15 @@ import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("admin-users-upstream-visibility");
 
 // Bulk upstream visibility. `user_ids` narrows the change to a member subset;
-// omit it to target every member. A static segment, so it never collides with
-// the `[id]` dynamic route — Next.js matches the literal path first.
+// omit it to target every member. An empty array is rejected rather than read as
+// either extreme, so a caller that built the list from an empty UI selection
+// gets a 400 instead of silently rewriting every member. A static segment, so it
+// never collides with the `[id]` dynamic route — Next.js matches the literal
+// path first.
 const bulkVisibilitySchema = z
   .object({
     expose_upstreams: z.boolean(),
-    user_ids: z.array(z.string().min(1)).optional(),
+    user_ids: z.array(z.string().min(1)).min(1, "user_ids must not be empty").optional(),
   })
   .strict();
 

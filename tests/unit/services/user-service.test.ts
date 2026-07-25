@@ -428,6 +428,118 @@ describe("user-service", () => {
         UserNotFoundError
       );
     });
+
+    // The single-user switch must realign keys exactly like the bulk control:
+    // once upstreams are hidden the member no longer owns the routing subset,
+    // so the key falls back to whatever the admin granted.
+    it("rebinds the member's keys to the whole grant set when hiding upstreams", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id, up2.id]);
+      await setExposeUpstreams(alice.id, true);
+      const key = await seedApiKey({ name: "member key", userId: alice.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      await updateUser(alice.id, { exposeUpstreams: false });
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id, up2.id].sort());
+    });
+
+    it("keeps the member's own selection when revealing upstreams", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id, up2.id]);
+      const key = await seedApiKey({ name: "member key", userId: alice.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      await updateUser(alice.id, { exposeUpstreams: true });
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
+
+    // Re-saving the dialog without touching the switch must not disturb a
+    // member who already narrowed their key while upstreams are visible.
+    it("does not realign keys when the visibility value is unchanged", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id, up2.id]);
+      await setExposeUpstreams(alice.id, true);
+      const key = await seedApiKey({ name: "member key", userId: alice.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      await updateUser(alice.id, { displayName: "Alice Renamed", exposeUpstreams: true });
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
+
+    // Demotion turns admin-managed keys into member keys, so they must be
+    // brought inside the new member's grants right away instead of waiting for
+    // the next grant edit.
+    it("aligns the keys of an admin demoted to member", async () => {
+      await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+      const other = await createUser({
+        username: "admin2",
+        password: "password123",
+        displayName: "A2",
+        role: "admin",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(other.id, [up1.id]);
+      const key = await seedApiKey({ name: "admin key", userId: other.id });
+      await linkKeyUpstreams(key.id, [up1.id, up2.id]);
+
+      await updateUser(other.id, { role: "member" });
+
+      const [persisted] = await db.select().from(apiKeys).where(eq(apiKeys.id, key.id));
+      expect(persisted.accessMode).toBe("restricted");
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
+
+    it("leaves an admin's own keys alone when hiding upstreams", async () => {
+      await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+      const other = await createUser({
+        username: "admin2",
+        password: "password123",
+        displayName: "A2",
+        role: "admin",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(other.id, [up1.id, up2.id]);
+      await setExposeUpstreams(other.id, true);
+      const key = await seedApiKey({ name: "admin key", userId: other.id });
+      await linkKeyUpstreams(key.id, [up1.id]);
+
+      await updateUser(other.id, { exposeUpstreams: false });
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
   });
 
   describe("changeUsername", () => {
@@ -616,6 +728,66 @@ describe("user-service", () => {
       await expect(revokeApiKeyOwnership(NONEXISTENT_ID)).rejects.toBeInstanceOf(
         ApiKeyOwnershipError
       );
+    });
+
+    // Handing an admin-created key to a member must not leave it reaching past
+    // that member's grants: an unrestricted key would otherwise stay readable by
+    // the proxy as "every active upstream is allowed".
+    it("narrows a newly owned key to the member's grant set", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id]);
+      const key = await seedApiKey({ name: "admin created", userId: null });
+      await linkKeyUpstreams(key.id, [up1.id, up2.id]);
+
+      await assignApiKeyOwnership(key.id, alice.id);
+
+      const [persisted] = await db.select().from(apiKeys).where(eq(apiKeys.id, key.id));
+      expect(persisted.accessMode).toBe("restricted");
+      // up2 was never granted to Alice, so it is dropped.
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id]);
+    });
+
+    it("binds a newly owned key with no links to the whole grant set", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(alice.id, [up1.id, up2.id]);
+      await setExposeUpstreams(alice.id, true);
+      // Unrestricted with zero links means "all upstreams"; that must become the
+      // member's grant set rather than an empty (unusable) set.
+      const key = await seedApiKey({ name: "admin created", userId: null });
+
+      await assignApiKeyOwnership(key.id, alice.id);
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id, up2.id].sort());
+    });
+
+    it("leaves an admin's key unaligned when ownership moves to an admin", async () => {
+      const admin = await createUser({
+        username: "root",
+        password: "password123",
+        displayName: "Root",
+        role: "admin",
+      });
+      const up1 = await seedUpstream("up1");
+      const up2 = await seedUpstream("up2");
+      await setUserUpstreams(admin.id, [up1.id]);
+      const key = await seedApiKey({ name: "admin created", userId: null });
+      await linkKeyUpstreams(key.id, [up1.id, up2.id]);
+
+      await assignApiKeyOwnership(key.id, admin.id);
+
+      expect(await keyUpstreamIds(key.id)).toEqual([up1.id, up2.id].sort());
     });
   });
 
@@ -852,6 +1024,22 @@ describe("user-service", () => {
       await setUsersUpstreamVisibility(false);
 
       expect(await keyUpstreamIds(adminKey.id)).toEqual([up1.id]);
+    });
+
+    // An empty id list must stay a no-op: reading it as "no filter" would
+    // silently rewrite every member.
+    it("changes nothing when the id subset is empty", async () => {
+      const alice = await createUser({
+        username: "alice",
+        password: "password123",
+        displayName: "Alice",
+      });
+      await setExposeUpstreams(alice.id, true);
+
+      const result = await setUsersUpstreamVisibility(false, []);
+
+      expect(result).toEqual({ affected: 0, alignedKeys: 0 });
+      expect(await getUserExposeUpstreams(alice.id)).toBe(true);
     });
 
     it("reports zero affected when there are no members", async () => {

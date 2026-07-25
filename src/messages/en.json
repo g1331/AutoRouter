@@ -1956,7 +1956,9 @@
       "disabledByAdminHint": "An administrator disabled this key. Contact your administrator to restore it.",
       "autoRouted": "Auto-routed",
       "autoRoutedTitle": "Upstreams are assigned by the gateway",
-      "autoRoutedDesc": "This key routes automatically within the scope your administrator granted; just use the single access endpoint."
+      "autoRoutedDesc": "This key routes automatically within the scope your administrator granted; just use the single access endpoint.",
+      "noRoutableUpstream": "No usable scope",
+      "noRoutableUpstreamHint": "This key currently has no usable scope, so calls are rejected. Contact your administrator."
     },
     "password": {
       "pageTitle": "Change Password",

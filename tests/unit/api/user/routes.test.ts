@@ -94,6 +94,22 @@ function makeLogWithUpstreamIdentity() {
     statusCode: 200,
     durationMs: 1200,
     routingType: "capability",
+    priorityTier: 2,
+    lbStrategy: "weighted",
+    // header_diff names the upstream's auth header and a fingerprint of its
+    // credential, so it identifies the upstream just as surely as its name.
+    headerDiff: {
+      inbound_count: 3,
+      outbound_count: 3,
+      dropped: [],
+      auth_replaced: {
+        header: "x-goog-api-key",
+        inbound_value: null,
+        outbound_value: "AIza***9f2c",
+      },
+      compensated: [],
+      unchanged: [],
+    },
     groupName: "openai-pool",
     failoverAttempts: 1,
     failoverHistory: [
@@ -240,6 +256,12 @@ describe("GET /api/user/logs", () => {
     expect(item.failover_history).toBeNull();
     expect(item.routing_decision).toBeNull();
     expect(item.upstream_error).toBeNull();
+    // How the gateway picked an upstream, and the outbound auth header it used,
+    // both point back at the upstream — they go with the identity.
+    expect(item.routing_type).toBeNull();
+    expect(item.priority_tier).toBeNull();
+    expect(item.lb_strategy).toBeNull();
+    expect(item.header_diff).toBeNull();
     // Facts about the member's own request survive.
     expect(item.status_code).toBe(200);
     expect(item.model).toBe("gpt-4");
@@ -259,6 +281,8 @@ describe("GET /api/user/logs", () => {
 
     expect(item.upstream_name).toBe("openai-primary");
     expect(item.failover_history).toHaveLength(1);
+    expect(item.routing_type).toBe("capability");
+    expect(item.header_diff).not.toBeNull();
   });
 
   it("scopes the query to the authenticated user", async () => {

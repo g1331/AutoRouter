@@ -2,7 +2,7 @@
 
 ### Requirement: 成员上游可见性按用户配置
 
-系统 SHALL 为每个用户持久化一个「上游可见性」布尔属性（`users.expose_upstreams`），默认值 MUST 为隐藏（`false`）。该属性仅影响对应成员侧（`/api/user/*` 与门户 UI）的上游信息暴露，管理端行为 MUST 不受影响。系统 SHALL 提供仅管理员可用的写入口：单用户（`PUT /api/admin/users/{id}` 携带 `expose_upstreams`）与批量（`PATCH /api/admin/users/upstream-visibility`，可对指定用户集或全体成员一次性设置）。非管理员访问上述写入口 MUST 被拒绝。
+系统 SHALL 为每个用户持久化一个「上游可见性」布尔属性（`users.expose_upstreams`），默认值 MUST 为隐藏（`false`）。该属性仅影响对应成员侧（`/api/user/*` 与门户 UI）的上游信息暴露，管理端行为 MUST 不受影响。系统 SHALL 提供仅管理员可用的写入口：单用户（`PUT /api/admin/users/{id}` 携带 `expose_upstreams`）与批量（`PATCH /api/admin/users/upstream-visibility`，可对指定用户集或全体成员一次性设置）。批量入口省略用户集时作用于全体成员，但显式传入空用户集 MUST 被拒绝（400），MUST NOT 被解释为全体成员。非管理员访问上述写入口 MUST 被拒绝。
 
 #### Scenario: 新用户默认隐藏
 
@@ -24,6 +24,11 @@
 - **WHEN** member 用户或未认证请求访问可见性写入口
 - **THEN** 系统返回 403 或 401
 
+#### Scenario: 批量入口拒绝空用户集
+
+- **WHEN** 管理员调用批量入口且 `user_ids` 为空数组
+- **THEN** 系统返回 400，任何用户的可见性与密钥都不被改动
+
 ### Requirement: 隐藏态用户的密钥与授权集自动对齐
 
 某用户可见性为隐藏时，其名下的成员自助密钥的可路由上游集合 MUST 与该用户当前的授权集（user_upstreams）保持一致，由服务端在写路径上物化维护：该用户创建密钥时 MUST 绑定当前授权全集；管理员替换该用户授权集时 MUST 同步该用户名下全部密钥的上游集合为新授权集；该用户可见性由可见切换为隐藏（无论单用户还是批量）时 MUST 一次性将其名下密钥重对齐到授权全集。代理路由路径 MUST NOT 因可见性引入额外分支。
@@ -42,6 +47,25 @@
 
 - **WHEN** 隐藏态且授权集为空的成员尝试创建自助密钥
 - **THEN** 系统拒绝创建并返回明确错误
+
+### Requirement: 密钥进入成员归属时立即收敛到该成员授权集
+
+密钥归属人变为某 member（管理员分配无归属密钥给成员），或某账号角色由 admin 变为 member 时，系统 MUST 在同一事务内把受影响密钥的访问模式置为 `restricted`，并把其可路由上游集合收敛到该成员的授权集之内：隐藏态取授权全集，可见态保留密钥原有选择并剔除未被授权的上游；原本为「不限上游」（无上游关联记录）的密钥 MUST 收敛为该成员的授权全集，MUST NOT 变成零上游的不可用密钥。
+
+#### Scenario: 分配密钥给成员时收敛
+
+- **WHEN** 管理员把上游集合为 {A,B} 的无归属密钥分配给只被授权 {A} 的成员
+- **THEN** 该密钥变为 `restricted` 且上游集合为 {A}
+
+#### Scenario: 降级为成员时收敛
+
+- **WHEN** 管理员把某 admin 账号的角色改为 member，其名下密钥上游集合为 {A,B} 而该账号授权集为 {A}
+- **THEN** 该密钥变为 `restricted` 且上游集合为 {A}
+
+#### Scenario: 不限上游的密钥不会被收敛成空集
+
+- **WHEN** 一把「不限上游」的密钥被分配给授权集为 {A,B} 的成员
+- **THEN** 该密钥变为 `restricted` 且上游集合为 {A,B}，而非零上游
 
 ### Requirement: 收回授权同时收回密钥上的该上游
 

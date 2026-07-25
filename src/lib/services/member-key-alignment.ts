@@ -108,7 +108,15 @@ async function alignOwnedKeys(
   for (const key of ownedKeys) {
     const granted = key.userId ? (grantsByUser.get(key.userId) ?? []) : [];
     const current = linksByKey.get(key.id) ?? [];
-    const next = mode === "replace" ? granted : current.filter((id) => granted.includes(id));
+    // An unrestricted key with no links means "every active upstream is
+    // allowed", not "an empty selection": intersecting that with the grants
+    // would leave zero links and turn a working key into one the proxy rejects.
+    // Narrow it to the owner's grant set instead — the tightest set that keeps
+    // it usable, and exactly what restricting it to member scope means. A
+    // restricted key (or any key that does carry links) has a real selection.
+    const hasSelection = key.accessMode === "restricted" || current.length > 0;
+    const selection = hasSelection ? current : granted;
+    const next = mode === "replace" ? granted : selection.filter((id) => granted.includes(id));
     const linksMatch = sameIdSet(current, next);
     const accessModeMatches = key.accessMode === "restricted";
 

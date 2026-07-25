@@ -39,6 +39,8 @@ users（新增一列）
 - `replace`（该用户隐藏）：密钥上游集合 = 授权全集。
 - `intersect`（该用户可见）：只剔除已被收回的上游，成员自选的其余部分保留。
 
+除授权变更与可见性切换外，还有两个入口会让一把密钥「成为成员密钥」：管理员把无归属密钥分配给成员（`assignApiKeyOwnership`），以及某 admin 账号被降级为 member（`updateUser` 改 role）。两者都在各自事务内做一次对齐，否则密钥会带着超出该成员授权范围的上游集合（或「不限上游」模式）进入成员名下。对齐时把「不限上游 + 无上游关联记录」的密钥按授权全集收敛：这种空关联表示「放行所有上游」而非「成员选了空集」，若按空选择去交集会得到零上游的不可用密钥。
+
 `intersect` 顺带补上一处既有缺口：代理侧的授权集只读 `api_key_upstreams`，此前管理员收回授权并不会同步收回已建密钥上的该上游，被收回的上游仍可继续路由。两种模式都在 `setUserUpstreams` 的同一个事务内完成，授权变更与密钥收敛要么一起生效、要么一起回滚。可见性从可见切换为隐藏（`updateUser` 或批量 `setUsersUpstreamVisibility`）时，对每个受影响用户按 `replace` 重对齐其密钥。
 
 ## 行为矩阵
@@ -51,7 +53,7 @@ users（新增一列）
 | POST /api/user/keys | `upstream_ids` 必填非空，校验子集 | 忽略 `upstream_ids`，绑当前授权全集；授权集为空返回 403 |
 | PUT /api/user/keys/[id] | 可改 `upstream_ids`（子集校验） | 忽略 `upstream_ids` |
 | 成员密钥响应 | 原样返回 `upstream_ids` | `upstream_ids: []` |
-| GET /api/user/logs | 原样 | 抹除 `upstream_id`、`upstream_name`、`group_name`、`failover_history`、`routing_decision`、`upstream_error` |
+| GET /api/user/logs | 原样 | 抹除 `upstream_id`、`upstream_name`、`group_name`、`failover_history`、`routing_decision`、`upstream_error`、`routing_type`、`priority_tier`、`lb_strategy`、`header_diff` |
 | PATCH admin 授权上游 | 换授权集后，从该用户名下密钥中剔除被收回的上游（保留成员自选的其余部分） | 换授权集后，重同步该用户名下密钥为新授权集 |
 | PATCH 用户可见性 → 隐藏（单用户/批量） | — | 重对齐受影响用户名下密钥到各自授权全集 |
 

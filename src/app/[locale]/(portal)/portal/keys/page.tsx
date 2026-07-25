@@ -12,7 +12,7 @@ import { PortalRevokeKeyDialog } from "@/components/portal/portal-revoke-key-dia
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortalKeys } from "@/hooks/use-portal-keys";
+import { usePortalKeys, usePortalUpstreamOptions } from "@/hooks/use-portal-keys";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import type { APIKey } from "@/types/api";
 
@@ -31,6 +31,9 @@ export default function PortalKeysPage() {
   const morphSourceRef = useRef<HTMLElement | null>(null);
 
   const { data, isLoading } = usePortalKeys(page, pageSize);
+  // 上游可见性决定“空上游列表”该如何解读，取不到时按不可见处理（fail closed）。
+  const { data: upstreamOptions } = usePortalUpstreamOptions();
+  const upstreamsVisible = upstreamOptions?.upstreams_visible ?? false;
 
   return (
     <>
@@ -77,6 +80,7 @@ export default function PortalKeysPage() {
           <>
             <PortalKeysTable
               keys={data?.items ?? []}
+              upstreamsVisible={upstreamsVisible}
               onEdit={(key, source) => {
                 morphSourceRef.current = source;
                 startMorph(() => setEditingKey(key), {

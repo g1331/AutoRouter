@@ -138,9 +138,11 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
   const updateMutation = useUpdatePortalKey();
   const { data: upstreamOptions, isLoading: upstreamsLoading } = usePortalUpstreamOptions();
 
-  // While the options are still loading, assume upstreams are visible so the
-  // required-field rule is never relaxed on a guess.
-  const upstreamsVisible = upstreamOptions?.upstreams_visible ?? true;
+  // Fail closed, like every other layer: until the endpoint says upstreams are
+  // visible, this member does not get shown an upstream dimension. Submitting is
+  // blocked while the options are in flight (see the submit button), so a guess
+  // in either direction can never produce a request the server would reject.
+  const upstreamsVisible = upstreamOptions?.upstreams_visible ?? false;
 
   const keyFormSchema = z.object({
     name: z.string().min(1, t("keyNameRequired")).max(100),
@@ -572,7 +574,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
             <Button type="button" variant="outline" onClick={onClose}>
               {tCommon("cancel")}
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || upstreamsLoading}>
               {isPending
                 ? mode === "create"
                   ? t("creating")
