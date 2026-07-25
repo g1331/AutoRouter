@@ -37,7 +37,9 @@ export function AssignUserKeysDialog({
   morph = false,
   morphName = "morph-user-row",
 }: AssignUserKeysDialogProps) {
-  const { data, isLoading } = useAPIKeys(1, 100);
+  // Only unowned keys can be handed to a user; keys another member already
+  // owns are managed from that member's own key view.
+  const { data, isLoading } = useAPIKeys(1, 100, "", { ownerScope: "unowned" });
   const assignMutation = useAssignApiKeyOwner();
   const t = useTranslations("users");
   const tCommon = useTranslations("common");

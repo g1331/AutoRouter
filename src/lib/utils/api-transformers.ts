@@ -302,6 +302,10 @@ export interface ApiKeyApiResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  user_id: string | null;
+  /** Display name of the owning user; null when the key is unowned. */
+  user_name: string | null;
   access_mode: "unrestricted" | "restricted";
   upstream_ids: string[];
   allowed_models: string[] | null;
@@ -359,6 +363,8 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     key_prefix: apiKey.keyPrefix,
     name: apiKey.name,
     description: apiKey.description,
+    user_id: apiKey.userId,
+    user_name: apiKey.userName,
     access_mode: apiKey.accessMode,
     upstream_ids: apiKey.upstreamIds,
     allowed_models: apiKey.allowedModels,
@@ -395,6 +401,8 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     key_prefix: result.keyPrefix,
     name: result.name,
     description: result.description,
+    user_id: result.userId,
+    user_name: result.userName,
     access_mode: result.accessMode,
     upstream_ids: result.upstreamIds,
     allowed_models: result.allowedModels,
@@ -929,6 +937,33 @@ export function transformPaginatedRequestLogs(
     page: result.page,
     page_size: result.pageSize,
     total_pages: result.totalPages,
+  };
+}
+
+/**
+ * Strip every upstream identity from a request log before it reaches a member.
+ * Applied while the portal keeps upstreams hidden: the member sees what their
+ * own request did (timings, tokens, status, cost, how many failovers happened)
+ * but never which upstream served it or how the gateway chose one.
+ */
+export function scrubUpstreamIdentityFromLog(log: RequestLogApiResponse): RequestLogApiResponse {
+  return {
+    ...log,
+    upstream_id: null,
+    upstream_name: null,
+    group_name: null,
+    failover_history: null,
+    routing_decision: null,
+    upstream_error: null,
+    // How the gateway picked an upstream is part of the routing decision, so it
+    // goes with it.
+    routing_type: null,
+    priority_tier: null,
+    lb_strategy: null,
+    // header_diff describes the *outbound* request: the provider-specific auth
+    // header name plus a masked but stable fingerprint of the upstream account's
+    // credential. That identifies the upstream as surely as its name does.
+    header_diff: null,
   };
 }
 
@@ -1771,6 +1806,8 @@ export interface UserApiResponse {
   display_name: string;
   role: "admin" | "member";
   is_active: boolean;
+  /** Whether this member may see upstream identities and pick key subsets. */
+  expose_upstreams: boolean;
   api_key_count: number;
   month_requests: number;
   month_cost_usd: number;
@@ -1789,6 +1826,7 @@ export function transformUserToApi(user: UserListItem): UserApiResponse {
     display_name: user.displayName,
     role: user.role,
     is_active: user.isActive,
+    expose_upstreams: user.exposeUpstreams,
     api_key_count: user.apiKeyCount,
     month_requests: user.monthRequests,
     month_cost_usd: user.monthCostUsd,

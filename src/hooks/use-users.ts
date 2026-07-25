@@ -8,6 +8,8 @@ import type {
   UserCreate,
   UserUpdate,
   UserUpstreamsResponse,
+  UserUpstreamVisibilityBulkUpdate,
+  UserUpstreamVisibilityBulkResult,
 } from "@/types/api";
 
 /**
@@ -70,6 +72,30 @@ export function useUpdateUser() {
     },
     onError: (error: Error) => {
       toast.error(`${t("updateFailed")}: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Set upstream visibility across many members at once. Without `user_ids` the
+ * change targets every member. Switching members to hidden realigns their keys
+ * server-side, so the member key lists are invalidated too.
+ */
+export function useSetUsersUpstreamVisibility() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("users");
+
+  return useMutation({
+    mutationFn: (data: UserUpstreamVisibilityBulkUpdate) =>
+      apiClient.patch<UserUpstreamVisibilityBulkResult>("/admin/users/upstream-visibility", data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      toast.success(t("bulkVisibilitySuccess", { count: result.affected }));
+    },
+    onError: (error: Error) => {
+      toast.error(`${t("bulkVisibilityFailed")}: ${error.message}`);
     },
   });
 }

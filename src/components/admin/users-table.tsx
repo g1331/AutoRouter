@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import {
   BarChart3,
+  Key,
   KeyRound,
   Link2,
   MoreHorizontal,
@@ -51,6 +52,7 @@ interface UsersTableProps {
   onChangeUsername: (user: User, source: HTMLElement | null) => void;
   onResetPassword: (user: User, source: HTMLElement | null) => void;
   onConfigureUpstreams: (user: User, source: HTMLElement | null) => void;
+  onViewKeys: (user: User, source: HTMLElement | null) => void;
   onAssignKeys: (user: User, source: HTMLElement | null) => void;
   onDelete: (user: User, source: HTMLElement | null) => void;
   /**
@@ -75,6 +77,7 @@ export function UsersTable({
   onChangeUsername,
   onResetPassword,
   onConfigureUpstreams,
+  onViewKeys,
   onAssignKeys,
   onDelete,
   searchQuery = "",
@@ -293,6 +296,10 @@ export function UsersTable({
                         >
                           <Server className="mr-2 h-4 w-4" aria-hidden="true" />
                           {t("configureUpstreams")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onViewKeys(user, rowSource(user.id))}>
+                          <Key className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("viewKeys")}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onAssignKeys(user, rowSource(user.id))}>
                           <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />

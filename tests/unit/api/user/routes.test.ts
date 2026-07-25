@@ -38,7 +38,12 @@ vi.mock("@/lib/services/user-data-service", () => ({
   listUserUpstreamOptions: vi.fn(),
 }));
 
+vi.mock("@/lib/services/user-service", () => ({
+  getUserExposeUpstreams: vi.fn(),
+}));
+
 import * as userDataService from "@/lib/services/user-data-service";
+import { getUserExposeUpstreams } from "@/lib/services/user-service";
 import { GET as overviewRoute } from "@/app/api/user/overview/route";
 import { GET as logsRoute } from "@/app/api/user/logs/route";
 import { GET as logsStatsRoute } from "@/app/api/user/logs/stats/route";
@@ -74,6 +79,56 @@ function makeEmptyLogsPage() {
   return { items: [], total: 0, page: 1, pageSize: 20, totalPages: 1 };
 }
 
+/** A log carrying every upstream-identity field the member must not see. */
+function makeLogWithUpstreamIdentity() {
+  return {
+    id: "log-1",
+    apiKeyId: "key-1",
+    apiKeyName: "portal key",
+    apiKeyPrefix: "sk-por",
+    upstreamId: "upstream-1",
+    upstreamName: "openai-primary",
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "gpt-4",
+    statusCode: 200,
+    durationMs: 1200,
+    routingType: "capability",
+    priorityTier: 2,
+    lbStrategy: "weighted",
+    // header_diff names the upstream's auth header and a fingerprint of its
+    // credential, so it identifies the upstream just as surely as its name.
+    headerDiff: {
+      inbound_count: 3,
+      outbound_count: 3,
+      dropped: [],
+      auth_replaced: {
+        header: "x-goog-api-key",
+        inbound_value: null,
+        outbound_value: "AIza***9f2c",
+      },
+      compensated: [],
+      unchanged: [],
+    },
+    groupName: "openai-pool",
+    failoverAttempts: 1,
+    failoverHistory: [
+      {
+        upstream_id: "upstream-2",
+        upstream_name: "openai-backup",
+        attempted_at: "2026-06-10T00:00:00.000Z",
+        error_type: "http_5xx" as const,
+        error_message: "HTTP 502 error",
+        status_code: 502,
+      },
+    ],
+    routingDecision: {
+      candidates: [{ upstream_id: "upstream-1", upstream_name: "openai-primary" }],
+    },
+    createdAt: new Date("2026-06-10T00:00:01.000Z"),
+  };
+}
+
 function makeUsage() {
   return {
     range: "7d" as const,
@@ -89,8 +144,14 @@ function makeUsage() {
   };
 }
 
+function setExposeUpstreams(exposeUpstreams: boolean): void {
+  vi.mocked(getUserExposeUpstreams).mockResolvedValue(exposeUpstreams);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // Upstreams are hidden from members by default.
+  setExposeUpstreams(false);
 });
 
 describe("user routes — guard", () => {
@@ -132,7 +193,8 @@ describe("user routes — guard", () => {
 });
 
 describe("GET /api/user/upstreams", () => {
-  it("returns the caller's granted upstream options", async () => {
+  it("returns the caller's granted upstream options when exposure is on", async () => {
+    setExposeUpstreams(true);
     vi.mocked(userDataService.listUserUpstreamOptions).mockResolvedValue([
       { id: "33333333-3333-4333-8333-333333333333", name: "alpha" },
     ]);
@@ -141,9 +203,18 @@ describe("GET /api/user/upstreams", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({
+      upstreams_visible: true,
       items: [{ id: "33333333-3333-4333-8333-333333333333", name: "alpha" }],
     });
     expect(userDataService.listUserUpstreamOptions).toHaveBeenCalledWith(SELF_ID);
+  });
+
+  it("exposes no upstream option while exposure is off", async () => {
+    const res = await upstreamsRoute(makeRequest("http://localhost/api/user/upstreams", MEMBER));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ upstreams_visible: false, items: [] });
+    // Not even queried: no upstream name reaches this surface.
+    expect(userDataService.listUserUpstreamOptions).not.toHaveBeenCalled();
   });
 });
 
@@ -168,6 +239,52 @@ describe("GET /api/user/overview", () => {
 });
 
 describe("GET /api/user/logs", () => {
+  it("removes every upstream identity while exposure is off", async () => {
+    vi.mocked(userDataService.listUserRequestLogs).mockResolvedValue({
+      ...makeEmptyLogsPage(),
+      items: [makeLogWithUpstreamIdentity()],
+      total: 1,
+    } as never);
+
+    const res = await logsRoute(makeRequest("http://localhost/api/user/logs", MEMBER));
+    expect(res.status).toBe(200);
+    const [item] = (await res.json()).items;
+
+    expect(item.upstream_id).toBeNull();
+    expect(item.upstream_name).toBeNull();
+    expect(item.group_name).toBeNull();
+    expect(item.failover_history).toBeNull();
+    expect(item.routing_decision).toBeNull();
+    expect(item.upstream_error).toBeNull();
+    // How the gateway picked an upstream, and the outbound auth header it used,
+    // both point back at the upstream — they go with the identity.
+    expect(item.routing_type).toBeNull();
+    expect(item.priority_tier).toBeNull();
+    expect(item.lb_strategy).toBeNull();
+    expect(item.header_diff).toBeNull();
+    // Facts about the member's own request survive.
+    expect(item.status_code).toBe(200);
+    expect(item.model).toBe("gpt-4");
+    expect(item.failover_attempts).toBe(1);
+  });
+
+  it("keeps upstream identity while exposure is on", async () => {
+    setExposeUpstreams(true);
+    vi.mocked(userDataService.listUserRequestLogs).mockResolvedValue({
+      ...makeEmptyLogsPage(),
+      items: [makeLogWithUpstreamIdentity()],
+      total: 1,
+    } as never);
+
+    const res = await logsRoute(makeRequest("http://localhost/api/user/logs", MEMBER));
+    const [item] = (await res.json()).items;
+
+    expect(item.upstream_name).toBe("openai-primary");
+    expect(item.failover_history).toHaveLength(1);
+    expect(item.routing_type).toBe("capability");
+    expect(item.header_diff).not.toBeNull();
+  });
+
   it("scopes the query to the authenticated user", async () => {
     vi.mocked(userDataService.listUserRequestLogs).mockResolvedValue(makeEmptyLogsPage());
 

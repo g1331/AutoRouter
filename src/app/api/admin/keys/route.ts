@@ -37,12 +37,21 @@ const createApiKeySchema = z
     }
   });
 
+const listApiKeysQuerySchema = z.object({
+  // Keys members create for themselves are managed from the user's own view,
+  // so the global list defaults to the keys the admin console owns.
+  owner_scope: z.enum(["unowned", "all"]).default("unowned"),
+  user_id: z.string().uuid().optional(),
+});
+
 /**
  * GET /api/admin/keys - List all API keys
  *
  * Query params:
  * - page / page_size: pagination
  * - search: string (filter - case-insensitive substring match on key name)
+ * - owner_scope: "unowned" (default) | "all"
+ * - user_id: only keys owned by this user; takes precedence over owner_scope
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -52,11 +61,26 @@ export async function GET(request: NextRequest) {
 
   try {
     const { page, pageSize } = getPaginationParams(request);
-    const search = new URL(request.url).searchParams.get("search")?.trim();
-    const result = await listApiKeys(page, pageSize, search ? { search } : {});
+    const params = new URL(request.url).searchParams;
+    const search = params.get("search")?.trim();
+    const query = listApiKeysQuerySchema.parse({
+      owner_scope: params.get("owner_scope") ?? undefined,
+      user_id: params.get("user_id") ?? undefined,
+    });
+
+    const result = await listApiKeys(page, pageSize, {
+      ...(search ? { search } : {}),
+      ...(query.user_id ? { userId: query.user_id } : { unowned: query.owner_scope === "unowned" }),
+    });
 
     return NextResponse.json(transformPaginatedApiKeys(result));
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return errorResponse(
+        `Validation error: ${error.issues.map((e: { message: string }) => e.message).join(", ")}`,
+        400
+      );
+    }
     log.error({ err: error }, "failed to list API keys");
     return errorResponse("Internal server error", 500);
   }

@@ -55,6 +55,7 @@ vi.mock("@/lib/services/user-service", () => {
     resetPassword: vi.fn(),
     getUserUpstreams: vi.fn(),
     setUserUpstreams: vi.fn(),
+    setUsersUpstreamVisibility: vi.fn(),
     assignApiKeyOwnership: vi.fn(),
     revokeApiKeyOwnership: vi.fn(),
     UserNotFoundError,
@@ -80,6 +81,7 @@ import {
   GET as getUpstreamsRoute,
   PUT as setUpstreamsRoute,
 } from "@/app/api/admin/users/[id]/upstreams/route";
+import { PATCH as bulkVisibilityRoute } from "@/app/api/admin/users/upstream-visibility/route";
 import {
   PUT as assignOwnerRoute,
   DELETE as revokeOwnerRoute,
@@ -111,6 +113,7 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
     displayName: "Alice",
     role: "member",
     isActive: true,
+    exposeUpstreams: false,
     apiKeyCount: 0,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-02T00:00:00.000Z"),
@@ -277,6 +280,30 @@ describe("GET/PUT/DELETE /api/admin/users/[id]", () => {
     expect(userService.updateUser).not.toHaveBeenCalled();
   });
 
+  it("passes the upstream visibility flag through and serializes it back", async () => {
+    vi.mocked(userService.updateUser).mockResolvedValue(
+      makeUser({ exposeUpstreams: true }) as never
+    );
+    const res = await updateUserRoute(makeRequest(ADMIN, { expose_upstreams: true }), ctx(USER_ID));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.expose_upstreams).toBe(true);
+    expect(userService.updateUser).toHaveBeenCalledWith(
+      USER_ID,
+      { exposeUpstreams: true },
+      { bypassLastActiveAdminGuard: true }
+    );
+  });
+
+  it("rejects a non-boolean upstream visibility flag with 400", async () => {
+    const res = await updateUserRoute(
+      makeRequest(ADMIN, { expose_upstreams: "yes" }),
+      ctx(USER_ID)
+    );
+    expect(res.status).toBe(400);
+    expect(userService.updateUser).not.toHaveBeenCalled();
+  });
+
   it("deletes a user with 204", async () => {
     vi.mocked(userService.deleteUser).mockResolvedValue(undefined);
     const res = await deleteUserRoute(makeRequest(ADMIN), ctx(USER_ID));
@@ -388,6 +415,85 @@ describe("GET/PUT /api/admin/users/[id]/upstreams", () => {
     );
     const res = await setUpstreamsRoute(makeRequest(ADMIN, { upstream_ids: [] }), ctx(USER_ID));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("PATCH /api/admin/users/upstream-visibility", () => {
+  it("rejects an unauthenticated request with 401", async () => {
+    const res = await bulkVisibilityRoute(makeRequest(null, { expose_upstreams: false }));
+    expect(res.status).toBe(401);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
+  it("rejects a member with 403", async () => {
+    const res = await bulkVisibilityRoute(
+      makeRequest("Bearer member-token", { expose_upstreams: false })
+    );
+    expect(res.status).toBe(403);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
+  it("targets every member when no subset is given", async () => {
+    vi.mocked(userService.setUsersUpstreamVisibility).mockResolvedValue({
+      affected: 3,
+      alignedKeys: 2,
+    });
+
+    const res = await bulkVisibilityRoute(makeRequest(ADMIN, { expose_upstreams: false }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ affected: 3, aligned_keys: 2 });
+    expect(userService.setUsersUpstreamVisibility).toHaveBeenCalledWith(false, undefined);
+  });
+
+  it("forwards an explicit member subset", async () => {
+    vi.mocked(userService.setUsersUpstreamVisibility).mockResolvedValue({
+      affected: 1,
+      alignedKeys: 0,
+    });
+
+    const res = await bulkVisibilityRoute(
+      makeRequest(ADMIN, { expose_upstreams: true, user_ids: [USER_ID] })
+    );
+
+    expect(res.status).toBe(200);
+    expect(userService.setUsersUpstreamVisibility).toHaveBeenCalledWith(true, [USER_ID]);
+  });
+
+  it("returns 400 when the visibility flag is missing", async () => {
+    const res = await bulkVisibilityRoute(makeRequest(ADMIN, { user_ids: [USER_ID] }));
+    expect(res.status).toBe(400);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
+  // An empty selection must not be read as "every member": a caller that built
+  // the list from an empty UI selection gets a 400 instead of a silent sweep.
+  it("returns 400 for an empty member subset", async () => {
+    const res = await bulkVisibilityRoute(
+      makeRequest(ADMIN, { expose_upstreams: false, user_ids: [] })
+    );
+    expect(res.status).toBe(400);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for unknown fields", async () => {
+    const res = await bulkVisibilityRoute(
+      makeRequest(ADMIN, { expose_upstreams: true, role: "admin" })
+    );
+    expect(res.status).toBe(400);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for a non-JSON body", async () => {
+    const res = await bulkVisibilityRoute(makeRequest(ADMIN));
+    expect(res.status).toBe(400);
+    expect(userService.setUsersUpstreamVisibility).not.toHaveBeenCalled();
+  });
+
+  it("maps an unexpected service failure to 500", async () => {
+    vi.mocked(userService.setUsersUpstreamVisibility).mockRejectedValue(new Error("db down"));
+    const res = await bulkVisibilityRoute(makeRequest(ADMIN, { expose_upstreams: false }));
+    expect(res.status).toBe(500);
   });
 });
 

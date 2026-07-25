@@ -21,6 +21,7 @@ const updateUserSchema = z
     display_name: z.string().trim().min(1).max(255).optional(),
     role: z.enum(["admin", "member"]).optional(),
     is_active: z.boolean().optional(),
+    expose_upstreams: z.boolean().optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {
@@ -80,6 +81,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.is_active !== undefined) {
       input.isActive = validated.is_active;
+    }
+    if (validated.expose_upstreams !== undefined) {
+      input.exposeUpstreams = validated.expose_upstreams;
     }
 
     const result = await updateUser(id, input, {

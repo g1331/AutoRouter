@@ -141,6 +141,13 @@
       "when": 1784644976990,
       "tag": "0019_solid_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1784867000157,
+      "tag": "0020_empty_bulldozer",
+      "breakpoints": true
     }
   ]
 }

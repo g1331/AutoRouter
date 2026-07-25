@@ -57,6 +57,14 @@ import {
   AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 
+// 上游可见性是 users 表上的 per-user 列。各 suite 仍用 setExposeUpstreams 表达
+// “这一组用例下成员能否看到上游”，由 seedUser 把该值写进被创建用户的列里。
+let seedExposeUpstreams = true;
+
+function setExposeUpstreams(exposeUpstreams: boolean): void {
+  seedExposeUpstreams = exposeUpstreams;
+}
+
 async function seedUser(username: string): Promise<{ id: string }> {
   const now = new Date();
   const [row] = await db
@@ -65,6 +73,7 @@ async function seedUser(username: string): Promise<{ id: string }> {
       username,
       passwordHash: "hashed:pw",
       displayName: username,
+      exposeUpstreams: seedExposeUpstreams,
       createdAt: now,
       updatedAt: now,
     })
@@ -100,6 +109,10 @@ beforeEach(async () => {
   await db.delete(userUpstreams);
   await db.delete(upstreams);
   await db.delete(users);
+  // The upstream subset is a member-facing dimension only while the admin
+  // exposes upstreams; the suites below assert that surface, and the hidden
+  // default gets its own suite at the end of this file.
+  setExposeUpstreams(true);
 });
 
 describe("createOwnApiKey", () => {
@@ -435,5 +448,84 @@ describe("listOwnApiKeys", () => {
     expect(result.total).toBe(1);
     expect(result.items).toHaveLength(1);
     expect(result.items[0].name).toBe("alice key");
+  });
+});
+
+describe("with upstreams hidden from members", () => {
+  beforeEach(() => {
+    setExposeUpstreams(false);
+  });
+
+  it("binds a new key to the owner's whole grant set and ignores the submitted subset", async () => {
+    const alice = await seedUser("alice");
+    const first = await seedUpstream("first");
+    const second = await seedUpstream("second");
+    await grantUpstreams(alice.id, [first.id, second.id]);
+
+    const result = await createOwnApiKey(alice.id, {
+      name: "my key",
+      upstreamIds: [first.id],
+    });
+
+    // Blanked in the response: not even the number of upstreams is exposed.
+    expect(result.upstreamIds).toEqual([]);
+    const links = await db
+      .select({ upstreamId: apiKeyUpstreams.upstreamId })
+      .from(apiKeyUpstreams)
+      .where(eq(apiKeyUpstreams.apiKeyId, result.id));
+    expect(links.map((link) => link.upstreamId).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it("creates a key without any upstream selection", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+
+    const result = await createOwnApiKey(alice.id, { name: "my key" });
+
+    expect(result.accessMode).toBe("restricted");
+    const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, result.id) });
+    expect(row?.userId).toBe(alice.id);
+  });
+
+  it("refuses to create a key for an owner with no grants", async () => {
+    const alice = await seedUser("alice");
+
+    await expect(createOwnApiKey(alice.id, { name: "my key" })).rejects.toBeInstanceOf(
+      UpstreamNotAllowedError
+    );
+    expect(await db.query.apiKeys.findMany()).toHaveLength(0);
+  });
+
+  it("ignores upstream_ids on update instead of narrowing the key", async () => {
+    const alice = await seedUser("alice");
+    const first = await seedUpstream("first");
+    const second = await seedUpstream("second");
+    await grantUpstreams(alice.id, [first.id, second.id]);
+    const key = await createOwnApiKey(alice.id, { name: "my key" });
+
+    const updated = await updateOwnApiKey(alice.id, key.id, {
+      name: "renamed",
+      upstreamIds: [first.id],
+    });
+
+    expect(updated.name).toBe("renamed");
+    expect(updated.upstreamIds).toEqual([]);
+    const links = await db
+      .select({ upstreamId: apiKeyUpstreams.upstreamId })
+      .from(apiKeyUpstreams)
+      .where(eq(apiKeyUpstreams.apiKeyId, key.id));
+    expect(links).toHaveLength(2);
+  });
+
+  it("blanks the upstream set on listed keys", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+    await createOwnApiKey(alice.id, { name: "my key" });
+
+    const result = await listOwnApiKeys(alice.id);
+
+    expect(result.items[0].upstreamIds).toEqual([]);
   });
 });

@@ -57,6 +57,10 @@ export interface APIKeyResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  user_id: string | null; // UUID
+  /** Display name of the owning user; null when the key is unowned. */
+  user_name: string | null;
   access_mode: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
   allowed_models: string[] | null;
@@ -97,6 +101,8 @@ export interface User {
   display_name: string;
   role: UserRole;
   is_active: boolean;
+  /** Whether this member may see upstream identities and pick key subsets. */
+  expose_upstreams: boolean;
   api_key_count: number;
   /** Month-to-date request count. */
   month_requests: number;
@@ -127,6 +133,22 @@ export interface UserUpdate {
   display_name?: string;
   role?: UserRole;
   is_active?: boolean;
+  expose_upstreams?: boolean;
+}
+
+/**
+ * Bulk upstream-visibility change. Omit `user_ids` to target every member.
+ */
+export interface UserUpstreamVisibilityBulkUpdate {
+  expose_upstreams: boolean;
+  user_ids?: string[];
+}
+
+export interface UserUpstreamVisibilityBulkResult {
+  /** Member users whose visibility flag was set. */
+  affected: number;
+  /** Member keys realigned because their owner switched to hidden. */
+  aligned_keys: number;
 }
 
 export interface UserUpstreamsResponse {
@@ -1337,6 +1359,11 @@ export interface PortalUpstreamOption {
 }
 
 export interface PortalUpstreamOptionsResponse {
+  /**
+   * False when the admin keeps upstreams hidden from members: `items` is then
+   * empty and keys route inside the granted set without exposing it.
+   */
+  upstreams_visible: boolean;
   items: PortalUpstreamOption[];
 }
 
@@ -1344,7 +1371,8 @@ export interface PortalUpstreamOptionsResponse {
 // server-side, and unknown fields are stripped by the API schema.
 export interface PortalKeyCreate {
   name: string;
-  upstream_ids: string[]; // UUID[]
+  // Omitted while upstreams are hidden; the server binds the granted set.
+  upstream_ids?: string[]; // UUID[]
   description?: string | null;
   spending_rules?: APIKeySpendingRule[] | null;
   rpm_limit?: number | null;

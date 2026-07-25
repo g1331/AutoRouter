@@ -276,11 +276,35 @@ describe("POST /api/user/keys", () => {
     });
   });
 
-  it("rejects a body without upstream_ids with 400", async () => {
+  it("passes a body without upstream_ids through to the service", async () => {
+    vi.mocked(userKeyService.createOwnApiKey).mockResolvedValue(makeCreateResult());
+
     const res = await createRoute(
       makeRequest("http://localhost/api/user/keys", MEMBER, {
         method: "POST",
         body: { name: "my key" },
+      })
+    );
+
+    // Whether an upstream selection is required depends on the portal setting,
+    // which only the service reads: while upstreams are hidden the key is bound
+    // to the owner's whole grant set instead.
+    expect(res.status).toBe(201);
+    expect(userKeyService.createOwnApiKey).toHaveBeenCalledWith(SELF_ID, {
+      name: "my key",
+      upstreamIds: undefined,
+      description: null,
+      spendingRules: null,
+      rpmLimit: null,
+      tpmLimit: null,
+    });
+  });
+
+  it("rejects an empty upstream_ids array with 400", async () => {
+    const res = await createRoute(
+      makeRequest("http://localhost/api/user/keys", MEMBER, {
+        method: "POST",
+        body: { name: "my key", upstream_ids: [] },
       })
     );
     expect(res.status).toBe(400);

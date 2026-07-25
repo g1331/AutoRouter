@@ -187,6 +187,9 @@ const KEYS_PAGE = {
       is_quota_exceeded: false,
       is_active: true,
       disabled_by_admin: false,
+      // 全局密钥列表默认只列无归属密钥，固定为无归属以保持基线稳定。
+      user_id: null,
+      user_name: null,
       expires_at: null,
       created_at: new Date("2026-06-01T00:00:00.000Z").toISOString(),
       updated_at: new Date("2026-06-10T00:00:00.000Z").toISOString(),

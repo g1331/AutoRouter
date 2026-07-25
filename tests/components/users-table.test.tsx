@@ -90,6 +90,7 @@ const handlers = {
   onChangeUsername: vi.fn(),
   onResetPassword: vi.fn(),
   onConfigureUpstreams: vi.fn(),
+  onViewKeys: vi.fn(),
   onAssignKeys: vi.fn(),
   onDelete: vi.fn(),
 };
@@ -143,6 +144,14 @@ describe("UsersTable", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "viewUsage" }));
     expect(handlers.onViewUsage).toHaveBeenCalledWith(user);
+  });
+
+  it("点击查看密钥触发回调并带上变形源", () => {
+    const user = makeUser({});
+    render(<UsersTable users={[user]} activeAdminCount={0} {...handlers} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "viewKeys" }));
+    expect(handlers.onViewKeys).toHaveBeenCalledWith(user, expect.any(HTMLElement));
   });
 
   it("点击编辑与删除触发对应回调", () => {

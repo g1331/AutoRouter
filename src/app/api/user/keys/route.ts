@@ -19,9 +19,14 @@ const log = createLogger("user-keys");
 // Unknown fields — including any attempted user_id or access_mode — are
 // stripped by the schema: ownership and the restricted access mode are forced
 // server-side and never taken from the request (decision 8).
+//
+// upstream_ids is optional at the schema level because whether it is required
+// depends on the portal upstream-visibility setting, which only the service
+// layer reads: when upstreams are hidden the key is bound to the owner's whole
+// grant set and any submitted value is ignored.
 const createOwnKeySchema = z.object({
   name: z.string().min(1).max(255),
-  upstream_ids: z.array(z.string().uuid()).min(1),
+  upstream_ids: z.array(z.string().uuid()).min(1).optional(),
   description: z.string().nullable().optional(),
   spending_rules: nullableSpendingRulesSchema,
   rpm_limit: nullableApiKeyRateLimitSchema,

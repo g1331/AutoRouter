@@ -41,6 +41,10 @@ export const users = sqliteTable(
     displayName: text("display_name").notNull(),
     role: text("role").notNull().default("member"), // 'admin' | 'member'
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    // Per-user upstream visibility. Default hidden: members see no upstream
+    // identity and their keys route inside the granted scope until an admin
+    // exposes upstreams for this user.
+    exposeUpstreams: integer("expose_upstreams", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
@@ -422,6 +426,9 @@ export const trafficRecordingSettings = sqliteTable("traffic_recording_settings"
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
 });
 
+/**
+ * Runtime configuration for the member self-service portal.
+ */
 /**
  * Searchable index for recorded traffic fixture files.
  */

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Key, Plus } from "lucide-react";
 
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
-import { KeysTable } from "@/components/admin/keys-table";
+import { KeysTable, type KeyOwnerScope } from "@/components/admin/keys-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
 import { Topbar } from "@/components/admin/topbar";
@@ -60,6 +60,7 @@ function KeysLoadingSkeleton({ loadingLabel }: KeysLoadingSkeletonProps) {
 export default function KeysPage() {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [ownerScope, setOwnerScope] = useState<KeyOwnerScope>("unowned");
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const pageSize = 10;
@@ -77,7 +78,7 @@ export default function KeysPage() {
 
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
-  const { data, isLoading, isFetching } = useAPIKeys(page, pageSize, searchQuery);
+  const { data, isLoading, isFetching } = useAPIKeys(page, pageSize, searchQuery, { ownerScope });
 
   return (
     <>
@@ -119,6 +120,11 @@ export default function KeysPage() {
               keys={data?.items || []}
               searchQuery={searchQuery}
               onSearchQueryChange={handleSearchQueryChange}
+              ownerScope={ownerScope}
+              onOwnerScopeChange={(scope) => {
+                setOwnerScope(scope);
+                setPage(1);
+              }}
               onRevoke={(key, source) => {
                 morphSourceRef.current = source;
                 startMorph(() => setRevokeKey(key), {

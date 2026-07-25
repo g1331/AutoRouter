@@ -1,6 +1,6 @@
-import { eq, desc, inArray, count, and } from "drizzle-orm";
+import { eq, desc, inArray, isNull, count, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
-import { db, apiKeys, apiKeyUpstreams, upstreams, type ApiKey } from "../db";
+import { db, apiKeys, apiKeyUpstreams, upstreams, users, type ApiKey } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashApiKey, verifyApiKey } from "../utils/auth";
 import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
@@ -66,6 +66,10 @@ export interface ApiKeyCreateResult {
   keyPrefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  userId: string | null;
+  /** Display name of the owning user; null when the key is unowned. */
+  userName: string | null;
   accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
   allowedModels: string[] | null;
@@ -86,6 +90,10 @@ export interface ApiKeyListItem {
   keyPrefix: string;
   name: string;
   description: string | null;
+  /** Owning user, or null for a key the admin console manages globally. */
+  userId: string | null;
+  /** Display name of the owning user; null when the key is unowned. */
+  userName: string | null;
   accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
   allowedModels: string[] | null;
@@ -234,6 +242,7 @@ async function buildApiKeyListItem(
     | "keyPrefix"
     | "name"
     | "description"
+    | "userId"
     | "accessMode"
     | "allowedModels"
     | "spendingRules"
@@ -245,7 +254,8 @@ async function buildApiKeyListItem(
     | "createdAt"
     | "updatedAt"
   >,
-  upstreamIds: string[]
+  upstreamIds: string[],
+  userName: string | null = null
 ): Promise<ApiKeyListItem> {
   const accessMode = normalizeAccessMode(key.accessMode, upstreamIds);
   const spendingRules = parseSpendingRules(key.spendingRules);
@@ -256,6 +266,8 @@ async function buildApiKeyListItem(
     keyPrefix: key.keyPrefix,
     name: key.name,
     description: key.description,
+    userId: key.userId,
+    userName,
     accessMode,
     upstreamIds: accessMode === "restricted" ? upstreamIds : [],
     allowedModels: normalizeApiKeyAllowedModels(key.allowedModels),
@@ -370,6 +382,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
 
   await syncApiKeyQuotaStateBestEffort(newKey.id, newKey.name, spendingRules);
   const quotaState = await resolveSpendingRuleStatuses(newKey.id, spendingRules);
+  const ownerNames = await loadOwnerNames([newKey]);
 
   return {
     id: newKey.id,
@@ -377,6 +390,8 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     keyPrefix: newKey.keyPrefix,
     name: newKey.name,
     description: newKey.description,
+    userId: newKey.userId,
+    userName: newKey.userId ? (ownerNames.get(newKey.userId) ?? null) : null,
     accessMode: normalizeAccessMode(newKey.accessMode, normalizedUpstreamIds),
     upstreamIds: normalizedAccessMode === "restricted" ? normalizedUpstreamIds : [],
     allowedModels: normalizeApiKeyAllowedModels(newKey.allowedModels),
@@ -414,8 +429,32 @@ export async function deleteApiKey(keyId: string): Promise<void> {
 export interface ListApiKeysFilter {
   // Owner filter; the self-service portal injects the authenticated userId.
   userId?: string;
+  // Keep only keys without an owner — the admin console's default scope, so
+  // keys members created for themselves stay out of the global key list.
+  unowned?: boolean;
   // Case-insensitive substring match on the key name.
   search?: string;
+}
+
+/**
+ * Look up display names for the owners of a page of keys, so the admin console
+ * can label each key without an extra round trip per row.
+ */
+async function loadOwnerNames(
+  keys: Array<{ userId: string | null }>
+): Promise<Map<string, string>> {
+  const ownerIds = Array.from(
+    new Set(keys.map((key) => key.userId).filter((id): id is string => typeof id === "string"))
+  );
+  if (ownerIds.length === 0) {
+    return new Map();
+  }
+
+  const owners = await db
+    .select({ id: users.id, displayName: users.displayName })
+    .from(users)
+    .where(inArray(users.id, ownerIds));
+  return new Map(owners.map((owner) => [owner.id, owner.displayName]));
 }
 
 /**
@@ -433,6 +472,8 @@ export async function listApiKeys(
   const conditions = [];
   if (filter.userId) {
     conditions.push(eq(apiKeys.userId, filter.userId));
+  } else if (filter.unowned) {
+    conditions.push(isNull(apiKeys.userId));
   }
   if (filter.search?.trim()) {
     conditions.push(caseInsensitiveLike(apiKeys.name, filter.search));
@@ -451,6 +492,7 @@ export async function listApiKeys(
     offset,
   });
   await apiKeyQuotaTracker.initialize();
+  const ownerNames = await loadOwnerNames(keys);
 
   // For each API key, fetch authorized upstream IDs
   const items: ApiKeyListItem[] = await Promise.all(
@@ -459,7 +501,11 @@ export async function listApiKeys(
         where: eq(apiKeyUpstreams.apiKeyId, key.id),
       });
       const upstreamIds = upstreamLinks.map((link) => link.upstreamId);
-      return buildApiKeyListItem(key, upstreamIds);
+      return buildApiKeyListItem(
+        key,
+        upstreamIds,
+        key.userId ? (ownerNames.get(key.userId) ?? null) : null
+      );
     })
   );
 
@@ -528,7 +574,12 @@ export async function getApiKeyById(keyId: string): Promise<ApiKeyListItem | nul
   });
   const upstreamIds = upstreamLinks.map((link) => link.upstreamId);
   await apiKeyQuotaTracker.initialize();
-  return buildApiKeyListItem(apiKey, upstreamIds);
+  const ownerNames = await loadOwnerNames([apiKey]);
+  return buildApiKeyListItem(
+    apiKey,
+    upstreamIds,
+    apiKey.userId ? (ownerNames.get(apiKey.userId) ?? null) : null
+  );
 }
 
 /**
@@ -747,6 +798,7 @@ export async function updateApiKey(
       keyPrefix: updatedKey.keyPrefix,
       name: updatedKey.name,
       description: updatedKey.description,
+      userId: updatedKey.userId,
       accessMode: resolvedAccessMode,
       upstreamIds: resolvedAccessMode === "restricted" ? currentUpstreamIds : [],
       allowedModels: normalizeApiKeyAllowedModels(updatedKey.allowedModels),
@@ -767,12 +819,15 @@ export async function updateApiKey(
     updatedResult.spendingRules
   );
 
+  const ownerNames = await loadOwnerNames([updatedResult]);
+
   return buildApiKeyListItem(
     {
       id: updatedResult.id,
       keyPrefix: updatedResult.keyPrefix,
       name: updatedResult.name,
       description: updatedResult.description,
+      userId: updatedResult.userId,
       accessMode: updatedResult.accessMode,
       allowedModels: updatedResult.allowedModels,
       spendingRules: updatedResult.spendingRules,
@@ -784,6 +839,7 @@ export async function updateApiKey(
       createdAt: updatedResult.createdAt,
       updatedAt: updatedResult.updatedAt,
     },
-    updatedResult.upstreamIds
+    updatedResult.upstreamIds,
+    updatedResult.userId ? (ownerNames.get(updatedResult.userId) ?? null) : null
   );
 }

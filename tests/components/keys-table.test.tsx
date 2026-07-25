@@ -534,6 +534,53 @@ describe("KeysTable", () => {
     });
   });
 
+  describe("Owner Scope", () => {
+    it("renders no scope switch when the parent does not handle scope changes", () => {
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+
+      expect(screen.queryByRole("group", { name: "ownerScopeLabel" })).not.toBeInTheDocument();
+    });
+
+    it("marks the active scope and reports a switch to all keys", () => {
+      const onOwnerScopeChange = vi.fn();
+      render(
+        <KeysTable
+          keys={[mockKey]}
+          onRevoke={mockOnRevoke}
+          ownerScope="unowned"
+          onOwnerScopeChange={onOwnerScopeChange}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "ownerScopeUnowned" })).toHaveAttribute(
+        "aria-pressed",
+        "true"
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "ownerScopeAll" }));
+      expect(onOwnerScopeChange).toHaveBeenCalledWith("all");
+    });
+
+    it("labels the owner of a member-owned key and leaves unowned keys unlabeled", () => {
+      const { rerender } = render(
+        <KeysTable
+          keys={[{ ...mockKey, user_id: "user-1", user_name: "Alice" }]}
+          onRevoke={mockOnRevoke}
+        />
+      );
+
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+
+      rerender(
+        <KeysTable
+          keys={[{ ...mockKey, user_id: null, user_name: null }]}
+          onRevoke={mockOnRevoke}
+        />
+      );
+      expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Active Toggle", () => {
     it("calls toggle mutation when toggle button is clicked", async () => {
       mockToggleKeyActive.mockResolvedValueOnce(undefined);

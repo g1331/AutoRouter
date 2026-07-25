@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 
 import { AssignUserKeysDialog } from "@/components/admin/assign-user-keys-dialog";
+import { BulkUpstreamVisibilityDialog } from "@/components/admin/bulk-upstream-visibility-dialog";
 import { ChangeUsernameDialog } from "@/components/admin/change-username-dialog";
 import { CreateUserDialog } from "@/components/admin/create-user-dialog";
 import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
@@ -12,6 +13,7 @@ import { EditUserDialog } from "@/components/admin/edit-user-dialog";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 import { Topbar } from "@/components/admin/topbar";
+import { UserKeysDialog } from "@/components/admin/user-keys-dialog";
 import { UsersTable } from "@/components/admin/users-table";
 import { UserUpstreamsDialog } from "@/components/admin/user-upstreams-dialog";
 import { Card } from "@/components/ui/card";
@@ -22,7 +24,15 @@ import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 import type { User } from "@/types/api";
 
-type UserDialog = "edit" | "username" | "password" | "upstreams" | "keys" | "delete" | null;
+type UserDialog =
+  | "edit"
+  | "username"
+  | "password"
+  | "upstreams"
+  | "viewKeys"
+  | "keys"
+  | "delete"
+  | null;
 
 export default function UsersPage() {
   const [page, setPage] = useState(1);
@@ -85,7 +95,10 @@ export default function UsersPage() {
             <Users className="h-4 w-4 text-amber-500" aria-hidden="true" />
             <span className="type-body-medium text-muted-foreground">{t("managementDesc")}</span>
           </div>
-          <CreateUserDialog />
+          <div className="flex items-center gap-2">
+            <BulkUpstreamVisibilityDialog />
+            <CreateUserDialog />
+          </div>
         </div>
 
         {isLoading ? (
@@ -111,6 +124,7 @@ export default function UsersPage() {
               onChangeUsername={(user, source) => openDialog("username", user, source)}
               onResetPassword={(user, source) => openDialog("password", user, source)}
               onConfigureUpstreams={(user, source) => openDialog("upstreams", user, source)}
+              onViewKeys={(user, source) => openDialog("viewKeys", user, source)}
               onAssignKeys={(user, source) => openDialog("keys", user, source)}
               onDelete={(user, source) => openDialog("delete", user, source)}
             />
@@ -156,6 +170,12 @@ export default function UsersPage() {
           <UserUpstreamsDialog
             user={activeUser}
             open={dialog === "upstreams"}
+            onOpenChange={(open) => !open && closeDialog()}
+            morph={canMorph}
+          />
+          <UserKeysDialog
+            user={activeUser}
+            open={dialog === "viewKeys"}
             onOpenChange={(open) => !open && closeDialog()}
             morph={canMorph}
           />
