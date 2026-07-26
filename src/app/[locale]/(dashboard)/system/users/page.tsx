@@ -132,7 +132,7 @@ export default function UsersPage() {
             {/* While searching, keep the controls visible even on a single
                 page — the total is the only match-count feedback. */}
             {data && (data.total_pages > 1 || searchQuery.trim() !== "") && (
-              <Card variant="filled" className="border border-divider">
+              <Card variant="filled" className="border border-transparent bg-surface-400">
                 <PaginationControls
                   total={data.total}
                   page={page}

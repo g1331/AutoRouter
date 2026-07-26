@@ -189,7 +189,7 @@ export function RecordingJsonBlock({ value }: { value: unknown }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-300/80">
+    <div className="overflow-hidden rounded-cf-md border border-transparent bg-surface-400">
       <div className="flex flex-col gap-2 border-b border-divider bg-surface-300/70 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
           <FileJson className="h-4 w-4 shrink-0" aria-hidden="true" />

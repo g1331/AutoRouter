@@ -162,7 +162,7 @@ export default function RankingsPage() {
 
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div
-            className="inline-flex flex-wrap self-start rounded-cf-sm border border-border bg-surface-200 p-1"
+            className="inline-flex flex-wrap self-start rounded-cf-sm border border-transparent bg-surface-400 p-1"
             role="tablist"
             aria-label={t("title")}
           >

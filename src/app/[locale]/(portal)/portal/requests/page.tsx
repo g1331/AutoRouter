@@ -90,7 +90,7 @@ export default function PortalRequestsPage() {
             role="status"
             aria-label={tCommon("loading")}
             variant="outlined"
-            className="space-y-3 border-divider bg-surface-200/70 p-4"
+            className="space-y-3 bg-card p-4"
           >
             <span className="sr-only">{tCommon("loading")}</span>
             {Array.from({ length: 8 }).map((_, index) => (
@@ -108,7 +108,7 @@ export default function PortalRequestsPage() {
             />
 
             {data && data.total_pages > 1 && (
-              <Card variant="filled" className="border border-divider">
+              <Card variant="filled" className="border border-transparent bg-surface-400">
                 <PaginationControls
                   total={data.total}
                   page={page}

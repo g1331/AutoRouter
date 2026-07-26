@@ -90,7 +90,7 @@ export function SpendingQuotaSection({ upstream }: { upstream: Upstream }) {
             return (
               <div
                 key={ruleField.id}
-                className="grid grid-cols-[1fr_1fr_auto] items-start gap-2 rounded-cf-sm border border-divider bg-surface-300/30 p-3"
+                className="grid grid-cols-[1fr_1fr_auto] items-start gap-2 rounded-cf-sm border border-transparent bg-surface-400 p-3"
               >
                 <FormField
                   control={form.control}

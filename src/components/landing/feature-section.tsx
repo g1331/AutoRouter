@@ -28,7 +28,7 @@ export function FeatureSection() {
             <Card
               key={key}
               variant="filled"
-              className="animate-log-card-enter overflow-hidden p-0 hover:border-amber-400/35 hover:shadow-cf-glow-subtle"
+              className="animate-log-card-enter overflow-hidden p-0 hover:shadow-cf-glow-subtle"
               style={{ animationDelay: `${index * 70}ms` }}
             >
               <CapabilityAnimation kind={key} />

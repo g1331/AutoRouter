@@ -255,7 +255,7 @@ export default function UpstreamsPage() {
                     value={searchQuery}
                     onChange={(event) => updateSearchQuery(event.target.value)}
                     placeholder={t("workbenchSearchPlaceholder")}
-                    className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
+                    className="border-surface-400/70 bg-card pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
                     aria-label={t("workbenchSearchPlaceholder")}
                   />
                 </div>
@@ -267,7 +267,7 @@ export default function UpstreamsPage() {
                   >
                     <SelectTrigger
                       aria-label={t("statusFilterPlaceholder")}
-                      className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45"
+                      className="border-surface-400/70 bg-card transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45"
                     >
                       <div className="flex items-center gap-2">
                         <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -291,7 +291,7 @@ export default function UpstreamsPage() {
                   >
                     <SelectTrigger
                       aria-label={t("capabilityFilterPlaceholder")}
-                      className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45"
+                      className="border-surface-400/70 bg-card transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45"
                     >
                       <div className="flex items-center gap-2">
                         <SlidersHorizontal
@@ -356,7 +356,7 @@ export default function UpstreamsPage() {
                 </div>
 
                 <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
-                  <div className="inline-flex max-w-full items-center rounded-cf-sm border border-surface-400/70 bg-surface-200/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="inline-flex max-w-full items-center rounded-cf-sm border border-surface-400/70 bg-card p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                     <span className="px-2 text-[11px] text-muted-foreground">
                       {t("densityLabel")}
                     </span>

@@ -119,14 +119,14 @@ export default function KeyDetailPage() {
         </Button>
 
         {notFound ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="bg-card">
             <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <h2 className="type-title-medium text-foreground">{t("keyNotFound")}</h2>
               <p className="type-body-medium text-muted-foreground">{t("keyNotFoundHint")}</p>
             </CardContent>
           </Card>
         ) : loadFailed ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="bg-card">
             <CardContent className="flex flex-col items-center justify-center gap-4 py-16 text-center">
               <div className="space-y-2">
                 <h2 className="type-title-medium text-foreground">{t("keyLoadFailed")}</h2>
@@ -149,7 +149,7 @@ export default function KeyDetailPage() {
               <aside className="hidden lg:block lg:w-56 lg:shrink-0">
                 <nav
                   aria-label={t("detailTitle")}
-                  className="sticky top-14 space-y-4 rounded-cf-md border border-divider bg-surface-200/55 p-3"
+                  className="sticky top-14 space-y-4 rounded-cf-md border border-transparent bg-surface-400 p-3"
                 >
                   {groupedSections.map((group) => (
                     <div key={group.category} className="space-y-1">
@@ -175,7 +175,7 @@ export default function KeyDetailPage() {
                   return (
                     <section key={section.id} id={section.id} className="scroll-mt-14">
                       {isLoading || !apiKey ? (
-                        <Card variant="outlined" className="border-divider bg-surface-200/70">
+                        <Card variant="outlined" className="bg-card">
                           <div className="flex items-center gap-3 border-b border-divider px-5 py-3.5">
                             <IconBox>
                               <section.icon className="h-4 w-4" aria-hidden="true" />

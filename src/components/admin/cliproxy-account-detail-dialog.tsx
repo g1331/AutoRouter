@@ -117,7 +117,7 @@ export function CliproxyAccountDetailDialog({
               <span className="type-label-large text-muted-foreground">
                 {t("accountDetailLabelRawMetadata")}
               </span>
-              <pre className="overflow-x-auto rounded-cf-sm border border-border bg-surface-200 p-3 type-body-small font-mono">
+              <pre className="overflow-x-auto rounded-cf-sm border border-transparent bg-surface-400 p-3 type-body-small font-mono">
                 {JSON.stringify(account.raw_metadata, null, 2)}
               </pre>
             </div>
@@ -139,7 +139,7 @@ interface DetailRowProps {
 
 function DetailRow({ label, children }: DetailRowProps) {
   return (
-    <div className="grid grid-cols-3 items-center gap-3 rounded-cf-sm border border-border p-2">
+    <div className="grid grid-cols-3 items-center gap-3 rounded-cf-sm border border-transparent p-2 bg-surface-400">
       <span className="type-label-large text-muted-foreground">{label}</span>
       <div className="col-span-2 type-body-medium">{children}</div>
     </div>

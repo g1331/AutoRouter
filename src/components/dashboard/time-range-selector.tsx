@@ -135,7 +135,7 @@ export function TimeRangeSelector({
 
   return (
     <div className="flex items-stretch gap-1">
-      <div className="inline-flex rounded-cf-sm border border-border bg-surface-200 p-1">
+      <div className="inline-flex rounded-cf-sm border border-transparent bg-surface-400 p-1">
         {presetRanges.map((range) => (
           <button
             key={range}
@@ -158,7 +158,7 @@ export function TimeRangeSelector({
         <button
           type="button"
           onClick={() => onChange("7d")}
-          className="inline-flex items-center justify-center rounded-cf-sm border border-border bg-surface-200 px-1.5 text-muted-foreground transition-colors hover:bg-surface-300 hover:text-foreground"
+          className="inline-flex items-center justify-center rounded-cf-sm border border-transparent bg-surface-400 px-1.5 text-muted-foreground transition-colors hover:bg-surface-300 hover:text-foreground"
           title={t("timeRange.resetToDefault")}
         >
           <X className="h-3.5 w-3.5" />
@@ -184,7 +184,7 @@ export function TimeRangeSelector({
           </PopoverTrigger>
           {/* 日期选择器弹层用中性描边（覆盖 Popover 默认的琥珀边框），与下拉菜单一致 */}
           <PopoverContent
-            className="w-auto border border-border p-0 text-foreground shadow-[var(--vr-shadow-md)]"
+            className="w-auto border border-transparent p-0 text-foreground shadow-[var(--vr-shadow-md)] bg-surface-400"
             align="end"
           >
             <div className="flex">

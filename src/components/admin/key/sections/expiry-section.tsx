@@ -92,7 +92,7 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
                   </PopoverTrigger>
                   {/* 日期选择器弹层用中性描边（覆盖 Popover 默认的琥珀边框），与下拉菜单一致 */}
                   <PopoverContent
-                    className="w-auto border border-border p-0 text-foreground shadow-[var(--vr-shadow-md)]"
+                    className="w-auto border border-transparent p-0 text-foreground shadow-[var(--vr-shadow-md)] bg-surface-400"
                     align="start"
                   >
                     <Calendar

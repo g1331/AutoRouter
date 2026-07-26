@@ -227,7 +227,7 @@ export function BackgroundSyncTasksPanel() {
 
   if (tasks.isLoading) {
     return (
-      <Card variant="outlined" className="border-divider bg-surface-200/70">
+      <Card variant="outlined" className="bg-card">
         <CardContent className="p-5 text-sm text-muted-foreground">{t("loading")}</CardContent>
       </Card>
     );
@@ -235,7 +235,7 @@ export function BackgroundSyncTasksPanel() {
 
   if (tasks.isError) {
     return (
-      <Card variant="outlined" className="border-divider bg-surface-200/70">
+      <Card variant="outlined" className="bg-card">
         <CardContent className="space-y-3 p-5">
           <p className="text-sm text-status-error">{t("loadFailed")}</p>
           <Button variant="outline" size="sm" onClick={() => void tasks.refetch()}>
@@ -330,7 +330,10 @@ export function BackgroundSyncTasksPanel() {
 
       <div className="space-y-3 lg:hidden">
         {rows.map((task) => (
-          <div key={task.task_name} className="rounded-cf-sm border border-divider p-3">
+          <div
+            key={task.task_name}
+            className="rounded-cf-sm border border-transparent p-3 bg-surface-400"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1.5">
                 <p className="text-sm font-medium leading-5 text-foreground">{getTitle(task)}</p>

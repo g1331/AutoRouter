@@ -57,7 +57,7 @@ export function FailureRulesSection({ upstream }: { upstream: Upstream }) {
             control={form.control}
             name="failure_rule_config.use_global_rules"
             render={({ field }) => (
-              <FormItem className="rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3 py-3">
+              <FormItem className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="space-y-1">
                     <FormLabel className="m-0 text-sm font-medium text-foreground">

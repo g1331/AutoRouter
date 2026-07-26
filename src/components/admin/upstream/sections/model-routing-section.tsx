@@ -493,7 +493,7 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                     control={form.control}
                     name="model_discovery.enable_lite_llm_fallback"
                     render={({ field }) => (
-                      <FormItem className="flex h-10 items-center justify-between gap-3 rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3">
+                      <FormItem className="flex h-10 items-center justify-between gap-3 rounded-cf-sm border border-transparent bg-surface-400 px-3">
                         <FormLabel className="m-0 text-xs font-medium leading-none text-foreground">
                           {t("enableLiteLlmFallback")}
                         </FormLabel>
@@ -510,7 +510,7 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                     control={form.control}
                     name="model_discovery.auto_refresh_enabled"
                     render={({ field }) => (
-                      <FormItem className="flex h-10 items-center justify-between gap-3 rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3">
+                      <FormItem className="flex h-10 items-center justify-between gap-3 rounded-cf-sm border border-transparent bg-surface-400 px-3">
                         <FormLabel className="m-0 text-xs font-medium leading-none text-foreground">
                           {t("modelDiscoveryAutoRefresh")}
                         </FormLabel>
@@ -644,7 +644,7 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                       return (
                         <div
                           key={ruleField.id}
-                          className="rounded-cf-sm border border-divider/70 bg-card/20 p-3"
+                          className="rounded-cf-sm border border-transparent bg-surface-400 p-3"
                         >
                           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
@@ -901,7 +901,7 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                     </div>
 
                     {filteredCatalogEntries.length === 0 ? (
-                      <div className="min-h-0 flex-1 rounded-cf-sm border border-divider/70 bg-card/15 p-4 text-sm text-muted-foreground">
+                      <div className="min-h-0 flex-1 rounded-cf-sm border border-transparent bg-surface-400 p-4 text-sm text-muted-foreground">
                         {t("catalogNoMatchingModels")}
                       </div>
                     ) : (

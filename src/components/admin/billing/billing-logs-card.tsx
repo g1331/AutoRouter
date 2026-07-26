@@ -6,7 +6,7 @@ import type { BillingTranslate } from "./billing-format";
 
 export function BillingLogsCard({ t }: { t: BillingTranslate }) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <CardContent className="space-y-3 p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

@@ -270,7 +270,7 @@ export function RankingsTable({
     dimension === "models" ? t("distribution.upstreams") : t("distribution.models");
 
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70 overflow-hidden">
+    <Card variant="outlined" className="bg-card overflow-hidden">
       <Table frame="none" containerClassName="rounded-none border-0 bg-transparent">
         <TableHeader>
           <TableRow>
@@ -394,7 +394,7 @@ export function RankingsTable({
                             href={logsHref(dimension, item, logsWindow)}
                             onClick={(event) => event.stopPropagation()}
                             className={cn(
-                              "inline-flex shrink-0 items-center gap-1.5 rounded-cf-sm border border-border bg-surface-200 px-3 py-1.5",
+                              "inline-flex shrink-0 items-center gap-1.5 rounded-cf-sm border border-transparent bg-surface-400 px-3 py-1.5",
                               "type-label-medium text-muted-foreground transition-colors hover:bg-surface-300 hover:text-foreground"
                             )}
                           >

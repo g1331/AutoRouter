@@ -346,7 +346,7 @@ export function LifecycleTrack({
 
   return (
     <div className="space-y-1.5">
-      <div className="flex h-9 overflow-hidden rounded-cf-sm border border-divider bg-surface-300/30">
+      <div className="flex h-9 overflow-hidden rounded-cf-sm border border-transparent bg-surface-400">
         {trackSegs.map((seg) => {
           const [statusPart, durationPart] =
             seg.key === "complete" && seg.time ? seg.time.split(" · ") : [null, null];

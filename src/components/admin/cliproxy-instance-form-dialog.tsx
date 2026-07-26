@@ -318,7 +318,7 @@ export function CliproxyInstanceFormDialog({
                 control={form.control}
                 name="enabled"
                 render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-cf-sm border border-border p-3">
+                  <FormItem className="flex items-center justify-between rounded-cf-sm border border-transparent p-3 bg-surface-400">
                     <FormLabel className="mb-0">{t("fieldEnabled")}</FormLabel>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -327,7 +327,7 @@ export function CliproxyInstanceFormDialog({
                 )}
               />
 
-              <div className="space-y-2 rounded-cf-sm border border-border p-3">
+              <div className="space-y-2 rounded-cf-sm border border-transparent p-3 bg-surface-400">
                 <div className="flex items-center justify-between gap-3">
                   <p className="type-body-small text-muted-foreground">{t("testBeforeSave")}</p>
                   <Button

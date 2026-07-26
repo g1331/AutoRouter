@@ -316,7 +316,7 @@ export function RoutingDecisionTimeline({
               <span className="text-muted-foreground">{t("timelineSessionId")}:</span>
               <span
                 title={sessionId!}
-                className="inline-flex max-w-full cursor-help items-center rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[11px] text-foreground"
+                className="inline-flex max-w-full cursor-help items-center rounded-cf-sm border border-transparent bg-surface-400 px-1.5 py-0.5 font-mono text-[11px] text-foreground"
               >
                 {truncateId(sessionId)}
               </span>
@@ -399,7 +399,7 @@ export function RoutingDecisionTimeline({
                 <div
                   key={c.id}
                   className={cn(
-                    "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/40 px-2 py-1.5",
+                    "flex flex-wrap items-center gap-2 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5",
                     isSelected && "border-status-success/40 bg-status-success/10"
                   )}
                 >
@@ -417,7 +417,7 @@ export function RoutingDecisionTimeline({
                   <Badge variant="neutral" className="text-[10px] px-1.5 py-0">
                     {t(`circuitState.${c.circuit_state}`)}
                   </Badge>
-                  <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  <span className="rounded-cf-sm border border-transparent bg-surface-400 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     w:{c.weight}
                   </span>
                   {isSelected && (
@@ -459,7 +459,7 @@ export function RoutingDecisionTimeline({
         showConnector={showStageConnector}
       >
         {queueLog && queueStatusLabel && queueLifecycleLabel ? (
-          <div className="mb-2 rounded-cf-sm border border-divider bg-surface-300/40 px-2 py-1.5">
+          <div className="mb-2 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <Badge
                 variant={getQueueStatusVariant(queueLog.status)}
@@ -560,7 +560,7 @@ function TimelineStage({
       )}
       {/* Stage header with CSS circle number */}
       <div className="flex items-center gap-2 mb-1">
-        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-divider bg-surface-400 text-[10px] font-bold text-foreground">
+        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-transparent bg-surface-400 text-[10px] font-bold text-foreground">
           {number}
         </span>
         <span className="text-xs font-semibold uppercase tracking-wider text-foreground">

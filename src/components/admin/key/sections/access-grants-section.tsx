@@ -165,7 +165,7 @@ export function AccessGrantsSection({ apiKey }: { apiKey: APIKeyResponse }) {
                         onChange={(event) => setUpstreamSearchQuery(event.target.value)}
                         placeholder={t("searchUpstreams")}
                         aria-label={t("searchUpstreams")}
-                        className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
+                        className="border-surface-400/70 bg-card pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
                       />
                     </div>
                     <Button
@@ -201,7 +201,7 @@ export function AccessGrantsSection({ apiKey }: { apiKey: APIKeyResponse }) {
                       })}
                     </p>
                   )}
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-divider-subtle bg-surface-200 p-3">
+                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-transparent bg-surface-400 p-3">
                     {upstreamsLoading ? (
                       <div className="py-4 text-center type-body-medium text-muted-foreground">
                         {tCommon("loading")}

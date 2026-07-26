@@ -49,7 +49,7 @@ export default function AdminUserUsagePage() {
         </Button>
 
         {notFound ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="bg-card">
             <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <h2 className="type-title-medium text-foreground">{t("userNotFound")}</h2>
               <p className="type-body-medium text-muted-foreground">{t("userNotFoundHint")}</p>
@@ -57,7 +57,7 @@ export default function AdminUserUsagePage() {
           </Card>
         ) : (
           <>
-            <Card variant="outlined" className="border-divider bg-surface-200/70">
+            <Card variant="outlined" className="bg-card">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 {userLoading ? (
                   <Skeleton className="h-8 w-48" />

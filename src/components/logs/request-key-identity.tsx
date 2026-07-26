@@ -78,7 +78,7 @@ export function RequestKeyIdentity({
       {keyMeta.secondaryLabel ? (
         <span
           className={cn(
-            "shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground",
+            "shrink-0 rounded-cf-sm border border-transparent bg-surface-400 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground",
             compact && "px-1 py-0 text-[9px]"
           )}
           title={keyMeta.secondaryLabel}

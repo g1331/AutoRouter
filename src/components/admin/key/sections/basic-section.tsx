@@ -86,7 +86,7 @@ export function BasicSection({ apiKey }: { apiKey: APIKeyResponse }) {
           control={form.control}
           name="is_active"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-cf-sm border border-divider p-4">
+            <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-cf-sm border border-transparent p-4 bg-surface-400">
               <FormControl>
                 <Checkbox checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>

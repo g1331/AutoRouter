@@ -39,7 +39,7 @@ describe("IconBox", () => {
     expect(container.firstElementChild).toHaveClass("h-7", "w-7");
   });
 
-  it("defaults to the amber tone triple", () => {
+  it("defaults to the filled amber tone (no outline)", () => {
     const { container } = render(
       <IconBox>
         <span>icon</span>
@@ -47,7 +47,7 @@ describe("IconBox", () => {
     );
 
     const box = container.firstElementChild as HTMLElement;
-    expect(box).toHaveClass("border-amber-500/35", "bg-amber-500/10", "text-amber-500");
+    expect(box).toHaveClass("border-transparent", "bg-amber-500/12", "text-amber-500");
   });
 
   it("applies a status tone from the shared status-tone soft triple", () => {

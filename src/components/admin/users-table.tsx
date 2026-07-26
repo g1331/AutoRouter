@@ -154,7 +154,7 @@ export function UsersTable({
   if (users.length === 0 && !searchQuery && !searchInput) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400">
           <Users className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
         <h3 className="type-title-medium text-foreground">{t("noUsers")}</h3>
@@ -167,7 +167,7 @@ export function UsersTable({
       <div className="space-y-4">
         <div className="flex items-center gap-3">{searchBar}</div>
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400">
             <Users className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
           <h3 className="type-title-medium text-foreground">{t("noUsersFound")}</h3>
@@ -179,7 +179,7 @@ export function UsersTable({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">{searchBar}</div>
-      <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+      <div className="overflow-hidden rounded-cf-md border bg-card">
         <Table frame="none" containerClassName="rounded-none bg-transparent">
           <TableHeader>
             <TableRow>

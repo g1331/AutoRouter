@@ -25,7 +25,7 @@ function KeysLoadingSkeleton({ loadingLabel }: KeysLoadingSkeletonProps) {
     <div
       role="status"
       aria-label={loadingLabel}
-      className="overflow-hidden rounded-cf-md border border-divider/85 bg-surface-200/55"
+      className="overflow-hidden rounded-cf-md border border-transparent bg-surface-400"
     >
       <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
         <div className="grid grid-cols-12 gap-3">
@@ -138,7 +138,7 @@ export default function KeysPage() {
             {/* While searching, keep the controls visible even on a single
                 page — the total is the only match-count feedback. */}
             {data && (data.total_pages > 1 || searchQuery.trim() !== "") && (
-              <Card variant="filled" className="border border-divider">
+              <Card variant="filled" className="border border-transparent bg-surface-400">
                 <PaginationControls
                   total={data.total}
                   page={page}

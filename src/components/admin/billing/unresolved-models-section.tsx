@@ -236,7 +236,7 @@ function UnresolvedRepairTable({
         return (
           <div
             key={row.model}
-            className="rounded-cf-sm border border-divider bg-surface-300/45 p-3"
+            className="rounded-cf-sm border border-transparent bg-surface-400 p-3"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
@@ -337,7 +337,7 @@ export function UnresolvedModelsSection({
   onOverrideSaved?: (model: string) => void;
 }) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <CardContent className="space-y-3 p-5 sm:p-6">
         <div>
           <h3 className="type-label-medium text-foreground">{t("unresolvedTitle")}</h3>

@@ -443,7 +443,7 @@ export function UpstreamsTable({
   if (upstreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400">
           <Server className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
         <h3 className="type-title-medium mb-2 text-foreground">
@@ -576,7 +576,7 @@ export function UpstreamsTable({
                       return (
                         <div
                           key={`${upstream.id}-quota-${index}`}
-                          className="rounded-cf-sm border border-divider bg-surface-200 px-2 py-1.5"
+                          className="rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5"
                         >
                           <div className="flex items-center justify-between gap-2 text-[11px]">
                             <span className="text-muted-foreground">{formatQuotaPeriod(rule)}</span>
@@ -875,7 +875,7 @@ export function UpstreamsTable({
                                   ) : null}
                                 </div>
                                 <code
-                                  className="block break-all rounded-cf-sm border border-divider bg-surface-200 px-2 py-1 font-mono text-[11px] leading-5 tabular-nums text-foreground"
+                                  className="block break-all rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1 font-mono text-[11px] leading-5 tabular-nums text-foreground"
                                   title={upstream.base_url}
                                 >
                                   {upstream.base_url}

@@ -89,7 +89,7 @@ const SelectContent = React.forwardRef<
         ref={ref}
         className={cn(
           "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem]",
-          "overflow-y-auto overflow-x-hidden rounded-cf-md border border-border",
+          "overflow-y-auto overflow-x-hidden rounded-cf-md border border-transparent bg-surface-400",
           "bg-card text-foreground shadow-[var(--vr-shadow-md)]",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",

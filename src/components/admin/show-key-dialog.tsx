@@ -70,7 +70,7 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
               {t("keyValue")}
             </label>
             <div className="flex gap-2">
-              <div className="flex-1 rounded-cf-md border border-divider bg-surface-300 p-4 font-mono type-body-medium text-status-success break-all">
+              <div className="flex-1 rounded-cf-md border border-transparent bg-surface-400 p-4 font-mono type-body-medium text-status-success break-all">
                 {apiKey.key_value}
               </div>
               <Button

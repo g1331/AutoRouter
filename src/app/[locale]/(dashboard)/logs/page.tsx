@@ -49,7 +49,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
       role="status"
       aria-label={loadingLabel}
       variant="outlined"
-      className="border-divider bg-surface-200/70 overflow-hidden"
+      className="bg-card overflow-hidden"
     >
       <span className="sr-only">{loadingLabel}</span>
       <Table
@@ -276,7 +276,7 @@ export default function LogsPage() {
           <Card
             variant="outlined"
             className={cn(
-              "border-divider bg-surface-200/70",
+              "bg-card",
               LOGS_SECTION_ENTER_CLASS,
               focusNotFound && "border-status-warning/40"
             )}
@@ -301,10 +301,7 @@ export default function LogsPage() {
             {userId && (
               <Card
                 variant="outlined"
-                className={cn(
-                  "border-divider bg-surface-200/70 border-amber-500/40",
-                  LOGS_SECTION_ENTER_CLASS
-                )}
+                className={cn("bg-card border-amber-500/40", LOGS_SECTION_ENTER_CLASS)}
               >
                 <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 space-y-1">
@@ -320,10 +317,7 @@ export default function LogsPage() {
                 </CardContent>
               </Card>
             )}
-            <Card
-              variant="outlined"
-              className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
-            >
+            <Card variant="outlined" className={cn("bg-card", LOGS_SECTION_ENTER_CLASS)}>
               <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 text-amber-500">
@@ -401,7 +395,7 @@ export default function LogsPage() {
             {!focusId && data && data.total_pages > 1 && (
               <Card
                 variant="filled"
-                className={cn("border border-divider", LOGS_SECTION_ENTER_CLASS)}
+                className={cn("border border-transparent bg-surface-400", LOGS_SECTION_ENTER_CLASS)}
                 style={{ animationDelay: "140ms" }}
               >
                 <PaginationControls

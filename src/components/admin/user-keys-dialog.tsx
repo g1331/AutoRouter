@@ -63,7 +63,7 @@ function UserKeysList({ userId }: { userId: string }) {
   const keys = data?.items ?? [];
 
   return (
-    <div className="max-h-72 space-y-2 overflow-y-auto rounded-cf-sm border border-divider bg-surface-200/60 p-3">
+    <div className="max-h-72 space-y-2 overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3">
       {isLoading ? (
         <div className="py-6 text-center type-body-small text-muted-foreground">
           {tCommon("loading")}
@@ -74,7 +74,7 @@ function UserKeysList({ userId }: { userId: string }) {
         keys.map((key) => (
           <div
             key={key.id}
-            className="flex items-center justify-between gap-3 rounded-cf-sm border border-divider/70 bg-surface-300/40 px-3 py-2"
+            className="flex items-center justify-between gap-3 rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2"
           >
             <div className="min-w-0 flex-1 space-y-0.5">
               <div className="flex min-w-0 items-center gap-2">

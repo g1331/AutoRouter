@@ -47,7 +47,7 @@ function Calendar({
         ),
         dropdowns: "flex items-center justify-center gap-1.5",
         dropdown_root: cn(
-          "relative inline-flex items-center rounded-cf-sm border border-border bg-surface-200 px-2 py-1",
+          "relative inline-flex items-center rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1",
           "transition-colors hover:bg-surface-300",
           "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
         ),

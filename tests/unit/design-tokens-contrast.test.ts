@@ -48,6 +48,21 @@ function contrast(fg: string, bg: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/**
+ * 读取 --vr-status-*-muted 实际使用的 color-mix 百分比。
+ * 写死百分比会让这条对比度锁在 CSS 调浓底色后依旧「通过」，等于失去防护，
+ * 所以直接从 globals.css 取值。muted 变量只在 :root/.dark 里定义，亮色沿用同一比例。
+ */
+function statusMutedRatio(tone: string): number {
+  const m = css.match(
+    new RegExp(
+      `--vr-status-${tone}-muted:\\s*color-mix\\(in srgb, var\\(--vr-status-${tone}\\) (\\d+)%`
+    )
+  );
+  if (!m) throw new Error(`status muted ratio not found: ${tone}`);
+  return Number(m[1]) / 100;
+}
+
 /** 复现 color-mix(in srgb, fg N%, transparent) 叠在不透明底上的合成色。 */
 function mixOver(fg: string, bg: string, fgRatio: number): string {
   const ch = (hex: string, i: number) => parseInt(hex.slice(1).slice(i * 2, i * 2 + 2), 16);
@@ -79,16 +94,13 @@ describe("暗色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
     expect(contrast(d("--vr-text-dim"), d("--vr-surface-1"))).toBeGreaterThanOrEqual(3);
   });
 
-  // StatusBadge/StateChip 模式：text-status-* 叠在 12% muted 底上。
+  // StatusBadge/StateChip 模式：text-status-* 叠在 muted 底上（比例取自 globals.css）。
   // 暗色最坏底 = 最亮表面 surface-3 与 muted 合成后的颜色。
-  it.each(["success", "warning", "error", "info"])(
-    "status-%s / 12%% muted over surface-3",
-    (tone) => {
-      const fg = d(`--vr-status-${tone}`);
-      const bg = mixOver(fg, d("--vr-surface-3"), 0.12);
-      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
-    }
-  );
+  it.each(["success", "warning", "error", "info"])("status-%s / muted over surface-3", (tone) => {
+    const fg = d(`--vr-status-${tone}`);
+    const bg = mixOver(fg, d("--vr-surface-3"), statusMutedRatio(tone));
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
 });
 
 describe("亮色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
@@ -117,13 +129,10 @@ describe("亮色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
     expect(contrast(l("--vr-accent-500"), l("--vr-surface-0"))).toBeGreaterThanOrEqual(3);
   });
 
-  // 亮色最坏底 = 最深表面 surface-3 与 12% muted 合成（axe 实测暴露的配对）。
-  it.each(["success", "warning", "error", "info"])(
-    "status-%s / 12%% muted over surface-3",
-    (tone) => {
-      const fg = l(`--vr-status-${tone}`);
-      const bg = mixOver(fg, l("--vr-surface-3"), 0.12);
-      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
-    }
-  );
+  // 亮色最坏底 = 最深表面 surface-3 与 muted 合成（axe 实测暴露的配对）。
+  it.each(["success", "warning", "error", "info"])("status-%s / muted over surface-3", (tone) => {
+    const fg = l(`--vr-status-${tone}`);
+    const bg = mixOver(fg, l("--vr-surface-3"), statusMutedRatio(tone));
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
 });

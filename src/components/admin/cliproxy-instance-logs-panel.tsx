@@ -97,7 +97,7 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
             {t("logsNoMatches")}
           </p>
         ) : (
-          <div className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-border bg-surface-200 p-3 font-mono">
+          <div className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3 font-mono">
             <ul className="space-y-1 type-body-small">
               {filtered.map((line, index) => (
                 <li

@@ -250,7 +250,7 @@ export default function TrafficRecordingPage() {
       <Topbar title={t("pageTitle")} />
 
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
+        <Card variant="outlined" className="bg-card">
           <CardContent className="space-y-5 p-5 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-1.5">
@@ -273,21 +273,21 @@ export default function TrafficRecordingPage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-1 rounded-cf-md border border-divider bg-surface-300/55 p-3">
+              <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
                 <p className="type-caption text-muted-foreground">{t("recordCount")}</p>
                 <p className="type-title-small tabular-nums">{recordings.data?.stats.total ?? 0}</p>
               </div>
-              <div className="space-y-1 rounded-cf-md border border-divider bg-surface-300/55 p-3">
+              <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
                 <p className="type-caption text-muted-foreground">{t("diskUsage")}</p>
                 <p className="type-title-small tabular-nums">
                   {formatBytes(recordings.data?.stats.total_size_bytes ?? 0)}
                 </p>
               </div>
-              <div className="space-y-1 rounded-cf-md border border-divider bg-surface-300/55 p-3">
+              <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
                 <p className="type-caption text-muted-foreground">{t("mode")}</p>
                 <p className="type-title-small">{t(`mode_${settings.data?.mode ?? "failure"}`)}</p>
               </div>
-              <div className="space-y-1 rounded-cf-md border border-divider bg-surface-300/55 p-3">
+              <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
                 <p className="type-caption text-muted-foreground">{t("latestRecord")}</p>
                 <p className="type-title-small">
                   {formatDate(recordings.data?.stats.latest_created_at ?? null)}
@@ -350,7 +350,7 @@ export default function TrafficRecordingPage() {
           </CardContent>
         </Card>
 
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
+        <Card variant="outlined" className="bg-card">
           <CardContent className="space-y-4 p-5 sm:p-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -494,7 +494,7 @@ export default function TrafficRecordingPage() {
                     <div
                       key={recording.id}
                       className={cn(
-                        "rounded-cf-sm border border-divider p-3",
+                        "rounded-cf-sm border border-transparent p-3 bg-surface-400",
                         selectedId === recording.id && "bg-surface-300/55"
                       )}
                     >
@@ -546,7 +546,7 @@ export default function TrafficRecordingPage() {
         </Card>
 
         {selectedId ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="bg-card">
             <CardContent className="space-y-3 p-5 sm:p-6">
               <div className="flex items-center gap-2 text-amber-500">
                 <FileJson className="h-4 w-4" aria-hidden="true" />

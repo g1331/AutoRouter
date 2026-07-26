@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, CircleHelp, SquareTerminal } from "lucide-react";
+import { Check, CircleHelp } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,90 +12,75 @@ import {
   type RouteCapabilityDefinition,
 } from "@/lib/route-capabilities";
 
-import Image from "next/image";
-
 interface BrandIconProps {
   className?: string;
 }
 
-const OPENAI_BLOSSOM_PATH =
-  "M249.176 323.434V298.276C249.176 296.158 249.971 294.569 251.825 293.509L302.406 264.381C309.29 260.409 317.5 258.555 325.973 258.555C357.75 258.555 377.877 283.185 377.877 309.399C377.877 311.253 377.877 313.371 377.611 315.49L325.178 284.771C322.001 282.919 318.822 282.919 315.645 284.771L249.176 323.434ZM367.283 421.415V361.301C367.283 357.592 365.694 354.945 362.516 353.092L296.048 314.43L317.763 301.982C319.617 300.925 321.206 300.925 323.058 301.982L373.639 331.112C388.205 339.586 398.003 357.592 398.003 375.069C398.003 395.195 386.087 413.733 367.283 421.412V421.415ZM233.553 368.452L211.838 355.742C209.986 354.684 209.19 353.095 209.19 350.975V292.718C209.19 264.383 230.905 242.932 260.301 242.932C271.423 242.932 281.748 246.641 290.49 253.26L238.321 283.449C235.146 285.303 233.555 287.951 233.555 291.659V368.455L233.553 368.452ZM280.292 395.462L249.176 377.985V340.913L280.292 323.436L311.407 340.913V377.985L280.292 395.462ZM300.286 475.968C289.163 475.968 278.837 472.259 270.097 465.64L322.264 435.449C325.441 433.597 327.03 430.949 327.03 427.239V350.445L349.011 363.155C350.865 364.213 351.66 365.802 351.66 367.922V426.179C351.66 454.514 329.679 475.965 300.286 475.965V475.968ZM237.525 416.915L186.944 387.785C172.378 379.31 162.582 361.305 162.582 343.827C162.582 323.436 174.763 305.164 193.563 297.485V357.861C193.563 361.571 195.154 364.217 198.33 366.071L264.535 404.467L242.82 416.915C240.967 417.972 239.377 417.972 237.525 416.915ZM234.614 460.343C204.689 460.343 182.71 437.833 182.71 410.028C182.71 407.91 182.976 405.792 183.238 403.672L235.405 433.863C238.582 435.715 241.763 435.715 244.938 433.863L311.407 395.466V420.622C311.407 422.742 310.612 424.331 308.758 425.389L258.179 454.519C251.293 458.491 243.083 460.343 234.611 460.343H234.614ZM300.286 491.854C332.329 491.854 359.073 469.082 365.167 438.892C394.825 431.211 413.892 403.406 413.892 375.073C413.892 356.535 405.948 338.529 391.648 325.552C392.972 319.991 393.766 314.43 393.766 308.87C393.766 271.003 363.048 242.666 327.562 242.666C320.413 242.666 313.528 243.723 306.644 246.109C294.725 234.457 278.307 227.042 260.301 227.042C228.258 227.042 201.513 249.815 195.42 280.004C165.761 287.685 146.694 315.49 146.694 343.824C146.694 362.362 154.638 380.368 168.938 393.344C167.613 398.906 166.819 404.467 166.819 410.027C166.819 447.894 197.538 476.231 233.024 476.231C240.172 476.231 247.058 475.173 253.943 472.788C265.859 484.441 282.278 491.854 300.286 491.854Z";
+// 品牌图形一律取各家官方标志（来源 simple-icons），viewBox 统一 0 0 24 24。
+// 之前的自绘版本（裁切过的 OpenAI 花瓣、Anthropic 的 "A\" 字标、指向 gstatic 的
+// 远程 Gemini 图片）要么变形，要么外网不可达时渲染成空方块。
 
 function OpenAILogo({ className }: BrandIconProps) {
   return (
     <svg
-      viewBox="146 227 267 265"
+      viewBox="0 0 24 24"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="OpenAI"
       className={className}
     >
-      <path d={OPENAI_BLOSSOM_PATH} />
+      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
     </svg>
   );
 }
 
+// Claude 官方星芒，取代此前的 "A\" 字标
 function AnthropicLogo({ className }: BrandIconProps) {
   return (
     <svg
-      viewBox="0 0 92 64"
-      fill="none"
+      viewBox="0 0 24 24"
+      fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="Anthropic"
+      aria-label="Claude"
       className={className}
     >
-      <path d="M66.4915 0H52.5029L78.0115 64H92.0001L66.4915 0Z" fill="currentColor" />
-      <path
-        d="M26.08 0L0.571472 64H14.8343L20.0512 50.56H46.7374L51.9543 64H66.2172L40.7086 0H26.08ZM24.6647 38.6743L33.3943 16.1829L42.1239 38.6743H24.6647Z"
-        fill="currentColor"
-      />
+      <path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z" />
     </svg>
   );
 }
 
-function GeminiLogo({ className }: BrandIconProps) {
-  return (
-    <Image
-      src="https://www.gstatic.com/marketing-cms/assets/images/7e/a4/253561a944f4a8f5e6dec4f5f26f/gemini.webp=s48-fcrop64=1,00000000ffffffff-rw"
-      aria-label="Gemini"
-      alt="Gemini"
-      className={className}
-      width={14}
-      height={14}
-      unoptimized
-    />
-  );
-}
+const GEMINI_STAR_PATH =
+  "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81";
 
-function CodexCliLogo({ className }: BrandIconProps) {
+// Google Gemini 官方四角星，用品牌蓝→紫→红渐变。
+// 渐变 id 必须逐实例唯一：一个页面上会同时出现多个 Gemini 徽标（sparkles / wrench，
+// 且上游列表里每行都有一份），写死 id 会在文档里造出重复 id。
+function GeminiLogo({ className }: BrandIconProps) {
+  // useId 的取值带 «» / : 等分隔符，剥掉后再拼进 url(#…)，避免落进 CSS 选择器时报错。
+  const gradientId = `gemini-brand-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="Codex CLI"
+      aria-label="Gemini"
       className={className}
     >
-      <rect
-        x="2.25"
-        y="3.25"
-        width="19.5"
-        height="17.5"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M7 9.25 9.75 12 7 14.75"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M11.5 15h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <g transform="translate(13.25 4.65) scale(0.0225)">
-        <path d={OPENAI_BLOSSOM_PATH} fill="currentColor" />
-      </g>
+      <defs>
+        <linearGradient
+          id={gradientId}
+          x1="0"
+          y1="0"
+          x2="24"
+          y2="24"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#4285F4" />
+          <stop offset="0.52" stopColor="#9B72CB" />
+          <stop offset="1" stopColor="#D96570" />
+        </linearGradient>
+      </defs>
+      <path d={GEMINI_STAR_PATH} fill={`url(#${gradientId})`} />
     </svg>
   );
 }
@@ -110,45 +95,53 @@ export const ROUTE_CAPABILITY_ICON_META: Record<
   RouteCapabilityDefinition["iconKey"],
   RouteCapabilityIconMeta
 > = {
+  // 一律用各厂家的官方品牌色，同厂家的不同接口共用同一个标志与颜色——
+  // 接口之间的区分交给文字标签，图标只负责「这是哪家」。
+  // iconContainerClass 保持透明 = 不套外框，图标直接落在底色上。
+
+  // Anthropic Messages / Claude Code Messages — Claude 品牌陶土橙
   messages_square: {
     render: (className) => <AnthropicLogo className={className} />,
-    iconColorClass: "text-[#141413] dark:text-[#FAF9F5]",
-    iconContainerClass: "border-divider bg-surface-300",
-  },
-  terminal: {
-    render: (className) => <CodexCliLogo className={className} />,
-    iconColorClass: "text-foreground",
-    iconContainerClass: "border-divider bg-surface-300",
+    iconColorClass: "text-[#D97757]",
+    iconContainerClass: "border-transparent bg-transparent",
   },
   terminal_anthropic: {
-    render: (className) => <SquareTerminal className={className} />,
-    iconColorClass: "text-[#141413] dark:text-[#FAF9F5]",
-    iconContainerClass: "border-divider bg-surface-300",
+    render: (className) => <AnthropicLogo className={className} />,
+    iconColorClass: "text-[#D97757]",
+    iconContainerClass: "border-transparent bg-transparent",
   },
+  // OpenAI 系（Responses / Chat Compatible / Codex CLI / Extended）——
+  // 官方单色标志：深色底走白、浅色底走黑
   message_circle: {
     render: (className) => <OpenAILogo className={className} />,
-    iconColorClass: "text-foreground",
-    iconContainerClass: "border-divider bg-surface-300",
+    iconColorClass: "text-[#0D0D0D] dark:text-[#FFFFFF]",
+    iconContainerClass: "border-transparent bg-transparent",
+  },
+  terminal: {
+    render: (className) => <OpenAILogo className={className} />,
+    iconColorClass: "text-[#0D0D0D] dark:text-[#FFFFFF]",
+    iconContainerClass: "border-transparent bg-transparent",
   },
   blocks: {
     render: (className) => <OpenAILogo className={className} />,
-    iconColorClass: "text-foreground",
-    iconContainerClass: "border-divider bg-surface-300",
+    iconColorClass: "text-[#0D0D0D] dark:text-[#FFFFFF]",
+    iconContainerClass: "border-transparent bg-transparent",
   },
+  // Gemini 系 — 品牌蓝→紫→红渐变
   sparkles: {
     render: (className) => <GeminiLogo className={className} />,
     iconColorClass: "",
-    iconContainerClass: "border-divider bg-surface-300",
+    iconContainerClass: "border-transparent bg-transparent",
   },
   wrench: {
     render: (className) => <GeminiLogo className={className} />,
     iconColorClass: "",
-    iconContainerClass: "border-divider bg-surface-300",
+    iconContainerClass: "border-transparent bg-transparent",
   },
   circle_help: {
     render: (className) => <CircleHelp className={className} />,
     iconColorClass: "text-muted-foreground",
-    iconContainerClass: "border-divider bg-surface-300",
+    iconContainerClass: "border-transparent bg-transparent",
   },
 };
 
@@ -276,7 +269,7 @@ export function RouteCapabilityMultiSelect({
                 {t("selected")}
               </span>
             ) : (
-              <span className="ml-auto inline-flex shrink-0 items-center rounded-cf-sm border border-divider px-1.5 py-0.5 text-[10px] text-muted-foreground max-sm:ml-0 max-sm:mt-1">
+              <span className="ml-auto inline-flex shrink-0 items-center rounded-cf-sm border border-transparent px-1.5 py-0.5 text-[10px] text-muted-foreground max-sm:ml-0 max-sm:mt-1 bg-surface-400">
                 {t("select")}
               </span>
             )}

@@ -171,7 +171,7 @@ function LeaderboardLoadingRow({ cols }: { cols: number }) {
   return (
     <div
       data-testid="leaderboard-loading-row"
-      className="flex items-center gap-4 rounded-cf-sm border border-divider/65 bg-surface-200/45 px-3 py-1.5"
+      className="flex items-center gap-4 rounded-cf-sm border border-transparent bg-surface-400 px-3 py-1.5"
     >
       <DashboardLoadingBlock tone="accent" className="h-4 w-8 flex-shrink-0" />
       <DashboardLoadingBlock className="h-3 w-32" />

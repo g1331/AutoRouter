@@ -91,7 +91,7 @@ export function CapacityControlSection({ upstream }: { upstream: Upstream }) {
           control={form.control}
           name="queue_policy.enabled"
           render={({ field }) => (
-            <FormItem className="rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3 py-3">
+            <FormItem className="rounded-cf-sm border border-transparent bg-surface-400 px-3 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-1">
                   <FormLabel className="m-0 text-sm font-medium text-foreground">

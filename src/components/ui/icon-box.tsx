@@ -12,7 +12,8 @@ const SIZE_CLASSES: Record<IconBoxSize, string> = {
 };
 
 const NON_STATUS_TONES: Record<"amber" | "neutral", string> = {
-  amber: "border-amber-500/35 bg-amber-500/10 text-amber-500",
+  // 填充式而非包边式：amber 只承担图标与底色，不再画一圈描边
+  amber: "border-transparent bg-amber-500/12 text-amber-500",
   neutral: "border-divider bg-surface-300 text-muted-foreground",
 };
 

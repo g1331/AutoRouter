@@ -38,7 +38,7 @@ export function SectionForm({
   const disabled = !isDirty || isSaving;
 
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card variant="outlined" className="bg-card">
       <form onSubmit={onSave}>
         <div className="flex items-start justify-between gap-3 border-b border-divider px-5 py-3.5">
           <div className="space-y-1">

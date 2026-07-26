@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
 
 const DETAIL_PANEL_CLASS =
-  "overflow-hidden rounded-cf-md border border-divider/80 bg-surface-200/82 shadow-[var(--vr-shadow-xs)]";
+  "overflow-hidden rounded-cf-md border border-transparent bg-surface-400 shadow-[var(--vr-shadow-xs)]";
 const DETAIL_PANEL_HEADER_CLASS =
   "border-b border-divider/70 bg-surface-300/72 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground";
 const DETAIL_PANEL_BODY_CLASS = "px-4 py-3";
@@ -55,7 +55,7 @@ export function ThinkingConfigPanel({
             <button
               type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-transparent px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground bg-surface-400"
               aria-expanded={isExpanded}
               aria-label={isExpanded ? collapseLabel : expandLabel}
             >
@@ -129,7 +129,7 @@ export function ThinkingConfigPanel({
           <button
             type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-transparent px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground bg-surface-400"
             aria-expanded={isExpanded}
             aria-label={isExpanded ? collapseLabel : expandLabel}
           >
