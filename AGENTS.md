@@ -240,3 +240,17 @@ Pull requests follow `.github/PULL_REQUEST_TEMPLATE.md`: include a summary, the 
 2. Add translations to `src/messages/en.json` and `src/messages/zh-CN.json` for both locales.
 3. Build components under `src/components/` (reuse `ui/` primitives).
 4. Add data hooks using the TanStack Query patterns in `src/hooks/`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`g1331/AutoRouter`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, each label string equal to its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
