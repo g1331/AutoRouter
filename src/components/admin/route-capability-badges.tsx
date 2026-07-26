@@ -2,7 +2,7 @@
 
 import { Check, CircleHelp } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -52,9 +52,12 @@ function AnthropicLogo({ className }: BrandIconProps) {
 const GEMINI_STAR_PATH =
   "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81";
 
-// Google Gemini 官方四角星。gradient=true 用品牌蓝→紫→红渐变（原生 Gemini 接口），
-// gradient=false 走 currentColor，便于给 Code Assist 这类分支单独着色。
-function GeminiLogo({ className, gradient = true }: BrandIconProps & { gradient?: boolean }) {
+// Google Gemini 官方四角星，用品牌蓝→紫→红渐变。
+// 渐变 id 必须逐实例唯一：一个页面上会同时出现多个 Gemini 徽标（sparkles / wrench，
+// 且上游列表里每行都有一份），写死 id 会在文档里造出重复 id。
+function GeminiLogo({ className }: BrandIconProps) {
+  // useId 的取值带 «» / : 等分隔符，剥掉后再拼进 url(#…)，避免落进 CSS 选择器时报错。
+  const gradientId = `gemini-brand-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <svg
       viewBox="0 0 24 24"
@@ -63,23 +66,21 @@ function GeminiLogo({ className, gradient = true }: BrandIconProps & { gradient?
       aria-label="Gemini"
       className={className}
     >
-      {gradient && (
-        <defs>
-          <linearGradient
-            id="gemini-brand"
-            x1="0"
-            y1="0"
-            x2="24"
-            y2="24"
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop stopColor="#4285F4" />
-            <stop offset="0.52" stopColor="#9B72CB" />
-            <stop offset="1" stopColor="#D96570" />
-          </linearGradient>
-        </defs>
-      )}
-      <path d={GEMINI_STAR_PATH} fill={gradient ? "url(#gemini-brand)" : "currentColor"} />
+      <defs>
+        <linearGradient
+          id={gradientId}
+          x1="0"
+          y1="0"
+          x2="24"
+          y2="24"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#4285F4" />
+          <stop offset="0.52" stopColor="#9B72CB" />
+          <stop offset="1" stopColor="#D96570" />
+        </linearGradient>
+      </defs>
+      <path d={GEMINI_STAR_PATH} fill={`url(#${gradientId})`} />
     </svg>
   );
 }

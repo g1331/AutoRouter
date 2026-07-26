@@ -79,18 +79,47 @@ function blurUpstreamIdentity(secrets) {
 
 const token = readAdminToken();
 
-const res = await fetch(`${BASE_URL}/api/admin/upstreams`, {
-  headers: { Authorization: `Bearer ${token}` },
-});
-if (!res.ok) throw new Error(`GET /api/admin/upstreams -> ${res.status}`);
-const payload = await res.json();
-const upstreams = payload.items ?? payload.data ?? payload;
+// The list endpoint paginates (default page_size=20, max 100). Only masking the
+// first page would leave every upstream past #20 legible in the screenshots, so
+// walk all pages before building the secret list.
+async function fetchAllUpstreams() {
+  const all = [];
+  for (let page = 1; ; page += 1) {
+    const res = await fetch(`${BASE_URL}/api/admin/upstreams?page=${page}&page_size=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`GET /api/admin/upstreams -> ${res.status}`);
+    const payload = await res.json();
+    const items = payload.items ?? payload.data ?? payload;
+    if (!Array.isArray(items)) throw new Error("unexpected /api/admin/upstreams payload shape");
+    all.push(...items);
+    if (items.length === 0 || page >= (payload.total_pages ?? 1)) break;
+  }
+  return all;
+}
+
+function hostOf(baseUrl) {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return null;
+  }
+}
+
+const upstreams = await fetchAllUpstreams();
 const secrets = [];
 for (const u of upstreams) {
   if (u.name) secrets.push(u.name);
-  if (u.base_url) secrets.push(u.base_url, new URL(u.base_url).host);
+  if (u.base_url) {
+    secrets.push(u.base_url);
+    const host = hostOf(u.base_url);
+    if (host) secrets.push(host);
+  }
 }
 const firstUpstream = upstreams[0]?.id;
+if (!firstUpstream) {
+  throw new Error("no upstreams configured — the upstream-detail shot has nothing to capture");
+}
 console.log(`masking ${secrets.length} upstream identity strings`);
 
 const browser = await chromium.launch();
@@ -104,14 +133,17 @@ try {
     });
     await context.addInitScript(
       ({ token, anonymous }) => {
-        localStorage.setItem("theme", "dark");
+        // next-themes is mounted with storageKey="autorouter-theme"; writing the
+        // generic "theme" key is a no-op and leaves the shot at the mercy of the
+        // context colorScheme.
+        localStorage.setItem("autorouter-theme", "dark");
         if (!anonymous) sessionStorage.setItem("admin_token", token);
       },
       { token, anonymous: Boolean(shot.anonymous) }
     );
 
     const page = await context.newPage();
-    const path = shot.path.replace(":firstUpstream", firstUpstream ?? "");
+    const path = shot.path.replace(":firstUpstream", firstUpstream);
     // The admin shell holds SSE streams open, so `networkidle` never fires —
     // wait for the document instead and give data + animations a fixed budget.
     await page.goto(`${BASE_URL}/${LOCALE}${path}`, { waitUntil: "domcontentloaded" });

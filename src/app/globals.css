@@ -46,16 +46,19 @@
   --vr-atmo: color-mix(in srgb, var(--vr-accent-500) 13%, transparent);
 
   /* 提亮加饱和：容器装饰退成中性后，画面的色彩识别度改由「状态」承担，
-     底色也从 12% 提到 20%，让状态徽章在列表里能一眼扫到。 */
+     底色也从 12% 提到 14%，让状态徽章在列表里能一眼扫到。
+     14% 是对比度上限：徽章是「text-status-* 叠同色 muted 底」，底色越浓前后景越接近，
+     两个主题里最紧的一对（暗色 info、亮色 success）在 15% 就跌破 4.5:1。
+     调这个百分比必须同步 tests/unit/design-tokens-contrast.test.ts（该测试直接读本文件的取值）。 */
   --vr-status-success: #3ddc97;
   --vr-status-warning: #ffb347;
   --vr-status-error: #ff7a6e;
   --vr-status-info: #58a6ff;
 
-  --vr-status-success-muted: color-mix(in srgb, var(--vr-status-success) 20%, transparent);
-  --vr-status-warning-muted: color-mix(in srgb, var(--vr-status-warning) 20%, transparent);
-  --vr-status-error-muted: color-mix(in srgb, var(--vr-status-error) 20%, transparent);
-  --vr-status-info-muted: color-mix(in srgb, var(--vr-status-info) 20%, transparent);
+  --vr-status-success-muted: color-mix(in srgb, var(--vr-status-success) 14%, transparent);
+  --vr-status-warning-muted: color-mix(in srgb, var(--vr-status-warning) 14%, transparent);
+  --vr-status-error-muted: color-mix(in srgb, var(--vr-status-error) 14%, transparent);
+  --vr-status-info-muted: color-mix(in srgb, var(--vr-status-info) 14%, transparent);
 
   --vr-disabled-bg: #14171c;
   --vr-disabled-text: #626b78;
@@ -163,7 +166,7 @@
   --vr-glow: 0 0 0 transparent;
   --vr-atmo: rgb(90 110 140 / 0.07);
 
-  /* 亮色状态色统一深档：text-status-* 叠 12% muted 底（最坏 surface-3 合成）仍 ≥4.5:1 */
+  /* 亮色状态色统一深档：text-status-* 叠 muted 底（比例见暗色块，最坏 surface-3 合成）仍 ≥4.5:1 */
   --vr-status-success: #106b3f;
   --vr-status-warning: #7d490a;
   --vr-status-error: #a53228;
@@ -260,7 +263,7 @@
   35% {
     background-color: color-mix(in srgb, var(--vr-status-info) 12%, transparent);
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--vr-status-info) 20%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--vr-status-info) 14%, transparent),
       0 12px 28px color-mix(in srgb, var(--vr-status-info) 8%, transparent);
   }
 
@@ -397,7 +400,7 @@
   50% {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--vr-status-success) 50%, transparent),
-      0 0 12px color-mix(in srgb, var(--vr-status-success) 20%, transparent);
+      0 0 12px color-mix(in srgb, var(--vr-status-success) 14%, transparent);
     background-color: color-mix(in srgb, var(--vr-status-success) 16%, transparent);
   }
 }

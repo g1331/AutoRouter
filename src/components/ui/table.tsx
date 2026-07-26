@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
 export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
-  frame?: "amber" | "subtle" | "none";
+  frame?: "amber" | "subtle" | "raised" | "none";
   containerClassName?: string;
 }
 
@@ -11,12 +11,14 @@ const FRAME_CLASS: Record<NonNullable<TableProps["frame"]>, string> = {
   // 保留 amber 取值供个别需要强调的表格显式指定，但不再是默认值
   amber: "border border-amber-500/45",
   subtle: "border border-divider",
-  none: "border-0 shadow-cf-glow-subtle",
+  // 默认：不包边，靠 bg-card 的明度差 + 阴影从页面底色里浮起来
+  raised: "border-0 shadow-cf-glow-subtle",
+  // 真正的「无框」：嵌在卡片里的子表用它，卡片内部不该再投一层阴影
+  none: "border-0",
 };
 
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
-  // 默认不包边：表格自带 bg-card，靠背景明度差 + 阴影与页面底色区分
-  ({ className, frame = "none", containerClassName, ...props }, ref) => {
+  ({ className, frame = "raised", containerClassName, ...props }, ref) => {
     warnIfForbiddenVisualStyle("Table", containerClassName);
     return (
       <div
