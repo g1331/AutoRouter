@@ -133,6 +133,7 @@ vi.mock("@/lib/utils/logger", () => ({
 describe("billing-price-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tierRulesFindManyMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -169,6 +170,38 @@ describe("billing-price-service", () => {
     });
   });
 
+  it("keeps manual overrides authoritative for confirmed fast responses", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+
+    syncedFindFirstMock.mockResolvedValueOnce({
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      priorityInputPricePerMillion: 10,
+      priorityOutputPricePerMillion: 60,
+      maxInputTokens: 1050000,
+      maxOutputTokens: 128000,
+    });
+    manualFindFirstMock.mockResolvedValueOnce({
+      model: "gpt-5.6-sol",
+      inputPricePerMillion: 7,
+      outputPricePerMillion: 42,
+      cacheReadInputPricePerMillion: 0.7,
+      cacheWriteInputPricePerMillion: 8.75,
+    });
+
+    const result = await resolveBillingModelPrice("gpt-5.6-sol", 1000, "fast");
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        source: "manual",
+        inputPricePerMillion: 7,
+        outputPricePerMillion: 42,
+      })
+    );
+  });
+
   it("falls back to synced price when no manual override exists", async () => {
     const { resolveBillingModelPrice } =
       await import("../../../src/lib/services/billing-price-service");
@@ -199,6 +232,90 @@ describe("billing-price-service", () => {
       modelMaxInputTokens: 200000,
       modelMaxOutputTokens: 8192,
     });
+  });
+
+  it("uses synced priority rates only for a confirmed fast response", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+
+    manualFindFirstMock.mockResolvedValueOnce(null);
+    syncedFindFirstMock.mockResolvedValueOnce({
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: 0.5,
+      cacheWriteInputPricePerMillion: 6.25,
+      priorityInputPricePerMillion: 10,
+      priorityOutputPricePerMillion: 60,
+      priorityCacheReadInputPricePerMillion: 1,
+      priorityCacheWriteInputPricePerMillion: 12.5,
+      maxInputTokens: 1050000,
+      maxOutputTokens: 128000,
+    });
+
+    const result = await resolveBillingModelPrice("gpt-5.6-sol", 1000, "fast");
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        inputPricePerMillion: 10,
+        outputPricePerMillion: 60,
+        cacheReadInputPricePerMillion: 1,
+        cacheWriteInputPricePerMillion: 12.5,
+      })
+    );
+  });
+
+  it("does not substitute standard rates when confirmed fast prices are unavailable", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+
+    manualFindFirstMock.mockResolvedValueOnce(null);
+    syncedFindFirstMock.mockResolvedValueOnce({
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: 0.5,
+      cacheWriteInputPricePerMillion: 6.25,
+      priorityInputPricePerMillion: null,
+      priorityOutputPricePerMillion: null,
+      priorityCacheReadInputPricePerMillion: null,
+      priorityCacheWriteInputPricePerMillion: null,
+      maxInputTokens: 1050000,
+      maxOutputTokens: 128000,
+    });
+
+    await expect(resolveBillingModelPrice("gpt-5.6-sol", 1000, "fast")).resolves.toBeNull();
+  });
+
+  it("uses standard synced rates when the effective tier is unknown", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+
+    manualFindFirstMock.mockResolvedValueOnce(null);
+    syncedFindFirstMock.mockResolvedValueOnce({
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: 0.5,
+      cacheWriteInputPricePerMillion: 6.25,
+      priorityInputPricePerMillion: 10,
+      priorityOutputPricePerMillion: 60,
+      priorityCacheReadInputPricePerMillion: 1,
+      priorityCacheWriteInputPricePerMillion: 12.5,
+      maxInputTokens: 1050000,
+      maxOutputTokens: 128000,
+    });
+
+    const result = await resolveBillingModelPrice("gpt-5.6-sol", 1000, "unknown");
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        inputPricePerMillion: 5,
+        outputPricePerMillion: 30,
+        cacheReadInputPricePerMillion: 0.5,
+        cacheWriteInputPricePerMillion: 6.25,
+      })
+    );
   });
 
   it("prefers synced threshold rules before manual tier rules", async () => {
@@ -249,6 +366,90 @@ describe("billing-price-service", () => {
     });
     expect(tierRulesFindManyMock).toHaveBeenCalledTimes(1);
     expect(manualFindFirstMock).not.toHaveBeenCalled();
+  });
+
+  it("does not apply a synced standard tier rule to a confirmed fast response", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+
+    syncedFindFirstMock.mockResolvedValueOnce({
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      priorityInputPricePerMillion: 10,
+      priorityOutputPricePerMillion: 60,
+      maxInputTokens: 1050000,
+      maxOutputTokens: 128000,
+    });
+    tierRulesFindManyMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: "rule-sync-128k",
+        model: "gpt-5.6-sol",
+        source: "litellm",
+        thresholdInputTokens: 128000,
+        displayLabel: ">128K context",
+        inputPricePerMillion: 10,
+        outputPricePerMillion: 45,
+        cacheReadInputPricePerMillion: 1,
+        cacheWriteInputPricePerMillion: 12.5,
+        note: null,
+        isActive: true,
+        createdAt: new Date("2026-02-28T00:00:00.000Z"),
+        updatedAt: new Date("2026-02-28T00:00:00.000Z"),
+      },
+    ]);
+    manualFindFirstMock.mockResolvedValueOnce(null);
+
+    await expect(resolveBillingModelPrice("gpt-5.6-sol", 150000, "fast")).resolves.toBeNull();
+    expect(manualFindFirstMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a manual flat override instead of a synced standard tier for confirmed fast", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+
+    syncedFindFirstMock.mockResolvedValueOnce({
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      priorityInputPricePerMillion: 10,
+      priorityOutputPricePerMillion: 60,
+      maxInputTokens: 1050000,
+      maxOutputTokens: 128000,
+    });
+    tierRulesFindManyMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: "rule-sync-128k",
+        model: "gpt-5.6-sol",
+        source: "litellm",
+        thresholdInputTokens: 128000,
+        displayLabel: ">128K context",
+        inputPricePerMillion: 10,
+        outputPricePerMillion: 45,
+        cacheReadInputPricePerMillion: 1,
+        cacheWriteInputPricePerMillion: 12.5,
+        note: null,
+        isActive: true,
+        createdAt: new Date("2026-02-28T00:00:00.000Z"),
+        updatedAt: new Date("2026-02-28T00:00:00.000Z"),
+      },
+    ]);
+    manualFindFirstMock.mockResolvedValueOnce({
+      model: "gpt-5.6-sol",
+      inputPricePerMillion: 7,
+      outputPricePerMillion: 42,
+      cacheReadInputPricePerMillion: 0.7,
+      cacheWriteInputPricePerMillion: 8,
+    });
+
+    await expect(resolveBillingModelPrice("gpt-5.6-sol", 150000, "fast")).resolves.toEqual(
+      expect.objectContaining({
+        source: "manual",
+        inputPricePerMillion: 7,
+        outputPricePerMillion: 42,
+        matchedRuleType: "flat",
+      })
+    );
   });
 
   it("falls back to flat pricing when prompt tokens do not reach any tier threshold", async () => {
@@ -318,6 +519,10 @@ describe("billing-price-service", () => {
           "gpt-4.1": {
             input_cost_per_token: 0.000003,
             output_cost_per_token: 0.000009,
+            input_cost_per_token_priority: 0.000006,
+            output_cost_per_token_priority: 0.000018,
+            cache_read_input_token_cost_priority: 0.000001,
+            cache_creation_input_token_cost_priority: 0.0000075,
             max_input_tokens: 200000,
             max_output_tokens: 8192,
           },
@@ -339,6 +544,10 @@ describe("billing-price-service", () => {
     expect(txUpdateMock).toHaveBeenNthCalledWith(2, billingTierRulesTable);
     expect(txInsertValuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        priorityInputPricePerMillion: 6,
+        priorityOutputPricePerMillion: 18,
+        priorityCacheReadInputPricePerMillion: 1,
+        priorityCacheWriteInputPricePerMillion: 7.5,
         maxInputTokens: 200000,
         maxOutputTokens: 8192,
       })

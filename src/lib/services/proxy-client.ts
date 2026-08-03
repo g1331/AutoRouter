@@ -3,6 +3,7 @@ import { decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 import { extractGeminiModelFromPath } from "./route-capability-matcher";
+import type { RequestedServiceTier } from "@/types/api";
 
 const log = createLogger("proxy-client");
 
@@ -37,6 +38,7 @@ export interface TokenUsage {
  */
 export interface StreamMetrics {
   usage: TokenUsage | null;
+  effectiveServiceTier?: RequestedServiceTier | null;
   ttftMs?: number;
 }
 
@@ -157,6 +159,7 @@ export interface ProxyResult {
   body: ReadableStream<Uint8Array> | Uint8Array;
   isStream: boolean;
   usage?: TokenUsage;
+  effectiveServiceTier?: RequestedServiceTier;
   streamMetricsPromise?: Promise<StreamMetrics>;
   ttftMs?: number;
   headerDiff?: HeaderDiff;
@@ -333,9 +336,12 @@ function extractFromUsageObject(usage: Record<string, unknown>): NormalizedToken
     const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
 
     let cachedTokens = 0;
+    let cacheCreationTokens = 0;
     const promptDetails = usage.prompt_tokens_details;
     if (typeof promptDetails === "object" && promptDetails !== null) {
-      cachedTokens = getIntValue(promptDetails as Record<string, unknown>, "cached_tokens");
+      const details = promptDetails as Record<string, unknown>;
+      cachedTokens = getIntValue(details, "cached_tokens");
+      cacheCreationTokens = getIntValue(details, "cache_write_tokens");
     }
 
     let reasoningTokens = 0;
@@ -354,6 +360,7 @@ function extractFromUsageObject(usage: Record<string, unknown>): NormalizedToken
       totalTokens,
       cachedTokens,
       reasoningTokens,
+      cacheCreationTokens,
       cacheReadTokens: cachedTokens,
       rawInputTokens: promptTokens,
     };
@@ -400,12 +407,12 @@ function extractFromUsageObject(usage: Record<string, unknown>): NormalizedToken
 
     // OpenAI Responses API detailed usage format (when present)
     let cachedTokensFromDetails = 0;
+    let cacheCreationTokensFromDetails = 0;
     const inputDetails = usage.input_tokens_details;
     if (typeof inputDetails === "object" && inputDetails !== null) {
-      cachedTokensFromDetails = getIntValue(
-        inputDetails as Record<string, unknown>,
-        "cached_tokens"
-      );
+      const details = inputDetails as Record<string, unknown>;
+      cachedTokensFromDetails = getIntValue(details, "cached_tokens");
+      cacheCreationTokensFromDetails = getIntValue(details, "cache_write_tokens");
     }
 
     let reasoningTokens = 0;
@@ -425,7 +432,7 @@ function extractFromUsageObject(usage: Record<string, unknown>): NormalizedToken
       totalTokens,
       cachedTokens,
       reasoningTokens,
-      cacheCreationTokens: useAnthropicCache ? cacheCreationTokens : 0,
+      cacheCreationTokens: useAnthropicCache ? cacheCreationTokens : cacheCreationTokensFromDetails,
       cacheReadTokens: useAnthropicCache ? cacheReadTokens : cachedTokens,
       cacheCreation5mTokens: useAnthropicCache ? cacheCreation5mTokens : 0,
       cacheCreation1hTokens: useAnthropicCache ? cacheCreation1hTokens : 0,
@@ -525,9 +532,36 @@ export function extractNormalizedUsage(data: Record<string, unknown>): Normalize
   return null;
 }
 
-/**
- * Extract token usage from response payload.
- */
+/** Normalize provider service-tier aliases to AutoRouter's billing tiers. */
+function normalizeEffectiveServiceTier(value: unknown): RequestedServiceTier | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "fast" || normalized === "priority") {
+    return "fast";
+  }
+  return normalized === "default" ? "standard" : null;
+}
+
+/** Extract the effective processing tier from OpenAI chat or Responses payloads. */
+export function extractEffectiveServiceTier(
+  data: Record<string, unknown>
+): RequestedServiceTier | null {
+  const direct = normalizeEffectiveServiceTier(data.service_tier);
+  if (direct) {
+    return direct;
+  }
+
+  if (typeof data.response === "object" && data.response !== null) {
+    return normalizeEffectiveServiceTier((data.response as Record<string, unknown>).service_tier);
+  }
+
+  return null;
+}
+
+/** Extract token usage from response payload. */
 export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
   const normalized = extractNormalizedUsage(data);
   if (!normalized) {
@@ -792,6 +826,7 @@ function isContentBearingSSEEventData(dataStr: string, sseEventName?: string): b
  */
 export interface SSETransformerCallbacks {
   onUsage: (usage: TokenUsage) => void;
+  onServiceTier?: (serviceTier: RequestedServiceTier) => void;
   onFirstChunk?: () => void;
 }
 
@@ -849,6 +884,10 @@ export function createSSETransformer(
               const usage = extractUsage(data);
               if (usage) {
                 callbacks.onUsage(usage);
+              }
+              const serviceTier = extractEffectiveServiceTier(data);
+              if (serviceTier) {
+                callbacks.onServiceTier?.(serviceTier);
               }
             } catch {
               // Not JSON, skip
@@ -1197,6 +1236,7 @@ export async function forwardRequest(
     if (contentType.includes("text/event-stream") && upstreamResponse.body) {
       // Streaming response - return stream directly for maximum performance
       let usage: TokenUsage | undefined;
+      let effectiveServiceTier: RequestedServiceTier | undefined;
       let ttftMs: number | undefined;
       let firstContentReceived = false;
       let resolveFirstContent!: () => void;
@@ -1217,6 +1257,9 @@ export async function forwardRequest(
               "token usage"
             );
           },
+          onServiceTier: (serviceTier) => {
+            effectiveServiceTier = serviceTier;
+          },
           onFirstChunk: () => {
             firstContentReceived = true;
             ttftMs = Date.now() - upstreamSendTime;
@@ -1236,7 +1279,11 @@ export async function forwardRequest(
           resolveStreamDone();
         }
 
-        return { usage: usage ?? null, ttftMs };
+        return {
+          usage: usage ?? null,
+          effectiveServiceTier: effectiveServiceTier ?? null,
+          ttftMs,
+        };
       })();
 
       await waitForFirstStreamContent({
@@ -1253,6 +1300,7 @@ export async function forwardRequest(
         body: clientStream,
         isStream: true,
         usage,
+        effectiveServiceTier,
         streamMetricsPromise,
         headerDiff: requestHeaderDiff,
       };
@@ -1267,10 +1315,12 @@ export async function forwardRequest(
 
       // Try to extract usage from JSON response
       let usage: TokenUsage | undefined;
+      let effectiveServiceTier: RequestedServiceTier | undefined;
 
       if (contentType.includes("application/json") && bodyBytes.length > 0) {
         try {
           const data = JSON.parse(new TextDecoder().decode(bodyBytes));
+          effectiveServiceTier = extractEffectiveServiceTier(data) ?? undefined;
           const extracted = extractUsage(data);
           if (extracted) {
             usage = extracted;
@@ -1294,6 +1344,7 @@ export async function forwardRequest(
         body: bodyBytes,
         isStream: false,
         usage,
+        effectiveServiceTier,
         headerDiff: requestHeaderDiff,
       };
     }
