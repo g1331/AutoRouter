@@ -88,6 +88,16 @@ export class StreamIdleTimeoutError extends Error {
 }
 
 /**
+ * Error raised when a successful non-streaming upstream response has no body.
+ */
+export class UpstreamEmptyResponseError extends Error {
+  constructor(public readonly statusCode: number) {
+    super(`Upstream returned HTTP ${statusCode} with an empty response body`);
+    this.name = "UpstreamEmptyResponseError";
+  }
+}
+
+/**
  * Error raised when an upstream SSE stream closes cleanly before producing any
  * content-bearing chunk. This is distinct from FirstByteTimeoutError: the
  * configured first-byte timer never fired — the upstream simply finished the
@@ -957,28 +967,30 @@ async function waitForFirstStreamContent(options: {
   abortController: AbortController;
   hasFirstContent: () => boolean;
 }): Promise<void> {
-  if (!options.timeoutMs || options.timeoutMs <= 0) {
-    return;
-  }
-
   const startedAt = Date.now();
+  const waiters: Promise<void>[] = [
+    options.onFirstContent,
+    options.onStreamDone.then(() => {
+      if (!options.hasFirstContent()) {
+        throw new UpstreamNoContentStreamError(Date.now() - startedAt, options.timeoutMs ?? 0);
+      }
+    }),
+  ];
 
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(() => {
-      options.abortController.abort();
-      reject(new FirstByteTimeoutError(options.timeoutMs ?? 0));
-    }, options.timeoutMs);
-  });
-
-  const streamDoneBeforeContentPromise = options.onStreamDone.then(() => {
-    if (!options.hasFirstContent()) {
-      throw new UpstreamNoContentStreamError(Date.now() - startedAt, options.timeoutMs ?? 0);
-    }
-  });
+  if (options.timeoutMs && options.timeoutMs > 0) {
+    waiters.push(
+      new Promise<never>((_resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          options.abortController.abort();
+          reject(new FirstByteTimeoutError(options.timeoutMs ?? 0));
+        }, options.timeoutMs);
+      })
+    );
+  }
 
   try {
-    await Promise.race([options.onFirstContent, streamDoneBeforeContentPromise, timeoutPromise]);
+    await Promise.race(waiters);
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);
@@ -1247,6 +1259,11 @@ export async function forwardRequest(
     } else {
       // Regular response
       const bodyBytes = new Uint8Array(await upstreamResponse.arrayBuffer());
+      const isExpectedNoContentStatus =
+        upstreamResponse.status === 204 || upstreamResponse.status === 205;
+      if (upstreamResponse.ok && !isExpectedNoContentStatus && bodyBytes.length === 0) {
+        throw new UpstreamEmptyResponseError(upstreamResponse.status);
+      }
 
       // Try to extract usage from JSON response
       let usage: TokenUsage | undefined;
