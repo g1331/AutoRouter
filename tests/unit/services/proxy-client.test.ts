@@ -1692,6 +1692,47 @@ describe("proxy-client", () => {
       });
     });
 
+    it("should reject a successful non-streaming response with an empty body", async () => {
+      const mockResponse = new Response(null, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4" }),
+      });
+
+      await expect(
+        forwardRequest(request, mockUpstream, "chat/completions", "req-123")
+      ).rejects.toMatchObject({
+        name: "UpstreamEmptyResponseError",
+        statusCode: 200,
+      });
+    });
+
+    it.each([204, 205])(
+      "should preserve a successful no-content status %s without failing over",
+      async (statusCode) => {
+        const mockResponse = new Response(null, { status: statusCode });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-4" }),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.statusCode).toBe(statusCode);
+        expect(result.isStream).toBe(false);
+        expect(result.body).toEqual(new Uint8Array());
+      }
+    );
+
     it("should handle streaming response", async () => {
       const sseData = 'data: {"id":"1"}\n\ndata: [DONE]\n\n';
       const mockResponse = new Response(sseData, {
@@ -1756,6 +1797,34 @@ describe("proxy-client", () => {
 
       await vi.runAllTimersAsync();
       await assertion;
+    });
+
+    it("should reject a stream that closes without content when first-byte timeout is disabled", async () => {
+      const sseData = 'data: {"type":"response.created"}\n\ndata: [DONE]\n\n';
+      const mockResponse = new Response(sseData, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+
+      await expect(
+        forwardRequest(
+          request,
+          { ...mockUpstream, firstByteTimeout: undefined },
+          "chat/completions",
+          "req-123"
+        )
+      ).rejects.toMatchObject({
+        name: "UpstreamNoContentStreamError",
+        firstByteTimeoutMs: 0,
+      });
     });
 
     it("should raise UpstreamNoContentStreamError when stream closes before content-bearing data", async () => {

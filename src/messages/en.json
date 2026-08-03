@@ -869,6 +869,7 @@
     "retryErrorType": {
       "timeout": "timeout",
       "first_byte_timeout": "first-byte timeout",
+      "upstream_empty_response": "upstream empty response",
       "upstream_no_content_stream": "upstream no-content stream",
       "stream_idle_timeout": "stream idle timeout",
       "stream_error": "stream error",

@@ -130,6 +130,13 @@ vi.mock("@/lib/services/proxy-client", () => {
     }
   }
 
+  class UpstreamEmptyResponseError extends Error {
+    constructor(public readonly statusCode: number) {
+      super(`Upstream returned HTTP ${statusCode} with an empty response body`);
+      this.name = "UpstreamEmptyResponseError";
+    }
+  }
+
   class UpstreamNoContentStreamError extends Error {
     constructor(
       public readonly elapsedMs: number,
@@ -178,6 +185,7 @@ vi.mock("@/lib/services/proxy-client", () => {
     ),
     FirstByteTimeoutError,
     StreamIdleTimeoutError,
+    UpstreamEmptyResponseError,
     UpstreamNoContentStreamError,
   };
 });
@@ -4285,6 +4293,117 @@ describe("proxy route upstream selection", () => {
     expect(markUnhealthy).toHaveBeenCalledTimes(1);
     expect(markUnhealthy).toHaveBeenCalledWith("up-release-error", "fetch failed");
     expect(recordFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("should fail over when an upstream returns an empty successful response", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, UpstreamEmptyResponseError } =
+      await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const firstUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-first",
+      name: "empty-response",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+    };
+    const secondUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-second",
+      name: "valid-response",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([firstUpstream, secondUpstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: firstUpstream.id },
+      { upstreamId: secondUpstream.id },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: firstUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [firstUpstream, secondUpstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: firstUpstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: firstUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+        selectionReason: null,
+      })
+      .mockResolvedValueOnce({
+        upstream: secondUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+        selectionReason: null,
+      });
+    vi.mocked(forwardRequest)
+      .mockRejectedValueOnce(new UpstreamEmptyResponseError(200))
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        body: new TextEncoder().encode(JSON.stringify({ id: "valid-response" })),
+        isStream: false,
+        usage: null,
+        headerDiff: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ id: "valid-response" });
+    expect(forwardRequest).toHaveBeenCalledTimes(2);
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        failoverHistory: expect.arrayContaining([
+          expect.objectContaining({
+            upstream_id: firstUpstream.id,
+            error_type: "upstream_empty_response",
+            status_code: 200,
+          }),
+        ]),
+      })
+    );
   });
 
   it("should release a reserved slot exactly once after streaming completes", async () => {

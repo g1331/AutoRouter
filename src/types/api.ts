@@ -545,6 +545,7 @@ export interface TestUpstreamResponse {
 export type FailoverErrorType =
   | "timeout"
   | "first_byte_timeout"
+  | "upstream_empty_response"
   | "upstream_no_content_stream"
   | "stream_idle_timeout"
   | "stream_error"
