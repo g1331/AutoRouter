@@ -544,6 +544,8 @@ export async function resolveBillingModelPrice(
     orderBy: [desc(billingModelPrices.syncedAt)],
   });
 
+  let matchedSyncedStandardTierForFast = false;
+
   // Check tier rules when billed input tokens are provided.
   // Manual rules take priority over synced rules (consistent with flat price behavior).
   if (billedInputTokens !== undefined && billedInputTokens > 0) {
@@ -569,7 +571,11 @@ export async function resolveBillingModelPrice(
       billedInputTokens,
       "litellm"
     );
-    if (syncedTierRule) {
+    if (syncedTierRule && effectiveServiceTier === "fast") {
+      // Synced context tiers currently contain Standard rates only. Keep looking for a manual flat
+      // override before treating the request as unbillable.
+      matchedSyncedStandardTierForFast = true;
+    } else if (syncedTierRule) {
       return {
         model: normalizedModel,
         source: syncedTierRule.source as BillingPriceSource,
@@ -606,7 +612,7 @@ export async function resolveBillingModelPrice(
     };
   }
 
-  if (!syncedCatalogPrice) {
+  if (matchedSyncedStandardTierForFast || !syncedCatalogPrice) {
     return null;
   }
 

@@ -239,6 +239,7 @@ async function logApiKeyQuotaRejectedRequest(input: {
   path: string;
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  requestedServiceTier: RequestedServiceTier | null;
   thinkingConfig: import("@/types/api").RequestThinkingConfig | null;
   requestId: string;
   startTime: number;
@@ -278,6 +279,8 @@ async function logApiKeyQuotaRejectedRequest(input: {
     path: input.path,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
+    requestedServiceTier: input.requestedServiceTier,
+    effectiveServiceTier: null,
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
@@ -314,6 +317,7 @@ async function logApiKeyAdmissionRejectedRequest(input: {
   path: string;
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  requestedServiceTier: RequestedServiceTier | null;
   thinkingConfig: import("@/types/api").RequestThinkingConfig | null;
   requestId: string;
   startTime: number;
@@ -356,6 +360,8 @@ async function logApiKeyAdmissionRejectedRequest(input: {
     path: input.path,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
+    requestedServiceTier: input.requestedServiceTier,
+    effectiveServiceTier: null,
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
@@ -2668,6 +2674,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         model,
         reasoningEffort,
+        requestedServiceTier,
         thinkingConfig,
         requestId,
         startTime,
@@ -2724,6 +2731,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         model,
         reasoningEffort,
+        requestedServiceTier,
         thinkingConfig,
         requestId,
         startTime,
@@ -2786,6 +2794,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         model,
         reasoningEffort,
+        requestedServiceTier,
+        effectiveServiceTier: null,
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
@@ -2806,6 +2816,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           apiKeyId: validApiKey.id,
           upstreamId: null,
           model,
+          requestedServiceTier,
+          effectiveServiceTier: null,
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -3032,6 +3044,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         model,
         reasoningEffort,
+        requestedServiceTier,
+        effectiveServiceTier: null,
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
@@ -3090,6 +3104,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         model: resolvedModel,
         reasoningEffort,
+        requestedServiceTier,
         thinkingConfig,
         requestId,
         startTime,
@@ -3495,6 +3510,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             ...apiKeySnapshot,
             upstreamId: upstreamForLogging.id,
             model: resolvedModel,
+            requestedServiceTier,
+            effectiveServiceTier: null,
             statusCode: disconnectStatusCode,
             durationMs: disconnectDurationMs,
             routingDurationMs,
@@ -3518,6 +3535,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             apiKeyId: validApiKey.id,
             upstreamId: upstreamForLogging.id,
             model: resolvedModel,
+            requestedServiceTier,
+            effectiveServiceTier: null,
             usage: disconnectUsageForBilling,
             requestId,
           });
@@ -3531,6 +3550,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           method: request.method,
           path,
           model: resolvedModel,
+          requestedServiceTier,
+          effectiveServiceTier: null,
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
@@ -3558,6 +3579,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           apiKeyId: validApiKey.id,
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
+          requestedServiceTier,
+          effectiveServiceTier: null,
           usage: disconnectUsageForBilling,
           requestId,
         });
@@ -3605,6 +3628,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             ...apiKeySnapshot,
             upstreamId: upstreamForLogging.id,
             model: resolvedModel,
+            requestedServiceTier,
+            effectiveServiceTier: null,
             statusCode: failure.statusCode,
             durationMs: failureDurationMs,
             routingDurationMs,
@@ -3627,6 +3652,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             apiKeyId: validApiKey.id,
             upstreamId: upstreamForLogging.id,
             model: resolvedModel,
+            requestedServiceTier,
+            effectiveServiceTier: null,
             usage: failureUsageForBilling,
             requestId,
           });
@@ -3640,6 +3667,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           method: request.method,
           path,
           model: resolvedModel,
+          requestedServiceTier,
+          effectiveServiceTier: null,
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
@@ -3666,6 +3695,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           apiKeyId: validApiKey.id,
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
+          requestedServiceTier,
+          effectiveServiceTier: null,
           usage: failureUsageForBilling,
           requestId,
         });
@@ -4220,6 +4251,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const failureLogBaseFields = {
       ...apiKeySnapshot,
       reasoningEffort,
+      requestedServiceTier,
+      effectiveServiceTier: null,
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
@@ -4428,6 +4461,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         apiKeyId: validApiKey.id,
         upstreamId: actualUpstreamId,
         model: resolvedModel,
+        requestedServiceTier,
+        effectiveServiceTier: null,
         usage: {
           promptTokens: 0,
           completionTokens: 0,

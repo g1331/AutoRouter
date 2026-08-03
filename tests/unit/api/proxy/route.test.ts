@@ -878,6 +878,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "gpt-5.2",
         messages: [{ role: "user", content: "hello" }],
+        service_tier: "priority",
       }),
     });
 
@@ -910,6 +911,8 @@ describe("proxy route upstream selection", () => {
         upstreamId: null,
         path: "chat/completions",
         model: "gpt-5.2",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         statusCode: 429,
         errorMessage: expect.stringContaining("rate_limited"),
         routingDecision: expect.objectContaining({
@@ -1167,6 +1170,7 @@ describe("proxy route upstream selection", () => {
         model: "gpt-5.2",
         messages: [{ role: "user", content: "hello" }],
         stream: true,
+        service_tier: "fast",
       }),
     });
 
@@ -1193,6 +1197,8 @@ describe("proxy route upstream selection", () => {
         upstreamId: null,
         path: "chat/completions",
         model: "gpt-5.2",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         statusCode: 429,
         errorMessage: expect.stringContaining("API key spending quota exceeded"),
         routingDecision: expect.objectContaining({
@@ -2459,6 +2465,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "gpt-5.2",
         messages: [{ role: "user", content: "hello" }],
+        service_tier: "fast",
       }),
     });
 
@@ -2482,6 +2489,8 @@ describe("proxy route upstream selection", () => {
     expect(logRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         upstreamId: null,
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         errorMessage: "all authorized upstreams were excluded by model rules",
         routingDecision: expect.objectContaining({
           matched_route_capability: "openai_chat_compatible",
@@ -2525,6 +2534,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "claude-3-7-sonnet",
         messages: [{ role: "user", content: "hello" }],
+        service_tier: "fast",
       }),
     });
 
@@ -2551,6 +2561,8 @@ describe("proxy route upstream selection", () => {
         apiKeyPrefix: "sk-test",
         upstreamId: null,
         model: "claude-3-7-sonnet",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         statusCode: 403,
         errorMessage: "API key is not allowed to request model: claude-3-7-sonnet",
         routingDecision: expect.objectContaining({
@@ -6599,6 +6611,8 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -6635,6 +6649,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "unknown-model",
         messages: [{ role: "user", content: "hi" }],
+        service_tier: "fast",
       }),
     });
 
@@ -6654,6 +6669,12 @@ describe("proxy route upstream selection", () => {
     });
     expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
+      })
+    );
   });
 
   it("should authorize unrestricted keys across all active upstreams", async () => {
@@ -8278,6 +8299,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          service_tier: "priority",
           stream: true,
         }),
         signal: abortController.signal,
@@ -8307,9 +8329,13 @@ describe("proxy route upstream selection", () => {
       const failureLogPayload = vi
         .mocked(updateRequestLog)
         .mock.calls.find(([, payload]) => payload.statusCode === 504)?.[1];
-      expect(failureLogPayload?.routingDecision).toEqual(
+      expect(failureLogPayload).toEqual(
         expect.objectContaining({
-          failure_stage: "downstream_streaming",
+          requestedServiceTier: "fast",
+          effectiveServiceTier: null,
+          routingDecision: expect.objectContaining({
+            failure_stage: "downstream_streaming",
+          }),
         })
       );
       expect(failureLogPayload?.failoverHistory?.[0]).toEqual(
@@ -8318,6 +8344,12 @@ describe("proxy route upstream selection", () => {
           error_type: "stream_idle_timeout",
           circuit_breaker_recorded: true,
           matched_failure_rule: null,
+        })
+      );
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedServiceTier: "fast",
+          effectiveServiceTier: null,
         })
       );
     });
@@ -8426,6 +8458,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          service_tier: "fast",
           stream: true,
         }),
         signal: abortController.signal,
@@ -8459,6 +8492,8 @@ describe("proxy route upstream selection", () => {
           apiKeyId: "key-1",
           upstreamId: "up-openai",
           model: "gpt-4.1",
+          requestedServiceTier: "fast",
+          effectiveServiceTier: null,
           usage: {
             promptTokens: 0,
             completionTokens: 0,

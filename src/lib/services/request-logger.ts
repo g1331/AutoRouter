@@ -324,7 +324,13 @@ function parseRequestLogCreatedAt(value: Date | string | number | null | undefin
 }
 
 async function persistZeroUsageBillingSnapshot(
-  logEntry: Pick<RequestLog, "id" | "apiKeyId" | "upstreamId" | "model"> | null | undefined
+  logEntry:
+    | Pick<
+        RequestLog,
+        "id" | "apiKeyId" | "upstreamId" | "model" | "requestedServiceTier" | "effectiveServiceTier"
+      >
+    | null
+    | undefined
 ): Promise<void> {
   if (!logEntry) {
     return;
@@ -336,6 +342,8 @@ async function persistZeroUsageBillingSnapshot(
       apiKeyId: logEntry.apiKeyId,
       upstreamId: logEntry.upstreamId,
       model: logEntry.model,
+      requestedServiceTier: normalizeRequestedServiceTier(logEntry.requestedServiceTier),
+      effectiveServiceTier: normalizeEffectiveServiceTier(logEntry.effectiveServiceTier),
       usage: {
         promptTokens: 0,
         completionTokens: 0,

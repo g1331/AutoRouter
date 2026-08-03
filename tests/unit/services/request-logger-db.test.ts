@@ -875,6 +875,8 @@ describe("request-logger (db flows)", () => {
         apiKeyId: "key-1",
         upstreamId: "upstream-1",
         model: "gpt-4.1",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
       },
     ]);
     const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
@@ -904,6 +906,8 @@ describe("request-logger (db flows)", () => {
       apiKeyId: "key-1",
       upstreamId: "upstream-1",
       model: "gpt-4.1",
+      requestedServiceTier: "fast",
+      effectiveServiceTier: null,
       usage: {
         promptTokens: 0,
         completionTokens: 0,
