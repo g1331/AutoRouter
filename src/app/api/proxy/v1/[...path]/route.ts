@@ -98,6 +98,8 @@ import {
 } from "@/lib/services/unified-error";
 import type {
   ReasoningEffort,
+  RequestedServiceTier,
+  EffectiveServiceTier,
   RoutingDecisionLog,
   RoutingCandidate,
   RoutingExcluded,
@@ -149,6 +151,8 @@ async function persistBillingSnapshotSafely(input: {
   apiKeyId: string | null;
   upstreamId: string | null;
   model: string | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  effectiveServiceTier?: EffectiveServiceTier | null;
   usage: {
     promptTokens: number;
     completionTokens: number;
@@ -164,6 +168,8 @@ async function persistBillingSnapshotSafely(input: {
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
       model: input.model,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: input.effectiveServiceTier ?? null,
       usage: input.usage,
     });
   } catch (error) {
@@ -2335,6 +2341,7 @@ interface RequestContext {
   bodyJson: Record<string, unknown> | null;
   isStream: boolean;
   reasoningEffort: ReasoningEffort | null;
+  requestedServiceTier: RequestedServiceTier | null;
 }
 
 type AuthSource = "authorization" | "x-api-key" | "x-goog-api-key" | "none";
@@ -2373,6 +2380,28 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function normalizeRequestedServiceTier(value: unknown): RequestedServiceTier | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "fast" || normalized === "priority") {
+    return "fast";
+  }
+  return normalized === "default" ? "standard" : null;
+}
+
+function resolveEffectiveServiceTier(
+  requestedServiceTier: RequestedServiceTier | null,
+  confirmedServiceTier: RequestedServiceTier | null | undefined
+): EffectiveServiceTier | null {
+  if (confirmedServiceTier) {
+    return confirmedServiceTier;
+  }
+  return requestedServiceTier === "fast" ? "unknown" : null;
+}
+
 function normalizeReasoningEffort(value: unknown): ReasoningEffort | null {
   if (typeof value !== "string") {
     return null;
@@ -2385,6 +2414,7 @@ function normalizeReasoningEffort(value: unknown): ReasoningEffort | null {
     normalized === "medium" ||
     normalized === "high" ||
     normalized === "xhigh" ||
+    normalized === "max" ||
     normalized === "enabled"
     ? normalized
     : null;
@@ -2494,6 +2524,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
         bodyJson: null,
         isStream: false,
         reasoningEffort: null,
+        requestedServiceTier: null,
       };
     }
 
@@ -2501,6 +2532,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
     const modelFromBody = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
     const isStream = bodyJson.stream === true;
     const reasoningEffort = extractReasoningEffortFromBody(bodyJson);
+    const requestedServiceTier = normalizeRequestedServiceTier(bodyJson.service_tier);
 
     return {
       model: modelFromBody ?? modelFromPath,
@@ -2508,6 +2540,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
       bodyJson,
       isStream,
       reasoningEffort,
+      requestedServiceTier,
     };
   } catch {
     // Not JSON or empty body
@@ -2517,6 +2550,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
       bodyJson: null,
       isStream: false,
       reasoningEffort: null,
+      requestedServiceTier: null,
     };
   }
 }
@@ -2594,6 +2628,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
   const requestedStream = tempContext.isStream;
   const reasoningEffort = tempContext.reasoningEffort;
+  const requestedServiceTier = tempContext.requestedServiceTier;
   const matchedRouteCapabilityDetails = resolveRouteCapability(
     request.method,
     path,
@@ -3143,6 +3178,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       path,
       model: resolvedModel,
       reasoningEffort,
+      requestedServiceTier,
       isStream: requestedStream,
       routingType,
       priorityTier: null,
@@ -3402,7 +3438,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       }
       const metricsPromise =
         result.streamMetricsPromise ??
-        Promise.resolve({ usage: result.usage ?? null, ttftMs: result.ttftMs });
+        Promise.resolve({
+          usage: result.usage ?? null,
+          effectiveServiceTier: result.effectiveServiceTier ?? null,
+          ttftMs: result.ttftMs,
+        });
 
       // TPM accounting must follow the upstream metrics settlement, not the
       // downstream response lifecycle. proxy-client keeps draining its logging
@@ -3642,6 +3682,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             return;
           }
           const { usage, ttftMs } = outcome.metrics;
+          const effectiveServiceTier = resolveEffectiveServiceTier(
+            requestedServiceTier,
+            outcome.metrics.effectiveServiceTier ?? result.effectiveServiceTier
+          );
 
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && usage) {
@@ -3680,6 +3724,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               upstreamId: upstreamForLogging.id,
               model: resolvedModel,
               reasoningEffort,
+              requestedServiceTier,
+              effectiveServiceTier,
               promptTokens: usageForBilling.promptTokens,
               completionTokens: usageForBilling.completionTokens,
               totalTokens: usageForBilling.totalTokens,
@@ -3717,6 +3763,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               path,
               model: resolvedModel,
               reasoningEffort,
+              requestedServiceTier,
+              effectiveServiceTier,
               promptTokens: usageForBilling.promptTokens,
               completionTokens: usageForBilling.completionTokens,
               totalTokens: usageForBilling.totalTokens,
@@ -3753,6 +3801,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               apiKeyId: validApiKey.id,
               upstreamId: upstreamForLogging.id,
               model: resolvedModel,
+              requestedServiceTier,
+              effectiveServiceTier,
               usage: usageForBilling,
               requestId,
             });
@@ -3868,6 +3918,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         );
       }
 
+      const effectiveServiceTier = resolveEffectiveServiceTier(
+        requestedServiceTier,
+        result.effectiveServiceTier
+      );
       const usageForBilling = {
         promptTokens: usage?.promptTokens || 0,
         completionTokens: usage?.completionTokens || 0,
@@ -3888,6 +3942,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
           reasoningEffort,
+          requestedServiceTier,
+          effectiveServiceTier,
           promptTokens: usageForBilling.promptTokens,
           completionTokens: usageForBilling.completionTokens,
           totalTokens: usageForBilling.totalTokens,
@@ -3924,6 +3980,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           path,
           model: resolvedModel,
           reasoningEffort,
+          requestedServiceTier,
+          effectiveServiceTier,
           promptTokens: usageForBilling.promptTokens,
           completionTokens: usageForBilling.completionTokens,
           totalTokens: usageForBilling.totalTokens,
@@ -3959,6 +4017,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           apiKeyId: validApiKey.id,
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
+          requestedServiceTier,
+          effectiveServiceTier,
           usage: usageForBilling,
           requestId,
         });

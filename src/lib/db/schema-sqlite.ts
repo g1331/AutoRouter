@@ -357,6 +357,8 @@ export const requestLogs = sqliteTable(
     path: text("path"),
     model: text("model"),
     reasoningEffort: text("reasoning_effort"),
+    requestedServiceTier: text("requested_service_tier"),
+    effectiveServiceTier: text("effective_service_tier"),
     promptTokens: integer("prompt_tokens").notNull().default(0),
     completionTokens: integer("completion_tokens").notNull().default(0),
     totalTokens: integer("total_tokens").notNull().default(0),
@@ -479,6 +481,10 @@ export const billingModelPrices = sqliteTable(
     outputPricePerMillion: real("output_price_per_million").notNull(),
     cacheReadInputPricePerMillion: real("cache_read_input_price_per_million"),
     cacheWriteInputPricePerMillion: real("cache_write_input_price_per_million"),
+    priorityInputPricePerMillion: real("priority_input_price_per_million"),
+    priorityOutputPricePerMillion: real("priority_output_price_per_million"),
+    priorityCacheReadInputPricePerMillion: real("priority_cache_read_input_price_per_million"),
+    priorityCacheWriteInputPricePerMillion: real("priority_cache_write_input_price_per_million"),
     maxInputTokens: integer("max_input_tokens"),
     maxOutputTokens: integer("max_output_tokens"),
     source: text("source").notNull(), // openrouter | litellm
@@ -641,6 +647,8 @@ export const requestBillingSnapshots = sqliteTable(
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     model: text("model"),
+    requestedServiceTier: text("requested_service_tier"),
+    effectiveServiceTier: text("effective_service_tier"),
     billingStatus: text("billing_status").notNull(), // billed | unbilled
     unbillableReason: text("unbillable_reason"),
     priceSource: text("price_source"), // manual | openrouter | litellm

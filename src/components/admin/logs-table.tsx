@@ -1283,6 +1283,8 @@ export function LogsTable({
                 <ModelIdentity
                   label={modelDisplay ?? log.model}
                   reasoningEffort={reasoningEffort}
+                  requestedServiceTier={log.requested_service_tier}
+                  effectiveServiceTier={log.effective_service_tier}
                   thinkingConfig={log.thinking_config}
                   className="min-w-0"
                   textClassName="font-medium text-foreground"
@@ -2781,6 +2783,8 @@ export function LogsTable({
                                 <ModelIdentity
                                   label={log.model}
                                   reasoningEffort={reasoningEffort}
+                                  requestedServiceTier={log.requested_service_tier}
+                                  effectiveServiceTier={log.effective_service_tier}
                                   thinkingConfig={log.thinking_config}
                                   compactBadges
                                   className="min-w-0 max-w-full"
@@ -3119,6 +3123,8 @@ export function LogsTable({
                                   <ModelIdentity
                                     label={log.model}
                                     reasoningEffort={reasoningEffort}
+                                    requestedServiceTier={log.requested_service_tier}
+                                    effectiveServiceTier={log.effective_service_tier}
                                     thinkingConfig={log.thinking_config}
                                     compactBadges
                                     className="min-w-0 w-full"

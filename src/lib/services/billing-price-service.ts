@@ -8,6 +8,7 @@ import {
   requestBillingSnapshots,
 } from "@/lib/db";
 import { createLogger } from "@/lib/utils/logger";
+import type { EffectiveServiceTier } from "@/types/api";
 
 const log = createLogger("billing-price-service");
 
@@ -144,6 +145,10 @@ interface NormalizedSyncedPrice {
   outputPricePerMillion: number;
   cacheReadInputPricePerMillion: number | null;
   cacheWriteInputPricePerMillion: number | null;
+  priorityInputPricePerMillion: number | null;
+  priorityOutputPricePerMillion: number | null;
+  priorityCacheReadInputPricePerMillion: number | null;
+  priorityCacheWriteInputPricePerMillion: number | null;
   maxInputTokens: number | null;
   maxOutputTokens: number | null;
   source: "litellm";
@@ -261,6 +266,14 @@ function parseLiteLLMPrices(payload: unknown): LiteLLMParseResult {
     }
     const cacheReadCostPerToken = toNonNegativeNumber(record.cache_read_input_token_cost);
     const cacheWriteCostPerToken = toNonNegativeNumber(record.cache_creation_input_token_cost);
+    const priorityInputCostPerToken = toNonNegativeNumber(record.input_cost_per_token_priority);
+    const priorityOutputCostPerToken = toNonNegativeNumber(record.output_cost_per_token_priority);
+    const priorityCacheReadCostPerToken = toNonNegativeNumber(
+      record.cache_read_input_token_cost_priority
+    );
+    const priorityCacheWriteCostPerToken = toNonNegativeNumber(
+      record.cache_creation_input_token_cost_priority
+    );
     const maxInputTokens = toNonNegativeInteger(record.max_input_tokens);
     const maxOutputTokens = toNonNegativeInteger(record.max_output_tokens);
 
@@ -272,6 +285,14 @@ function parseLiteLLMPrices(payload: unknown): LiteLLMParseResult {
         cacheReadCostPerToken === null ? null : cacheReadCostPerToken * 1_000_000,
       cacheWriteInputPricePerMillion:
         cacheWriteCostPerToken === null ? null : cacheWriteCostPerToken * 1_000_000,
+      priorityInputPricePerMillion:
+        priorityInputCostPerToken === null ? null : priorityInputCostPerToken * 1_000_000,
+      priorityOutputPricePerMillion:
+        priorityOutputCostPerToken === null ? null : priorityOutputCostPerToken * 1_000_000,
+      priorityCacheReadInputPricePerMillion:
+        priorityCacheReadCostPerToken === null ? null : priorityCacheReadCostPerToken * 1_000_000,
+      priorityCacheWriteInputPricePerMillion:
+        priorityCacheWriteCostPerToken === null ? null : priorityCacheWriteCostPerToken * 1_000_000,
       maxInputTokens,
       maxOutputTokens,
       source: "litellm",
@@ -349,6 +370,10 @@ async function persistSyncedPrices(prices: NormalizedSyncedPrice[]): Promise<num
           outputPricePerMillion: price.outputPricePerMillion,
           cacheReadInputPricePerMillion: price.cacheReadInputPricePerMillion,
           cacheWriteInputPricePerMillion: price.cacheWriteInputPricePerMillion,
+          priorityInputPricePerMillion: price.priorityInputPricePerMillion,
+          priorityOutputPricePerMillion: price.priorityOutputPricePerMillion,
+          priorityCacheReadInputPricePerMillion: price.priorityCacheReadInputPricePerMillion,
+          priorityCacheWriteInputPricePerMillion: price.priorityCacheWriteInputPricePerMillion,
           maxInputTokens: price.maxInputTokens,
           maxOutputTokens: price.maxOutputTokens,
           source: "litellm",
@@ -364,6 +389,10 @@ async function persistSyncedPrices(prices: NormalizedSyncedPrice[]): Promise<num
             outputPricePerMillion: price.outputPricePerMillion,
             cacheReadInputPricePerMillion: price.cacheReadInputPricePerMillion,
             cacheWriteInputPricePerMillion: price.cacheWriteInputPricePerMillion,
+            priorityInputPricePerMillion: price.priorityInputPricePerMillion,
+            priorityOutputPricePerMillion: price.priorityOutputPricePerMillion,
+            priorityCacheReadInputPricePerMillion: price.priorityCacheReadInputPricePerMillion,
+            priorityCacheWriteInputPricePerMillion: price.priorityCacheWriteInputPricePerMillion,
             maxInputTokens: price.maxInputTokens,
             maxOutputTokens: price.maxOutputTokens,
             isActive: true,
@@ -498,7 +527,8 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
  */
 export async function resolveBillingModelPrice(
   model: string | null,
-  billedInputTokens?: number
+  billedInputTokens?: number,
+  effectiveServiceTier: EffectiveServiceTier = "unknown"
 ): Promise<BillingResolvedPrice | null> {
   const normalizedModel = model?.trim();
   if (!normalizedModel) {
@@ -580,13 +610,32 @@ export async function resolveBillingModelPrice(
     return null;
   }
 
+  let inputPricePerMillion = syncedCatalogPrice.inputPricePerMillion;
+  let outputPricePerMillion = syncedCatalogPrice.outputPricePerMillion;
+  let cacheReadInputPricePerMillion = syncedCatalogPrice.cacheReadInputPricePerMillion;
+  let cacheWriteInputPricePerMillion = syncedCatalogPrice.cacheWriteInputPricePerMillion;
+
+  if (effectiveServiceTier === "fast") {
+    if (
+      syncedCatalogPrice.priorityInputPricePerMillion == null ||
+      syncedCatalogPrice.priorityOutputPricePerMillion == null
+    ) {
+      // A confirmed Fast response must not be billed with Standard base rates.
+      return null;
+    }
+    inputPricePerMillion = syncedCatalogPrice.priorityInputPricePerMillion;
+    outputPricePerMillion = syncedCatalogPrice.priorityOutputPricePerMillion;
+    cacheReadInputPricePerMillion = syncedCatalogPrice.priorityCacheReadInputPricePerMillion;
+    cacheWriteInputPricePerMillion = syncedCatalogPrice.priorityCacheWriteInputPricePerMillion;
+  }
+
   return {
     model: normalizedModel,
     source: "litellm",
-    inputPricePerMillion: syncedCatalogPrice.inputPricePerMillion,
-    outputPricePerMillion: syncedCatalogPrice.outputPricePerMillion,
-    cacheReadInputPricePerMillion: syncedCatalogPrice.cacheReadInputPricePerMillion,
-    cacheWriteInputPricePerMillion: syncedCatalogPrice.cacheWriteInputPricePerMillion,
+    inputPricePerMillion,
+    outputPricePerMillion,
+    cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion,
     matchedRuleType: "flat",
     matchedRuleDisplayLabel: null,
     appliedTierThreshold: null,
