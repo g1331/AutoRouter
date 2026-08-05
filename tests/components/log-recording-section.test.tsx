@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LogRecordingSection } from "@/components/admin/log-recording-section";
@@ -51,19 +51,8 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/admin/recording-json-block", () => ({
-  RecordingJsonBlock: ({
-    value,
-    defaultCollapsed,
-  }: {
-    value: unknown;
-    defaultCollapsed?: boolean;
-  }) => (
-    <div
-      data-testid="recording-json-block"
-      data-default-collapsed={String(Boolean(defaultCollapsed))}
-    >
-      {JSON.stringify(value)}
-    </div>
+  RecordingJsonBlock: ({ value }: { value: unknown }) => (
+    <div data-testid="recording-json-block">{JSON.stringify(value)}</div>
   ),
 }));
 
@@ -81,27 +70,33 @@ describe("LogRecordingSection", () => {
   beforeEach(() => {
     useTrafficRecordingByLogIdMock.mockReset();
   });
+  const expandSection = () => {
+    fireEvent.click(screen.getByRole("button", { name: "trafficRecording.logSectionExpand" }));
+  };
 
   it("renders idle state when not yet enabled", () => {
-    useTrafficRecordingByLogIdMock.mockReturnValueOnce(baseResult({ status: "idle" }));
+    useTrafficRecordingByLogIdMock.mockReturnValue(baseResult({ status: "idle" }));
 
     render(<LogRecordingSection logId="log-1" enabled={false} />);
+    expandSection();
 
     expect(screen.getByText("trafficRecording.logSectionIdle")).toBeInTheDocument();
   });
 
   it("renders loading state while probing", () => {
-    useTrafficRecordingByLogIdMock.mockReturnValueOnce(baseResult({ status: "loading" }));
+    useTrafficRecordingByLogIdMock.mockReturnValue(baseResult({ status: "loading" }));
 
     render(<LogRecordingSection logId="log-1" enabled={true} />);
+    expandSection();
 
     expect(screen.getByText("trafficRecording.logSectionLoading")).toBeInTheDocument();
   });
 
   it("renders absent state when no recording exists", () => {
-    useTrafficRecordingByLogIdMock.mockReturnValueOnce(baseResult({ status: "absent" }));
+    useTrafficRecordingByLogIdMock.mockReturnValue(baseResult({ status: "absent" }));
 
     render(<LogRecordingSection logId="log-1" enabled={true} />);
+    expandSection();
 
     expect(screen.getByText("trafficRecording.logSectionAbsent")).toBeInTheDocument();
     expect(
@@ -110,7 +105,7 @@ describe("LogRecordingSection", () => {
   });
 
   it("renders missing-file state with warning copy", () => {
-    useTrafficRecordingByLogIdMock.mockReturnValueOnce(
+    useTrafficRecordingByLogIdMock.mockReturnValue(
       baseResult({
         status: "missing-file",
         error: new Error("Fixture file missing"),
@@ -118,13 +113,14 @@ describe("LogRecordingSection", () => {
     );
 
     render(<LogRecordingSection logId="log-1" enabled={true} />);
+    expandSection();
 
     expect(screen.getByText("trafficRecording.logSectionMissingFile")).toBeInTheDocument();
     expect(screen.getByText("trafficRecording.logSectionOpenRecordings")).toBeInTheDocument();
   });
 
   it("renders error state with the underlying message", () => {
-    useTrafficRecordingByLogIdMock.mockReturnValueOnce(
+    useTrafficRecordingByLogIdMock.mockReturnValue(
       baseResult({
         status: "error",
         error: new Error("boom"),
@@ -132,12 +128,13 @@ describe("LogRecordingSection", () => {
     );
 
     render(<LogRecordingSection logId="log-1" enabled={true} />);
+    expandSection();
 
     expect(screen.getByText(/trafficRecording\.logSectionLoadFailed.*boom/)).toBeInTheDocument();
   });
 
-  it("renders summary metadata, fixture, and 'open in recordings' link in present state", () => {
-    useTrafficRecordingByLogIdMock.mockReturnValueOnce(
+  it("renders summary metadata and fixture after expanding the present state", () => {
+    useTrafficRecordingByLogIdMock.mockReturnValue(
       baseResult({
         status: "present",
         summary: {
@@ -180,15 +177,25 @@ describe("LogRecordingSection", () => {
 
     render(<LogRecordingSection logId="log-1" enabled={true} />);
 
+    expect(
+      screen.getByRole("button", { name: "trafficRecording.logSectionExpand" })
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("200")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("recording-json-block")).not.toBeInTheDocument();
+
+    expandSection();
+
+    expect(
+      screen.getByRole("button", { name: "trafficRecording.logSectionCollapse" })
+    ).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("200")).toBeInTheDocument();
     expect(screen.getByText("gpt-4o")).toBeInTheDocument();
     expect(screen.getByText("12.1 KiB")).toBeInTheDocument();
     expect(screen.getByText("trafficRecording.redacted")).toBeInTheDocument();
     expect(screen.getByTestId("recording-json-block")).toHaveTextContent("requestId");
-    expect(screen.getByTestId("recording-json-block")).toHaveAttribute(
-      "data-default-collapsed",
-      "true"
-    );
     expect(screen.getByText("trafficRecording.logSectionOpenRecordings")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "trafficRecording.logSectionCollapse" }));
+    expect(screen.queryByTestId("recording-json-block")).not.toBeInTheDocument();
   });
 });

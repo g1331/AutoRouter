@@ -114,17 +114,6 @@ describe("RecordingJsonBlock component", () => {
     expect(screen.getByText("Object(1)")).toBeInTheDocument();
   });
 
-  it("supports starting with all branches collapsed", () => {
-    render(<RecordingJsonBlock value={{ outer: { inner: { leaf: 1 } } }} defaultCollapsed />);
-
-    expect(screen.getByText("Object(1)")).toBeInTheDocument();
-    expect(screen.queryByText('"outer":')).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "common.expand root" })).toHaveAttribute(
-      "aria-expanded",
-      "false"
-    );
-  });
-
   it("expand-all reveals deeper branches that start collapsed", () => {
     render(<RecordingJsonBlock value={{ outer: { inner: { leaf: 1 } } }} />);
 
