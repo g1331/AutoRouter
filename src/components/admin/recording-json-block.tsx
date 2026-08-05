@@ -159,10 +159,18 @@ export function JsonTreeNode({
   );
 }
 
-export function RecordingJsonBlock({ value }: { value: unknown }) {
+export function RecordingJsonBlock({
+  value,
+  defaultCollapsed = false,
+}: {
+  value: unknown;
+  defaultCollapsed?: boolean;
+}) {
   const tCommon = useTranslations("common");
   const jsonText = useMemo(() => JSON.stringify(value, null, 2), [value]);
-  const [expandedPaths, setExpandedPaths] = useState(() => collectExpandedJsonPaths(value, 1));
+  const [expandedPaths, setExpandedPaths] = useState(() =>
+    defaultCollapsed ? new Set<string>() : collectExpandedJsonPaths(value, 1)
+  );
   const [copied, setCopied] = useState(false);
 
   const handleToggle = (path: string) => {

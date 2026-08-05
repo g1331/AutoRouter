@@ -122,7 +122,7 @@ export function LogRecordingSection({ logId, enabled }: LogRecordingSectionProps
               <span className="font-mono">{formatDate(result.summary.created_at)}</span>
             </div>
 
-            <RecordingJsonBlock value={result.detail.fixture ?? null} />
+            <RecordingJsonBlock value={result.detail.fixture ?? null} defaultCollapsed />
           </div>
         ) : null}
       </div>

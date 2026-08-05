@@ -51,8 +51,19 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/admin/recording-json-block", () => ({
-  RecordingJsonBlock: ({ value }: { value: unknown }) => (
-    <div data-testid="recording-json-block">{JSON.stringify(value)}</div>
+  RecordingJsonBlock: ({
+    value,
+    defaultCollapsed,
+  }: {
+    value: unknown;
+    defaultCollapsed?: boolean;
+  }) => (
+    <div
+      data-testid="recording-json-block"
+      data-default-collapsed={String(Boolean(defaultCollapsed))}
+    >
+      {JSON.stringify(value)}
+    </div>
   ),
 }));
 
@@ -174,6 +185,10 @@ describe("LogRecordingSection", () => {
     expect(screen.getByText("12.1 KiB")).toBeInTheDocument();
     expect(screen.getByText("trafficRecording.redacted")).toBeInTheDocument();
     expect(screen.getByTestId("recording-json-block")).toHaveTextContent("requestId");
+    expect(screen.getByTestId("recording-json-block")).toHaveAttribute(
+      "data-default-collapsed",
+      "true"
+    );
     expect(screen.getByText("trafficRecording.logSectionOpenRecordings")).toBeInTheDocument();
   });
 });
