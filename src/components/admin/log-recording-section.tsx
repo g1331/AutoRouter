@@ -1,7 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { DatabaseZap, ExternalLink, FileWarning, Loader2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  DatabaseZap,
+  ExternalLink,
+  FileWarning,
+  Loader2,
+} from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +30,7 @@ function formatBytes(value: number): string {
 export function LogRecordingSection({ logId, enabled }: LogRecordingSectionProps) {
   const t = useTranslations("trafficRecording");
   const locale = useLocale();
+  const [isExpanded, setIsExpanded] = useState(false);
   const result = useTrafficRecordingByLogId(logId, enabled);
 
   const formatDate = (value: string | null) => {
@@ -37,10 +46,22 @@ export function LogRecordingSection({ logId, enabled }: LogRecordingSectionProps
   return (
     <div className="rounded-cf-md border bg-card">
       <div className="flex flex-col gap-2 border-b border-divider px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2 text-amber-500">
+        <button
+          type="button"
+          onClick={() => setIsExpanded((previous) => !previous)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-amber-500"
+          aria-expanded={isExpanded}
+          aria-controls={`log-recording-section-${logId}`}
+          aria-label={isExpanded ? t("logSectionCollapse") : t("logSectionExpand")}
+        >
           <DatabaseZap className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="type-label-medium">{t("logSectionTitle")}</span>
-        </div>
+          {isExpanded ? (
+            <ChevronUp className="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+        </button>
         {result.status === "present" && result.summary ? (
           <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-xs">
             <Link href="/system/traffic-recording">
@@ -51,81 +72,83 @@ export function LogRecordingSection({ logId, enabled }: LogRecordingSectionProps
         ) : null}
       </div>
 
-      <div className="p-3">
-        {result.status === "idle" ? (
-          <p className="type-caption text-muted-foreground">{t("logSectionIdle")}</p>
-        ) : null}
+      {isExpanded ? (
+        <div id={`log-recording-section-${logId}`} className="p-3">
+          {result.status === "idle" ? (
+            <p className="type-caption text-muted-foreground">{t("logSectionIdle")}</p>
+          ) : null}
 
-        {result.status === "loading" ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            <span>{t("logSectionLoading")}</span>
-          </div>
-        ) : null}
-
-        {result.status === "absent" ? (
-          <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>{t("logSectionAbsent")}</span>
-            <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs">
-              <Link href="/system/traffic-recording">
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                {t("logSectionOpenRecordingSettings")}
-              </Link>
-            </Button>
-          </div>
-        ) : null}
-
-        {result.status === "missing-file" ? (
-          <div className="flex flex-col gap-2 text-sm text-status-warning sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <FileWarning className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{t("logSectionMissingFile")}</span>
+          {result.status === "loading" ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <span>{t("logSectionLoading")}</span>
             </div>
-            <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs">
-              <Link href="/system/traffic-recording">
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                {t("logSectionOpenRecordings")}
-              </Link>
-            </Button>
-          </div>
-        ) : null}
+          ) : null}
 
-        {result.status === "error" && result.error ? (
-          <p className="text-sm text-status-error">
-            {t("logSectionLoadFailed", { message: result.error.message ?? "" })}
-          </p>
-        ) : null}
-
-        {result.status === "present" && result.summary && result.detail ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge
-                variant={
-                  result.summary.status_code != null && result.summary.status_code >= 500
-                    ? "error"
-                    : result.summary.status_code != null && result.summary.status_code >= 400
-                      ? "warning"
-                      : result.summary.status_code != null && result.summary.status_code >= 200
-                        ? "success"
-                        : "neutral"
-                }
-              >
-                {result.summary.status_code ?? result.summary.outcome}
-              </Badge>
-              {result.summary.model ? (
-                <span className="font-mono">{result.summary.model}</span>
-              ) : null}
-              <span>{formatBytes(result.summary.fixture_size_bytes)}</span>
-              <Badge variant={result.summary.redacted ? "success" : "warning"}>
-                {result.summary.redacted ? t("redacted") : t("notRedacted")}
-              </Badge>
-              <span className="font-mono">{formatDate(result.summary.created_at)}</span>
+          {result.status === "absent" ? (
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <span>{t("logSectionAbsent")}</span>
+              <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs">
+                <Link href="/system/traffic-recording">
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t("logSectionOpenRecordingSettings")}
+                </Link>
+              </Button>
             </div>
+          ) : null}
 
-            <RecordingJsonBlock value={result.detail.fixture ?? null} />
-          </div>
-        ) : null}
-      </div>
+          {result.status === "missing-file" ? (
+            <div className="flex flex-col gap-2 text-sm text-status-warning sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <FileWarning className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{t("logSectionMissingFile")}</span>
+              </div>
+              <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs">
+                <Link href="/system/traffic-recording">
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t("logSectionOpenRecordings")}
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+
+          {result.status === "error" && result.error ? (
+            <p className="text-sm text-status-error">
+              {t("logSectionLoadFailed", { message: result.error.message ?? "" })}
+            </p>
+          ) : null}
+
+          {result.status === "present" && result.summary && result.detail ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge
+                  variant={
+                    result.summary.status_code != null && result.summary.status_code >= 500
+                      ? "error"
+                      : result.summary.status_code != null && result.summary.status_code >= 400
+                        ? "warning"
+                        : result.summary.status_code != null && result.summary.status_code >= 200
+                          ? "success"
+                          : "neutral"
+                  }
+                >
+                  {result.summary.status_code ?? result.summary.outcome}
+                </Badge>
+                {result.summary.model ? (
+                  <span className="font-mono">{result.summary.model}</span>
+                ) : null}
+                <span>{formatBytes(result.summary.fixture_size_bytes)}</span>
+                <Badge variant={result.summary.redacted ? "success" : "warning"}>
+                  {result.summary.redacted ? t("redacted") : t("notRedacted")}
+                </Badge>
+                <span className="font-mono">{formatDate(result.summary.created_at)}</span>
+              </div>
+
+              <RecordingJsonBlock value={result.detail.fixture ?? null} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
