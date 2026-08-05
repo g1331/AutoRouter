@@ -1647,6 +1647,8 @@
     "loadingDetail": "Loading recording detail...",
     "detailLoadFailed": "Failed to load recording detail",
     "logSectionTitle": "Request recording",
+    "logSectionExpand": "Expand request recording",
+    "logSectionCollapse": "Collapse request recording",
     "logSectionIdle": "Expand this row to load the matching recording.",
     "logSectionLoading": "Loading recording...",
     "logSectionAbsent": "This request was not recorded.",
