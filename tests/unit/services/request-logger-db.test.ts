@@ -103,6 +103,8 @@ describe("request-logger (db flows)", () => {
       cachedTokens: 1,
       reasoningTokens: 2,
       reasoningEffort: "high",
+      requestedServiceTier: "fast",
+      effectiveServiceTier: "standard",
       cacheCreationTokens: 3,
       cacheReadTokens: 4,
       statusCode: 200,
@@ -159,6 +161,8 @@ describe("request-logger (db flows)", () => {
         cachedTokens: 1,
         reasoningTokens: 2,
         reasoningEffort: "high",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: "standard",
         cacheCreationTokens: 3,
         cacheReadTokens: 4,
         statusCode: 200,
@@ -871,6 +875,8 @@ describe("request-logger (db flows)", () => {
         apiKeyId: "key-1",
         upstreamId: "upstream-1",
         model: "gpt-4.1",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
       },
     ]);
     const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
@@ -900,6 +906,8 @@ describe("request-logger (db flows)", () => {
       apiKeyId: "key-1",
       upstreamId: "upstream-1",
       model: "gpt-4.1",
+      requestedServiceTier: "fast",
+      effectiveServiceTier: null,
       usage: {
         promptTokens: 0,
         completionTokens: 0,

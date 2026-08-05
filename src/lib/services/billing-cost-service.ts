@@ -9,6 +9,7 @@ import { getProviderTypeForModel } from "@/lib/services/model-router";
 import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 import { createLogger } from "@/lib/utils/logger";
+import type { EffectiveServiceTier, RequestedServiceTier } from "@/types/api";
 
 const log = createLogger("billing-cost-service");
 
@@ -166,6 +167,8 @@ export interface PersistRequestBillingInput {
   // upsert so the snapshot always matches the log's attribution (decision 7).
   userId?: string | null;
   model: string | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  effectiveServiceTier?: EffectiveServiceTier | null;
   usage: BillingUsageInput;
   billedAt?: Date;
 }
@@ -287,6 +290,8 @@ async function upsertUnbilledSnapshot(
       upstreamId: input.upstreamId,
       userId: input.userId ?? null,
       model: input.model,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: input.effectiveServiceTier ?? null,
       billingStatus: "unbilled",
       unbillableReason: reason,
       priceSource: null,
@@ -318,6 +323,8 @@ async function upsertUnbilledSnapshot(
       upstreamId: input.upstreamId,
       userId: input.userId ?? null,
       model: input.model,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: input.effectiveServiceTier ?? null,
       billingStatus: "unbilled",
       unbillableReason: reason,
       priceSource: null,
@@ -456,7 +463,9 @@ export async function calculateAndPersistRequestBillingSnapshot(
 
   const providerType = getProviderTypeForModel(model);
   const billedInputTokens = resolveBilledInputTokens(usage, providerType);
-  const resolvedPrice = await resolveBillingModelPrice(model, billedInputTokens);
+  const resolvedPrice = input.effectiveServiceTier
+    ? await resolveBillingModelPrice(model, billedInputTokens, input.effectiveServiceTier)
+    : await resolveBillingModelPrice(model, billedInputTokens);
   if (!resolvedPrice) {
     return upsertUnbilledSnapshot({ ...input, model }, "price_not_found");
   }
@@ -498,6 +507,8 @@ export async function calculateAndPersistRequestBillingSnapshot(
       upstreamId: input.upstreamId,
       userId: input.userId ?? null,
       model,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: input.effectiveServiceTier ?? null,
       billingStatus: "billed",
       unbillableReason: null,
       priceSource: resolvedPrice.source,
@@ -529,6 +540,8 @@ export async function calculateAndPersistRequestBillingSnapshot(
       upstreamId: input.upstreamId,
       userId: input.userId ?? null,
       model,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: input.effectiveServiceTier ?? null,
       billingStatus: "billed",
       unbillableReason: null,
       priceSource: resolvedPrice.source,

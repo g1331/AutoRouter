@@ -341,6 +341,8 @@ export const requestLogs = pgTable(
     path: text("path"),
     model: varchar("model", { length: 128 }),
     reasoningEffort: varchar("reasoning_effort", { length: 16 }),
+    requestedServiceTier: varchar("requested_service_tier", { length: 16 }),
+    effectiveServiceTier: varchar("effective_service_tier", { length: 16 }),
     promptTokens: integer("prompt_tokens").notNull().default(0),
     completionTokens: integer("completion_tokens").notNull().default(0),
     totalTokens: integer("total_tokens").notNull().default(0),
@@ -458,6 +460,14 @@ export const billingModelPrices = pgTable(
     outputPricePerMillion: doublePrecision("output_price_per_million").notNull(),
     cacheReadInputPricePerMillion: doublePrecision("cache_read_input_price_per_million"),
     cacheWriteInputPricePerMillion: doublePrecision("cache_write_input_price_per_million"),
+    priorityInputPricePerMillion: doublePrecision("priority_input_price_per_million"),
+    priorityOutputPricePerMillion: doublePrecision("priority_output_price_per_million"),
+    priorityCacheReadInputPricePerMillion: doublePrecision(
+      "priority_cache_read_input_price_per_million"
+    ),
+    priorityCacheWriteInputPricePerMillion: doublePrecision(
+      "priority_cache_write_input_price_per_million"
+    ),
     maxInputTokens: integer("max_input_tokens"),
     maxOutputTokens: integer("max_output_tokens"),
     source: varchar("source", { length: 32 }).notNull(), // openrouter | litellm
@@ -610,6 +620,8 @@ export const requestBillingSnapshots = pgTable(
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     upstreamId: uuid("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     model: varchar("model", { length: 255 }),
+    requestedServiceTier: varchar("requested_service_tier", { length: 16 }),
+    effectiveServiceTier: varchar("effective_service_tier", { length: 16 }),
     billingStatus: varchar("billing_status", { length: 16 }).notNull(), // billed | unbilled
     unbillableReason: varchar("unbillable_reason", { length: 64 }),
     priceSource: varchar("price_source", { length: 32 }), // manual | openrouter | litellm

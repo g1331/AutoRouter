@@ -17,6 +17,8 @@ import type {
 import type {
   RequestThinkingConfig,
   ReasoningEffort,
+  RequestedServiceTier,
+  EffectiveServiceTier,
   RouteCapability,
   RoutingDecisionLog,
   RoutingFailureStage,
@@ -473,6 +475,8 @@ export interface RequestLogApiResponse {
   path: string | null;
   model: string | null;
   reasoning_effort?: ReasoningEffort | null;
+  requested_service_tier?: RequestedServiceTier | null;
+  effective_service_tier?: EffectiveServiceTier | null;
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
@@ -863,6 +867,8 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     path: log.path,
     model: log.model,
     reasoning_effort: log.reasoningEffort ?? null,
+    requested_service_tier: log.requestedServiceTier ?? null,
+    effective_service_tier: log.effectiveServiceTier ?? null,
     prompt_tokens: log.promptTokens,
     completion_tokens: log.completionTokens,
     total_tokens: log.totalTokens,
