@@ -344,6 +344,11 @@ describe("lib/db/schema", () => {
       expect(requestLogs.reasoningEffort.name).toBe("reasoning_effort");
     });
 
+    it("has requested and effective service tier columns", () => {
+      expect(requestLogs.requestedServiceTier.name).toBe("requested_service_tier");
+      expect(requestLogs.effectiveServiceTier.name).toBe("effective_service_tier");
+    });
+
     it("has cacheCreationTokens column with default 0", () => {
       expect(requestLogs.cacheCreationTokens).toBeDefined();
       expect(requestLogs.cacheCreationTokens.name).toBe("cache_creation_tokens");
@@ -669,6 +674,8 @@ describe("lib/db/schema", () => {
 
     it("requestBillingSnapshots has user_id column and index", () => {
       expect(requestBillingSnapshots.userId.name).toBe("user_id");
+      expect(requestBillingSnapshots.requestedServiceTier.name).toBe("requested_service_tier");
+      expect(requestBillingSnapshots.effectiveServiceTier.name).toBe("effective_service_tier");
       const indexNames = getTableConfig(requestBillingSnapshots).indexes.map((i) => i.config.name);
       expect(indexNames).toContain("request_billing_snapshots_user_id_idx");
     });

@@ -11,14 +11,14 @@ describe("request-thinking-config", () => {
       extractRequestThinkingConfig("openai_responses", {
         model: "gpt-5.4",
         reasoning: {
-          effort: "high",
+          effort: "max",
         },
       })
     ).toEqual({
       provider: "openai",
       protocol: "openai_responses",
       mode: "reasoning",
-      level: "high",
+      level: "max",
       budget_tokens: null,
       include_thoughts: null,
       source_paths: ["reasoning.effort"],

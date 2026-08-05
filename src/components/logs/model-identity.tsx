@@ -9,6 +9,8 @@ import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-confi
 import { TruncatedTextTooltip } from "@/components/logs/truncated-text-tooltip";
 
 type ReasoningEffortLevel = NonNullable<RequestLog["reasoning_effort"]>;
+type RequestedServiceTier = NonNullable<RequestLog["requested_service_tier"]>;
+type EffectiveServiceTier = NonNullable<RequestLog["effective_service_tier"]>;
 
 type RequestLogReasoningMeta = RequestLog & {
   reasoning_effort?: unknown;
@@ -25,6 +27,7 @@ const REASONING_EFFORT_LABELS: Record<ReasoningEffortLevel, string> = {
   medium: "Medium",
   high: "High",
   xhigh: "XHigh",
+  max: "Max",
 };
 
 const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
@@ -35,6 +38,7 @@ const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
   medium: statusTone("info", "faint"),
   high: "border-amber-500/35 bg-amber-500/10 text-amber-300",
   xhigh: statusTone("warning"),
+  max: statusTone("error"),
 };
 
 const THINKING_BADGE_BASE_CLASS =
@@ -63,7 +67,8 @@ export function getReasoningEffortLevel(log: RequestLog): ReasoningEffortLevel |
     normalizedValue === "low" ||
     normalizedValue === "medium" ||
     normalizedValue === "high" ||
-    normalizedValue === "xhigh"
+    normalizedValue === "xhigh" ||
+    normalizedValue === "max"
     ? normalizedValue
     : null;
 }
@@ -105,6 +110,8 @@ function isThinkingBadgeDuplicatedByReasoningEffort(
 export function ModelIdentity({
   label,
   reasoningEffort,
+  requestedServiceTier,
+  effectiveServiceTier,
   thinkingConfig,
   compactBadges = false,
   className,
@@ -112,19 +119,42 @@ export function ModelIdentity({
 }: {
   label: string | null | undefined;
   reasoningEffort?: ReasoningEffortLevel | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  effectiveServiceTier?: EffectiveServiceTier | null;
   thinkingConfig?: RequestLog["thinking_config"] | null;
   compactBadges?: boolean;
   className?: string;
   textClassName?: string;
 }) {
+  const t = useTranslations("logs");
   if (!label) {
     return <span className="text-muted-foreground">-</span>;
   }
+
+  const serviceTierState =
+    requestedServiceTier === "fast" && effectiveServiceTier === "standard"
+      ? { label: t("serviceTierDowngraded"), className: statusTone("warning", "faint") }
+      : effectiveServiceTier === "fast"
+        ? { label: t("serviceTierFast"), className: statusTone("info", "faint") }
+        : requestedServiceTier === "fast" &&
+            (effectiveServiceTier === "unknown" || effectiveServiceTier == null)
+          ? { label: t("serviceTierUnconfirmed"), className: statusTone("warning", "faint") }
+          : null;
 
   return (
     <div className={cn("flex min-w-0 max-w-full items-center gap-1", className)}>
       <TruncatedTextTooltip text={label} className={cn("shrink", textClassName)} />
       {reasoningEffort ? <ReasoningEffortBadge level={reasoningEffort} /> : null}
+      {serviceTierState ? (
+        <Badge
+          variant="neutral"
+          className={cn(THINKING_BADGE_BASE_CLASS, serviceTierState.className)}
+          aria-label={serviceTierState.label}
+          title={serviceTierState.label}
+        >
+          {serviceTierState.label}
+        </Badge>
+      ) : null}
       <ThinkingConfigBadge
         thinkingConfig={thinkingConfig}
         dedupeWithReasoningEffort={reasoningEffort}

@@ -407,6 +407,52 @@ describe("billing-cost-service", () => {
     expect(resolveBillingModelPrice).toHaveBeenCalledWith("gpt-4.1", 500);
   });
 
+  it("bills an unconfirmed fast request at standard rates and persists the tier evidence", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-5.6-sol",
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: 0.5,
+      cacheWriteInputPricePerMillion: 6.25,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 1050000,
+      modelMaxOutputTokens: 128000,
+    });
+
+    const result = await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-fast-unknown",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "gpt-5.6-sol",
+      requestedServiceTier: "fast",
+      effectiveServiceTier: "unknown",
+      usage: {
+        promptTokens: 1000,
+        completionTokens: 100,
+        totalTokens: 1100,
+      },
+    });
+
+    expect(result.finalCost).toBeCloseTo(0.008, 8);
+    expect(resolveBillingModelPrice).toHaveBeenCalledWith("gpt-5.6-sol", 1000, "unknown");
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestedServiceTier: "fast",
+        effectiveServiceTier: "unknown",
+        baseInputPricePerMillion: 5,
+        baseOutputPricePerMillion: 30,
+      })
+    );
+  });
+
   it("uses provider-normalized billed input tokens for threshold resolution", async () => {
     const { resolveBillingModelPrice } =
       await import("../../../src/lib/services/billing-price-service");

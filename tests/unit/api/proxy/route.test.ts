@@ -130,6 +130,13 @@ vi.mock("@/lib/services/proxy-client", () => {
     }
   }
 
+  class UpstreamEmptyResponseError extends Error {
+    constructor(public readonly statusCode: number) {
+      super(`Upstream returned HTTP ${statusCode} with an empty response body`);
+      this.name = "UpstreamEmptyResponseError";
+    }
+  }
+
   class UpstreamNoContentStreamError extends Error {
     constructor(
       public readonly elapsedMs: number,
@@ -178,6 +185,7 @@ vi.mock("@/lib/services/proxy-client", () => {
     ),
     FirstByteTimeoutError,
     StreamIdleTimeoutError,
+    UpstreamEmptyResponseError,
     UpstreamNoContentStreamError,
   };
 });
@@ -870,6 +878,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "gpt-5.2",
         messages: [{ role: "user", content: "hello" }],
+        service_tier: "priority",
       }),
     });
 
@@ -902,6 +911,8 @@ describe("proxy route upstream selection", () => {
         upstreamId: null,
         path: "chat/completions",
         model: "gpt-5.2",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         statusCode: 429,
         errorMessage: expect.stringContaining("rate_limited"),
         routingDecision: expect.objectContaining({
@@ -1159,6 +1170,7 @@ describe("proxy route upstream selection", () => {
         model: "gpt-5.2",
         messages: [{ role: "user", content: "hello" }],
         stream: true,
+        service_tier: "fast",
       }),
     });
 
@@ -1185,6 +1197,8 @@ describe("proxy route upstream selection", () => {
         upstreamId: null,
         path: "chat/completions",
         model: "gpt-5.2",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         statusCode: 429,
         errorMessage: expect.stringContaining("API key spending quota exceeded"),
         routingDecision: expect.objectContaining({
@@ -2451,6 +2465,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "gpt-5.2",
         messages: [{ role: "user", content: "hello" }],
+        service_tier: "fast",
       }),
     });
 
@@ -2474,6 +2489,8 @@ describe("proxy route upstream selection", () => {
     expect(logRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         upstreamId: null,
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         errorMessage: "all authorized upstreams were excluded by model rules",
         routingDecision: expect.objectContaining({
           matched_route_capability: "openai_chat_compatible",
@@ -2517,6 +2534,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "claude-3-7-sonnet",
         messages: [{ role: "user", content: "hello" }],
+        service_tier: "fast",
       }),
     });
 
@@ -2543,6 +2561,8 @@ describe("proxy route upstream selection", () => {
         apiKeyPrefix: "sk-test",
         upstreamId: null,
         model: "claude-3-7-sonnet",
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
         statusCode: 403,
         errorMessage: "API key is not allowed to request model: claude-3-7-sonnet",
         routingDecision: expect.objectContaining({
@@ -4285,6 +4305,117 @@ describe("proxy route upstream selection", () => {
     expect(markUnhealthy).toHaveBeenCalledTimes(1);
     expect(markUnhealthy).toHaveBeenCalledWith("up-release-error", "fetch failed");
     expect(recordFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("should fail over when an upstream returns an empty successful response", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, UpstreamEmptyResponseError } =
+      await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const firstUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-first",
+      name: "empty-response",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+    };
+    const secondUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-second",
+      name: "valid-response",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([firstUpstream, secondUpstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: firstUpstream.id },
+      { upstreamId: secondUpstream.id },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: firstUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [firstUpstream, secondUpstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: firstUpstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: firstUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+        selectionReason: null,
+      })
+      .mockResolvedValueOnce({
+        upstream: secondUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+        selectionReason: null,
+      });
+    vi.mocked(forwardRequest)
+      .mockRejectedValueOnce(new UpstreamEmptyResponseError(200))
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        body: new TextEncoder().encode(JSON.stringify({ id: "valid-response" })),
+        isStream: false,
+        usage: null,
+        headerDiff: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ id: "valid-response" });
+    expect(forwardRequest).toHaveBeenCalledTimes(2);
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        failoverHistory: expect.arrayContaining([
+          expect.objectContaining({
+            upstream_id: firstUpstream.id,
+            error_type: "upstream_empty_response",
+            status_code: 200,
+          }),
+        ]),
+      })
+    );
   });
 
   it("should release a reserved slot exactly once after streaming completes", async () => {
@@ -6480,6 +6611,8 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -6516,6 +6649,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "unknown-model",
         messages: [{ role: "user", content: "hi" }],
+        service_tier: "fast",
       }),
     });
 
@@ -6535,6 +6669,12 @@ describe("proxy route upstream selection", () => {
     });
     expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestedServiceTier: "fast",
+        effectiveServiceTier: null,
+      })
+    );
   });
 
   it("should authorize unrestricted keys across all active upstreams", async () => {
@@ -7442,12 +7582,14 @@ describe("proxy route upstream selection", () => {
     );
   });
 
-  it("should persist streaming ttft from streamMetricsPromise", async () => {
+  it("should persist GPT-5.6 max reasoning and a downgraded fast service tier", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
     const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -7508,6 +7650,7 @@ describe("proxy route upstream selection", () => {
       body: stream,
       isStream: true,
       streamMetricsPromise: Promise.resolve({
+        effectiveServiceTier: "standard",
         usage: {
           promptTokens: 10,
           completionTokens: 20,
@@ -7530,7 +7673,8 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hello" }],
-        reasoning_effort: "high",
+        reasoning_effort: "max",
+        service_tier: "priority",
         stream: true,
       }),
     });
@@ -7544,12 +7688,13 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({
         model: "gpt-4o-mini",
         isStream: true,
-        reasoningEffort: "high",
+        reasoningEffort: "max",
+        requestedServiceTier: "fast",
         thinkingConfig: {
           provider: "openai",
           protocol: "openai_chat",
           mode: "reasoning",
-          level: "high",
+          level: "max",
           budget_tokens: null,
           include_thoughts: null,
           source_paths: ["reasoning_effort"],
@@ -7576,7 +7721,9 @@ describe("proxy route upstream selection", () => {
 
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
     expect(updateLogPayload?.isStream).toBe(true);
-    expect(updateLogPayload?.reasoningEffort).toBe("high");
+    expect(updateLogPayload?.reasoningEffort).toBe("max");
+    expect(updateLogPayload?.requestedServiceTier).toBe("fast");
+    expect(updateLogPayload?.effectiveServiceTier).toBe("standard");
     expect(updateLogPayload?.ttftMs).toBe(321);
     expect(updateLogPayload?.promptTokens).toBe(10);
     expect(updateLogPayload?.completionTokens).toBe(20);
@@ -7584,11 +7731,17 @@ describe("proxy route upstream selection", () => {
       provider: "openai",
       protocol: "openai_chat",
       mode: "reasoning",
-      level: "high",
+      level: "max",
       budget_tokens: null,
       include_thoughts: null,
       source_paths: ["reasoning_effort"],
     });
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestedServiceTier: "fast",
+        effectiveServiceTier: "standard",
+      })
+    );
   });
 
   it.skip("should handle streaming response failover with circuit breaker", async () => {
@@ -8146,6 +8299,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          service_tier: "priority",
           stream: true,
         }),
         signal: abortController.signal,
@@ -8175,9 +8329,13 @@ describe("proxy route upstream selection", () => {
       const failureLogPayload = vi
         .mocked(updateRequestLog)
         .mock.calls.find(([, payload]) => payload.statusCode === 504)?.[1];
-      expect(failureLogPayload?.routingDecision).toEqual(
+      expect(failureLogPayload).toEqual(
         expect.objectContaining({
-          failure_stage: "downstream_streaming",
+          requestedServiceTier: "fast",
+          effectiveServiceTier: null,
+          routingDecision: expect.objectContaining({
+            failure_stage: "downstream_streaming",
+          }),
         })
       );
       expect(failureLogPayload?.failoverHistory?.[0]).toEqual(
@@ -8186,6 +8344,12 @@ describe("proxy route upstream selection", () => {
           error_type: "stream_idle_timeout",
           circuit_breaker_recorded: true,
           matched_failure_rule: null,
+        })
+      );
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedServiceTier: "fast",
+          effectiveServiceTier: null,
         })
       );
     });
@@ -8294,6 +8458,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          service_tier: "fast",
           stream: true,
         }),
         signal: abortController.signal,
@@ -8327,6 +8492,8 @@ describe("proxy route upstream selection", () => {
           apiKeyId: "key-1",
           upstreamId: "up-openai",
           model: "gpt-4.1",
+          requestedServiceTier: "fast",
+          effectiveServiceTier: null,
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -8338,8 +8505,9 @@ describe("proxy route upstream selection", () => {
       );
     });
 
-    it("should persist billed snapshot after successful non-stream response", async () => {
+    it("should mark an unconfirmed fast non-stream response and bill it conservatively", async () => {
       const { db } = await import("@/lib/db");
+      const { updateRequestLog } = await import("@/lib/services/request-logger");
       const { forwardRequest } = await import("@/lib/services/proxy-client");
       const { selectFromProviderType } = await import("@/lib/services/load-balancer");
       const { calculateAndPersistRequestBillingSnapshot } =
@@ -8401,6 +8569,7 @@ describe("proxy route upstream selection", () => {
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
           reasoning_effort: "high",
+          service_tier: "fast",
         }),
       });
 
@@ -8409,12 +8578,22 @@ describe("proxy route upstream selection", () => {
       });
 
       expect(response.status).toBe(200);
+      expect(updateRequestLog).toHaveBeenCalledWith(
+        "log-id",
+        expect.objectContaining({
+          requestedServiceTier: "fast",
+          effectiveServiceTier: "unknown",
+          isStream: false,
+        })
+      );
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKeyId: "key-1",
           upstreamId: "up-openai",
           model: "gpt-4.1",
+          requestedServiceTier: "fast",
+          effectiveServiceTier: "unknown",
           usage: {
             promptTokens: 120,
             completionTokens: 30,

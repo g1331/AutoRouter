@@ -183,6 +183,10 @@ describe("getReasoningEffortLevel", () => {
     );
   });
 
+  it("recognizes the GPT-5.6 max reasoning effort", () => {
+    expect(getReasoningEffortLevel({ ...baseLog, reasoning_effort: "max" })).toBe("max");
+  });
+
   it("returns null for an unrecognized string value", () => {
     expect(
       getReasoningEffortLevel({ ...baseLog, reasoning_effort: "ultra" } as RequestLog)
@@ -212,12 +216,31 @@ describe("ModelIdentity", () => {
   it.each([
     ["high", "High"],
     ["xhigh", "XHigh"],
+    ["max", "Max"],
     ["medium", "Medium"],
     ["none", "None"],
   ] as const)("renders the %s reasoning effort badge as %s", (level, expectedText) => {
     renderWithTooltip(<ModelIdentity label="gpt-4" reasoningEffort={level} />);
     expect(screen.getByText(expectedText)).toBeInTheDocument();
   });
+
+  it.each([
+    ["fast", "fast", "logs.serviceTierFast"],
+    ["fast", "standard", "logs.serviceTierDowngraded"],
+    ["fast", "unknown", "logs.serviceTierUnconfirmed"],
+  ] as const)(
+    "renders requested %s and effective %s service tier state",
+    (requestedServiceTier, effectiveServiceTier, expectedLabel) => {
+      renderWithTooltip(
+        <ModelIdentity
+          label="gpt-5.6-sol"
+          requestedServiceTier={requestedServiceTier}
+          effectiveServiceTier={effectiveServiceTier}
+        />
+      );
+      expect(screen.getByText(expectedLabel)).toBeInTheDocument();
+    }
+  );
 
   it("keeps the bracketed thinking badge when there is no reasoning effort", () => {
     const thinkingConfig = {

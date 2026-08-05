@@ -19,6 +19,8 @@ import type {
   FailoverErrorType,
   RequestThinkingConfig,
   ReasoningEffort,
+  RequestedServiceTier,
+  EffectiveServiceTier,
   RoutingDecisionLog,
   RoutingSelectionReason,
 } from "@/types/api";
@@ -49,6 +51,8 @@ export interface LogRequestInput {
   path: string | null;
   model: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  effectiveServiceTier?: EffectiveServiceTier | null;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -95,6 +99,7 @@ export interface StartRequestLogInput {
   path: string | null;
   model: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  requestedServiceTier?: RequestedServiceTier | null;
   isStream?: boolean;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
@@ -118,6 +123,8 @@ export interface UpdateRequestLogInput {
   path?: string | null;
   model?: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  effectiveServiceTier?: EffectiveServiceTier | null;
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
@@ -186,6 +193,8 @@ export interface RequestLogResponse {
   path: string | null;
   model: string | null;
   reasoningEffort?: ReasoningEffort | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  effectiveServiceTier?: EffectiveServiceTier | null;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -315,7 +324,13 @@ function parseRequestLogCreatedAt(value: Date | string | number | null | undefin
 }
 
 async function persistZeroUsageBillingSnapshot(
-  logEntry: Pick<RequestLog, "id" | "apiKeyId" | "upstreamId" | "model"> | null | undefined
+  logEntry:
+    | Pick<
+        RequestLog,
+        "id" | "apiKeyId" | "upstreamId" | "model" | "requestedServiceTier" | "effectiveServiceTier"
+      >
+    | null
+    | undefined
 ): Promise<void> {
   if (!logEntry) {
     return;
@@ -327,6 +342,8 @@ async function persistZeroUsageBillingSnapshot(
       apiKeyId: logEntry.apiKeyId,
       upstreamId: logEntry.upstreamId,
       model: logEntry.model,
+      requestedServiceTier: normalizeRequestedServiceTier(logEntry.requestedServiceTier),
+      effectiveServiceTier: normalizeEffectiveServiceTier(logEntry.effectiveServiceTier),
       usage: {
         promptTokens: 0,
         completionTokens: 0,
@@ -411,11 +428,23 @@ function normalizeReasoningEffort(value: string | null | undefined): ReasoningEf
     value === "medium" ||
     value === "high" ||
     value === "xhigh" ||
+    value === "max" ||
     value === "enabled"
   ) {
     return value;
   }
   return null;
+}
+
+function normalizeRequestedServiceTier(value: string | null): RequestedServiceTier | null {
+  if (value === "fast" || value === "priority") return "fast";
+  if (value === "default" || value === "standard") return "standard";
+  return null;
+}
+
+function normalizeEffectiveServiceTier(value: string | null): EffectiveServiceTier | null {
+  if (value === "unknown") return "unknown";
+  return normalizeRequestedServiceTier(value);
 }
 
 /**
@@ -435,6 +464,8 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       path: input.path,
       model: input.model,
       reasoningEffort: input.reasoningEffort ?? null,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: null,
       // Keep token fields at 0 until completion.
       promptTokens: 0,
       completionTokens: 0,
@@ -486,6 +517,10 @@ export async function updateRequestLog(
   if (input.path !== undefined) updateValues.path = input.path;
   if (input.model !== undefined) updateValues.model = input.model;
   if (input.reasoningEffort !== undefined) updateValues.reasoningEffort = input.reasoningEffort;
+  if (input.requestedServiceTier !== undefined)
+    updateValues.requestedServiceTier = input.requestedServiceTier;
+  if (input.effectiveServiceTier !== undefined)
+    updateValues.effectiveServiceTier = input.effectiveServiceTier;
 
   if (input.promptTokens !== undefined) updateValues.promptTokens = input.promptTokens;
   if (input.completionTokens !== undefined) updateValues.completionTokens = input.completionTokens;
@@ -577,6 +612,8 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       path: input.path,
       model: input.model,
       reasoningEffort: input.reasoningEffort ?? null,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: input.effectiveServiceTier ?? null,
       promptTokens: input.promptTokens,
       completionTokens: input.completionTokens,
       totalTokens: input.totalTokens,
@@ -1071,6 +1108,8 @@ export async function listRequestLogs(
     path: log.path,
     model: log.model,
     reasoningEffort: normalizeReasoningEffort(log.reasoningEffort),
+    requestedServiceTier: normalizeRequestedServiceTier(log.requestedServiceTier),
+    effectiveServiceTier: normalizeEffectiveServiceTier(log.effectiveServiceTier),
     promptTokens: log.promptTokens,
     completionTokens: log.completionTokens,
     totalTokens: log.totalTokens,
