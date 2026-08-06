@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useRequestLogStats } from "@/hooks/use-request-log-stats";
-import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
+import { createRequestLogQuery } from "@/lib/utils/request-log-query";
 
 const mockGet = vi.fn();
 
@@ -47,7 +47,7 @@ describe("useRequestLogStats", () => {
 
   it("uses the filter stats projection without list-only fields", async () => {
     mockGet.mockResolvedValueOnce({ total: 0 });
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       id: "log-1",
       userId: "user-1",
       upstreamId: "up-1",
@@ -78,7 +78,7 @@ describe("useRequestLogStats", () => {
 
   it("drops admin-only fields for the user stats endpoint", async () => {
     mockGet.mockResolvedValueOnce({ total: 0 });
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       userId: "user-1",
       upstreamId: "up-1",
       apiKeyId: "key-1",
@@ -101,7 +101,7 @@ describe("useRequestLogStats", () => {
 
     mockGet.mockResolvedValueOnce({ total: 0 });
     const { result } = renderHook(
-      () => useRequestLogStats("admin", normalizeRequestLogFilter({ timeRange: "all" })),
+      () => useRequestLogStats("admin", createRequestLogQuery({ timeRange: "all" })),
       { wrapper }
     );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

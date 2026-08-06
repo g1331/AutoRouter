@@ -66,10 +66,10 @@ import {
   performancePresetToThresholds,
   performanceThresholdsToPreset,
   type RequestLogPerformanceThresholds,
-} from "@/lib/utils/request-log-filters";
+} from "@/lib/utils/request-log-query";
 
 /** Sortable list columns; created_at desc is the implicit default order. */
-export type LogsSortField = "created_at" | "duration_ms" | "total_tokens" | "cost";
+export type LogsSortField = "created_at" | "duration_ms" | "ttft_ms" | "total_tokens" | "cost";
 
 /**
  * Filters resolved server-side: the parent owns this state, feeds it into its

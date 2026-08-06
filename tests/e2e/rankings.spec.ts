@@ -68,7 +68,7 @@ test.describe("Rankings page", () => {
     await detailRow.getByRole("link", { name: "查看日志" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/zh-CN/logs\\?.*upstream_id=${UPSTREAM_COSTLY.id}`));
-    await expect(page).toHaveURL(/start_time=/);
+    await expect(page).toHaveURL(/time_range=7d/);
     // logs 页从 URL 参数初始化了上游过滤（Phase 4 行为的端到端验证）。
     await expect(page.getByRole("combobox", { name: "上游" })).toContainText(UPSTREAM_COSTLY.name);
 

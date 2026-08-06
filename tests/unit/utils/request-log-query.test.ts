@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  normalizeRequestLogFilter,
+  createRequestLogQuery,
   parseRequestLogFilterUrl,
   parseRequestLogListQuery,
   resolveTimeRangeStart,
-} from "@/lib/utils/request-log-filters";
+} from "@/lib/utils/request-log-query";
 
 const READ_AT = new Date("2026-08-06T12:00:00.000Z");
 
@@ -13,9 +13,9 @@ function params(search: string): URLSearchParams {
   return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
 }
 
-describe("request log filter module", () => {
+describe("request log query module", () => {
   it("normalizes status precedence, complete custom time, and performance presets", () => {
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       statusCode: "429",
       statusClass: "5xx",
       timeRange: "7d",
@@ -26,18 +26,18 @@ describe("request log filter module", () => {
       performancePreset: "high_ttft",
     });
 
-    expect(filter.statusCode).toBe(429);
-    expect(filter.statusClass).toBeUndefined();
-    expect(filter.time).toEqual({
+    expect(filter.filter.statusCode).toBe(429);
+    expect(filter.filter.statusClass).toBeUndefined();
+    expect(filter.filter.time).toEqual({
       kind: "custom",
       startIso: "2026-08-01T00:00:00.000Z",
       endIso: "2026-08-05T00:00:00.000Z",
     });
-    expect(filter.performance).toEqual({ ttftMinMs: 5000 });
+    expect(filter.filter.performance).toEqual({ ttftMinMs: 5000 });
   });
 
   it("serializes the admin list projection with pagination and sort", () => {
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       apiKeyId: "key-1",
       userId: "user-1",
       upstreamId: "up-1",
@@ -91,9 +91,19 @@ describe("request log filter module", () => {
     });
     expect(parsed.sort).toEqual({ field: "cost", order: "asc" });
   });
+  it("rejects a reversed explicit time range", () => {
+    const parsed = parseRequestLogListQuery(
+      new URL(
+        "https://example.test/logs?start_time=2026-08-05T00:00:00.000Z&end_time=2026-08-01T00:00:00.000Z"
+      ),
+      "admin"
+    );
+
+    expect(parsed).toEqual({ ok: false, error: "Invalid time range" });
+  });
 
   it("projects member scope without client-controlled owner fields", () => {
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       id: "log-1",
       userId: "user-1",
       upstreamId: "up-1",
@@ -121,7 +131,7 @@ describe("request log filter module", () => {
   });
 
   it("keeps preset identity stable while resolving a fresh runtime boundary", () => {
-    const filter = normalizeRequestLogFilter({ timeRange: "7d" });
+    const filter = createRequestLogQuery({ timeRange: "7d" });
     const first = filter.list({ scope: "admin", readAt: READ_AT });
     const laterAt = new Date("2026-08-07T12:00:00.000Z");
     const later = filter.list({ scope: "admin", readAt: laterAt });
@@ -136,14 +146,14 @@ describe("request log filter module", () => {
   });
 
   it("canonicalizes URLs by omitting defaults and preserving explicit all", () => {
-    const defaultUrl = normalizeRequestLogFilter({
+    const defaultUrl = createRequestLogQuery({
       apiKeyId: "key-1",
       timeRange: "30d",
     }).url({
       scope: "admin",
       sort: { field: "created_at", order: "desc" },
     }).search;
-    const allUrl = normalizeRequestLogFilter({ timeRange: "all" }).url({ scope: "admin" }).search;
+    const allUrl = createRequestLogQuery({ timeRange: "all" }).url({ scope: "admin" }).search;
 
     expect(defaultUrl).toBe("?api_key_id=key-1");
     expect(allUrl).toBe("?time_range=all");
@@ -157,8 +167,8 @@ describe("request log filter module", () => {
       "admin"
     );
 
-    expect(parsed.filter.time).toEqual({ kind: "preset", value: "30d" });
-    expect(parsed.filter.statusClass).toBeUndefined();
+    expect(parsed.query.filter.time).toEqual({ kind: "preset", value: "30d" });
+    expect(parsed.query.filter.statusClass).toBeUndefined();
     expect(parsed.sort).toBeUndefined();
     expect(parsed.canonical.search).toBe("");
   });

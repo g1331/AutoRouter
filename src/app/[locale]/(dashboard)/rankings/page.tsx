@@ -126,23 +126,16 @@ export default function RankingsPage() {
 
   // Time window forwarded to the logs page from the "view logs" links.
   const logsWindow = useMemo<RankingsLogsWindow>(() => {
-    const now = new Date();
     if (state.range === "custom" && state.customRange) {
       return {
-        startIso: state.customRange.start.toISOString(),
-        endIso: state.customRange.end.toISOString(),
+        timeRange: "custom",
+        customRange: {
+          startIso: state.customRange.start.toISOString(),
+          endIso: state.customRange.end.toISOString(),
+        },
       };
     }
-    if (state.range === "today") {
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      return { startIso: start.toISOString(), endIso: now.toISOString() };
-    }
-    const days = state.range === "30d" ? 30 : 7;
-    return {
-      startIso: new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString(),
-      endIso: now.toISOString(),
-    };
+    return { timeRange: state.range === "custom" ? "7d" : state.range };
   }, [state.range, state.customRange]);
 
   return (

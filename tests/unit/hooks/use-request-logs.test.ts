@@ -2,8 +2,8 @@ import { createElement, type ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RequestLogFilter } from "@/lib/utils/request-log-filters";
-import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
+import type { RequestLogQuery } from "@/lib/utils/request-log-query";
+import { createRequestLogQuery } from "@/lib/utils/request-log-query";
 import { useRequestLogs } from "@/hooks/use-request-logs";
 
 const mockGet = vi.fn();
@@ -47,7 +47,7 @@ describe("useRequestLogs", () => {
 
   it("passes the list projection and list controls to the admin endpoint", async () => {
     mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       apiKeyId: "key-1",
       upstreamId: "up-1",
       statusCode: 500,
@@ -74,16 +74,35 @@ describe("useRequestLogs", () => {
     expect(query.sort).toBe("cost");
     expect(query.order).toBe("asc");
   });
+  it("rebuilds relative time bounds when a query refetches", async () => {
+    vi.useFakeTimers({ now: new Date("2026-08-06T12:00:00.000Z"), shouldAdvanceTime: true });
+    try {
+      mockGet.mockResolvedValue({ items: [], total: 0 });
+      const filter = createRequestLogQuery({ timeRange: "7d" });
+      const { result } = renderHook(() => useRequestLogs(1, 20, filter), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      const firstStart = parseUrlParams(mockGet.mock.calls[0][0] as string).start_time;
+
+      vi.setSystemTime(new Date("2026-08-07T12:00:00.000Z"));
+      await result.current.refetch();
+      const secondStart = parseUrlParams(mockGet.mock.calls[1][0] as string).start_time;
+
+      expect(secondStart).not.toBe(firstStart);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("does not carry a focused request into the list placeholder", async () => {
     mockGet.mockResolvedValue({ items: [], total: 0 });
     const { result, rerender } = renderHook(
-      ({ filter }: { filter?: RequestLogFilter }) => useRequestLogs(1, 20, filter),
+      ({ filter }: { filter?: RequestLogQuery }) => useRequestLogs(1, 20, filter),
       { initialProps: { filter: undefined }, wrapper }
     );
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    rerender({ filter: normalizeRequestLogFilter({ id: "log-1" }) });
+    rerender({ filter: createRequestLogQuery({ id: "log-1" }) });
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ items: [], total: 0 });

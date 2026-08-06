@@ -1335,7 +1335,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let candidateCircuitStates: CandidateCircuitStateMap = {};
   let sessionId: string | null = null;
   let sessionIdSource: "header" | "body" | null = null;
-  const activeUpstreamSnapshot = await loadActiveUpstreamSnapshot();
+  let activeUpstreamSnapshot: Awaited<ReturnType<typeof loadActiveUpstreamSnapshot>>;
+  try {
+    activeUpstreamSnapshot = await loadActiveUpstreamSnapshot();
+  } catch (error) {
+    log.error({ err: error, requestId }, "failed to load active upstream snapshot");
+    return createUnifiedErrorResponse("SERVICE_UNAVAILABLE", {
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: "上游状态暂时不可用，请稍后重试",
+    });
+  }
   const activeUpstreams = activeUpstreamSnapshot.map((entry) => entry.upstream);
   const allowedUpstreamIds =
     accessMode === "restricted"
@@ -2374,7 +2384,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         applyCompensationHeaders(outboundHeadersBase, compensationHeaders);
         const outboundHeaders = injectAuthHeader(outboundHeadersBase, upstreamForProxy);
         void readStreamChunks(recordingStream)
-          .then((chunks) => {
+          .then(async (chunks) => {
+            const streamRequestLogId = await awaitRequestLogReady();
             const fixture = buildFixture({
               requestId,
               startTime,
@@ -2405,7 +2416,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               redactSensitive: trafficRecordingSettings.redactSensitive,
             });
             return recordTrafficFixture(fixture, {
-              requestLogId,
+              requestLogId: streamRequestLogId,
               apiKeyId: validApiKey.id,
               upstreamId: upstreamForLogging.id,
               method: request.method,
@@ -2674,6 +2685,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       error as FailoverErrorWithHistory | null,
       lastSentFailoverAttempt
     );
+    if (!didSendUpstream) {
+      routingDurationMs ??= durationMs;
+    }
     const attributionFailoverAttempt = didSendUpstream
       ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
       : lastFailoverAttempt;

@@ -30,6 +30,11 @@ import { recordPulseSample } from "./live-pulse-aggregator";
 import { calculateAndPersistRequestBillingSnapshot } from "./billing-cost-service";
 import { createLogger } from "@/lib/utils/logger";
 import { isRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
+import {
+  type RequestLogFilterCriteria,
+  type RequestLogSort,
+  type RequestLogStatusClass,
+} from "@/lib/utils/request-log-query";
 
 const log = createLogger("request-logger");
 const REQUEST_LOG_STALE_MINUTES = 15;
@@ -258,49 +263,10 @@ export interface PaginatedRequestLogs {
   totalPages: number;
 }
 
-export type RequestLogStatusClass = "2xx" | "4xx" | "5xx";
-
-export interface ListRequestLogsFilter {
-  id?: string;
-  apiKeyId?: string;
-  // Owner filter over the redundant user_id snapshot; user-side endpoints
-  // inject the authenticated userId here for server-enforced data isolation.
-  userId?: string;
-  upstreamId?: string;
-  statusCode?: number;
-  // Status code range filter (e.g. all 5xx); ignored when statusCode is set.
-  statusClass?: RequestLogStatusClass;
-  // Case-insensitive substring match on the model column.
-  model?: string;
-  startTime?: Date;
-  endTime?: Date;
-  // Performance threshold filters (server-side slow-request presets).
-  ttftMinMs?: number;
-  durationMinMs?: number;
-  // Upper bound on tokens/s (completion_tokens / duration seconds); rows below
-  // the TPS guard thresholds are excluded so near-zero requests don't match.
-  tpsMax?: number;
-}
-
 // Guards mirroring the client-side TPS display rules: a TPS value is only
 // meaningful once the request produced enough output over enough time.
 export const MIN_TPS_COMPLETION_TOKENS = 10;
 export const MIN_TPS_DURATION_MS = 100;
-
-export const REQUEST_LOG_SORT_FIELDS = [
-  "created_at",
-  "duration_ms",
-  "total_tokens",
-  "ttft_ms",
-  "cost",
-] as const;
-export type RequestLogSortField = (typeof REQUEST_LOG_SORT_FIELDS)[number];
-export type RequestLogSortOrder = "asc" | "desc";
-
-export interface RequestLogSort {
-  field: RequestLogSortField;
-  order: RequestLogSortOrder;
-}
 
 const STATUS_CLASS_RANGES: Record<RequestLogStatusClass, [number, number]> = {
   "2xx": [200, 300],
@@ -841,7 +807,7 @@ const REQUEST_LOG_PAGE_RELATIONS = {
 } as const;
 
 /** Shared filter → WHERE translation for the list and window-stats queries. */
-function buildRequestLogWhereClause(filters: ListRequestLogsFilter): SQL | undefined {
+function buildRequestLogWhereClause(filters: RequestLogFilterCriteria): SQL | undefined {
   const conditions = [];
 
   if (filters.id) {
@@ -1004,7 +970,7 @@ async function selectRequestLogPercentile(
  * the fetched page.
  */
 export async function getRequestLogWindowStats(
-  filters: ListRequestLogsFilter = {}
+  filters: RequestLogFilterCriteria = {}
 ): Promise<RequestLogWindowStats> {
   const whereClause = buildRequestLogWhereClause(filters);
 
@@ -1070,7 +1036,7 @@ export async function getRequestLogWindowStats(
 export async function listRequestLogs(
   page: number = 1,
   pageSize: number = 20,
-  filters: ListRequestLogsFilter = {},
+  filters: RequestLogFilterCriteria = {},
   sort?: RequestLogSort
 ): Promise<PaginatedRequestLogs> {
   if (process.env.NODE_ENV !== "test") {
