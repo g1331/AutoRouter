@@ -163,32 +163,57 @@ function assertPathInsideRecordingRoot(filePath: string): string {
 export function getTrafficRecordingRoot(): string {
   return process.env.RECORDER_FIXTURES_DIR || DEFAULT_TRAFFIC_RECORDING_ROOT;
 }
+const TRAFFIC_RECORDING_SETTINGS_CACHE_TTL_MS = 1_000;
+let trafficRecordingSettingsCache: {
+  value: TrafficRecordingSettingsValue;
+  expiresAt: number;
+} | null = null;
+let trafficRecordingSettingsLoadPromise: Promise<TrafficRecordingSettingsValue> | null = null;
 
 /** Read the singleton runtime traffic recording settings row, creating defaults when absent. */
 export async function getTrafficRecordingSettings(): Promise<TrafficRecordingSettingsValue> {
-  await db
-    .insert(trafficRecordingSettings)
-    .values({
-      id: TRAFFIC_RECORDING_SETTINGS_ID,
-      enabled: false,
-      mode: "failure",
-      redactSensitive: true,
-      retentionDays: 7,
-      updatedAt: new Date(),
-    })
-    .onConflictDoNothing({
-      target: trafficRecordingSettings.id,
-    });
-
-  const row = await db.query.trafficRecordingSettings.findFirst({
-    where: eq(trafficRecordingSettings.id, TRAFFIC_RECORDING_SETTINGS_ID),
-  });
-
-  if (!row) {
-    throw new Error("Failed to initialize traffic recording settings");
+  const now = Date.now();
+  if (trafficRecordingSettingsCache && trafficRecordingSettingsCache.expiresAt > now) {
+    return trafficRecordingSettingsCache.value;
+  }
+  if (trafficRecordingSettingsLoadPromise) {
+    return trafficRecordingSettingsLoadPromise;
   }
 
-  return mapSettings(row);
+  trafficRecordingSettingsLoadPromise = (async () => {
+    await db
+      .insert(trafficRecordingSettings)
+      .values({
+        id: TRAFFIC_RECORDING_SETTINGS_ID,
+        enabled: false,
+        mode: "failure",
+        redactSensitive: true,
+        retentionDays: 7,
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: trafficRecordingSettings.id,
+      });
+
+    const row = await db.query.trafficRecordingSettings.findFirst({
+      where: eq(trafficRecordingSettings.id, TRAFFIC_RECORDING_SETTINGS_ID),
+    });
+
+    if (!row) {
+      throw new Error("Failed to initialize traffic recording settings");
+    }
+
+    const value = mapSettings(row);
+    trafficRecordingSettingsCache = {
+      value,
+      expiresAt: Date.now() + TRAFFIC_RECORDING_SETTINGS_CACHE_TTL_MS,
+    };
+    return value;
+  })().finally(() => {
+    trafficRecordingSettingsLoadPromise = null;
+  });
+
+  return trafficRecordingSettingsLoadPromise;
 }
 
 /** Persist changes to the singleton runtime traffic recording settings row. */
@@ -213,7 +238,12 @@ export async function updateTrafficRecordingSettings(
     throw new Error("Traffic recording settings not found");
   }
 
-  return mapSettings(row);
+  const value = mapSettings(row);
+  trafficRecordingSettingsCache = {
+    value,
+    expiresAt: Date.now() + TRAFFIC_RECORDING_SETTINGS_CACHE_TTL_MS,
+  };
+  return value;
 }
 
 /** Decide whether the current settings record the given request outcome. */
