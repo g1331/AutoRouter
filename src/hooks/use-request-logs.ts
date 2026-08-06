@@ -3,9 +3,9 @@ import { useAuth } from "@/providers/auth-provider";
 import type { PaginatedRequestLogsResponse } from "@/types/api";
 import {
   buildRequestLogListProjection,
-  type RequestLogFilter,
+  type RequestLogQuery,
   type RequestLogSort,
-} from "@/lib/utils/request-log-filters";
+} from "@/lib/utils/request-log-query";
 
 export interface UseRequestLogsOptions {
   refetchInterval?: number | false;
@@ -13,23 +13,23 @@ export interface UseRequestLogsOptions {
 }
 
 /**
- * Fetch paginated admin request logs. Filter semantics and query serialization
- * belong to RequestLogFilter; this hook owns TanStack Query and refresh policy.
+ * Fetch paginated admin request logs. RequestLogQuery owns filter semantics
+ * and serialization; this hook owns TanStack Query and refresh policy.
  */
 export function useRequestLogs(
   page: number = 1,
   pageSize: number = 20,
-  filter?: RequestLogFilter,
+  query?: RequestLogQuery,
   options?: UseRequestLogsOptions
 ) {
   const { apiClient } = useAuth();
-  const listProjection = buildRequestLogListProjection(filter, {
+  const listProjection = buildRequestLogListProjection(query, {
     scope: "admin",
     page,
     pageSize,
     sort: options?.sort,
   });
-  const focusId = filter?.id ?? null;
+  const focusId = query?.filter.id ?? null;
 
   return useQuery({
     queryKey: ["request-logs", page, pageSize, listProjection.identity, focusId],

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaginationParams, errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { listRequestLogs } from "@/lib/services/request-logger";
-import { parseRequestLogListQuery } from "@/lib/utils/request-log-filters";
+import { parseRequestLogListQuery } from "@/lib/utils/request-log-query";
 import { transformPaginatedRequestLogs } from "@/lib/utils/api-transformers";
 import { createLogger } from "@/lib/utils/logger";
 

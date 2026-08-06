@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Link } from "@/i18n/navigation";
-import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
+import { createRequestLogQuery } from "@/lib/utils/request-log-query";
 import { cn } from "@/lib/utils";
 import type {
   DistributionItem,
@@ -123,7 +123,7 @@ function logsHref(
   window: RankingsLogsWindow
 ): string {
   const itemId = "id" in item ? item.id : undefined;
-  const filter = normalizeRequestLogFilter({
+  const query = createRequestLogQuery({
     model: dimension === "models" && "model" in item ? item.model : undefined,
     upstreamId: dimension === "upstreams" ? itemId : undefined,
     apiKeyId: dimension === "api_keys" ? itemId : undefined,
@@ -133,7 +133,7 @@ function logsHref(
       endIso: window.endIso,
     },
   });
-  return `/logs${filter.url({ scope: "admin" }).search}`;
+  return `/logs${query.url({ scope: "admin" }).search}`;
 }
 
 function errorRateClass(rate: number): string | undefined {

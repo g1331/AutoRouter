@@ -36,10 +36,10 @@ import { useRequestLogStats } from "@/hooks/use-request-log-stats";
 import { useRequestLogs } from "@/hooks/use-request-logs";
 import { useAllUpstreams } from "@/hooks/use-upstreams";
 import {
-  normalizeRequestLogFilter,
+  createRequestLogQuery,
   parseRequestLogFilterUrl,
   type RequestLogSort,
-} from "@/lib/utils/request-log-filters";
+} from "@/lib/utils/request-log-query";
 
 interface LogsLoadingSkeletonProps {
   loadingLabel: string;
@@ -62,21 +62,22 @@ function resolveLogsSortField(
 
 function recoverInitialTableFilters(searchParams: { toString?: () => string }): LogsServerFilters {
   const url = new URL("https://autorouter.local/logs");
-  const query = searchParams.toString?.();
-  if (query) url.search = query;
+  const queryString = searchParams.toString?.();
+  if (queryString) url.search = queryString;
 
   const parsed = parseRequestLogFilterUrl(url, "admin");
-  const time = parsed.filter.time;
+  const filter = parsed.query.filter;
+  const time = filter.time;
   return {
     ...DEFAULT_LOGS_SERVER_FILTERS,
-    statusClass: parsed.filter.statusClass ?? DEFAULT_LOGS_SERVER_FILTERS.statusClass,
-    statusCode: parsed.filter.statusCode === undefined ? "" : String(parsed.filter.statusCode),
-    model: parsed.filter.model ?? "",
+    statusClass: filter.statusClass ?? DEFAULT_LOGS_SERVER_FILTERS.statusClass,
+    statusCode: filter.statusCode === undefined ? "" : String(filter.statusCode),
+    model: filter.model ?? "",
     timeRange: time?.kind === "custom" ? "custom" : (time?.value ?? "30d"),
     customRange: time?.kind === "custom" ? { startIso: time.startIso, endIso: time.endIso } : null,
-    upstreamId: parsed.filter.upstreamId ?? "",
-    apiKeyId: parsed.filter.apiKeyId ?? "",
-    performance: { ...parsed.filter.performance },
+    upstreamId: filter.upstreamId ?? "",
+    apiKeyId: filter.apiKeyId ?? "",
+    performance: { ...filter.performance },
     sortField: resolveLogsSortField(parsed.sort?.field),
     sortOrder: parsed.sort?.order ?? DEFAULT_LOGS_SERVER_FILTERS.sortOrder,
   };
@@ -218,11 +219,11 @@ export default function LogsPage() {
     [apiKeysData]
   );
 
-  const filter = useMemo(
+  const query = useMemo(
     () =>
       focusId
-        ? normalizeRequestLogFilter({ id: focusId })
-        : normalizeRequestLogFilter({
+        ? createRequestLogQuery({ id: focusId })
+        : createRequestLogQuery({
             userId: userId ?? undefined,
             upstreamId: tableFilters.upstreamId,
             apiKeyId: tableFilters.apiKeyId,
@@ -243,14 +244,14 @@ export default function LogsPage() {
     [tableFilters.sortField, tableFilters.sortOrder]
   );
 
-  const { data: windowStats } = useRequestLogStats("admin", filter, {
+  const { data: windowStats } = useRequestLogStats("admin", query, {
     enabled: !focusId,
   });
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
   const { data, isLoading, refetch } = useRequestLogs(
     focusId ? 1 : page,
     focusId ? 1 : pageSize,
-    filter,
+    query,
     {
       refetchInterval: focusId ? false : effectiveRefetchInterval,
       sort,

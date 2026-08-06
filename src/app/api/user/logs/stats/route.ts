@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { errorResponse, requireMember } from "@/lib/utils/api-auth";
 import { getUserRequestLogWindowStats } from "@/lib/services/user-data-service";
-import { parseRequestLogListQuery } from "@/lib/utils/request-log-filters";
+import { parseRequestLogListQuery } from "@/lib/utils/request-log-query";
 import { transformRequestLogWindowStats } from "@/lib/utils/api-transformers";
 import { createLogger } from "@/lib/utils/logger";
 

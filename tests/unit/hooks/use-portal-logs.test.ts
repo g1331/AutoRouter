@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usePortalRequestLogs } from "@/hooks/use-portal-logs";
-import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
+import { createRequestLogQuery } from "@/lib/utils/request-log-query";
 
 const mockGet = vi.fn();
 
@@ -47,7 +47,7 @@ describe("usePortalRequestLogs", () => {
 
   it("uses user scope projection while preserving list controls", async () => {
     mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-    const filter = normalizeRequestLogFilter({
+    const filter = createRequestLogQuery({
       apiKeyId: "key-1",
       userId: "user-1",
       upstreamId: "up-1",

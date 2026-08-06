@@ -1,16 +1,24 @@
 import { startOfDay, subDays } from "date-fns";
 import { parseDateFilterParam, parseIntFilterParam } from "./request-log-query-params";
 import type { TimeRange } from "@/types/api";
-import type {
-  ListRequestLogsFilter,
-  RequestLogSort as ServiceRequestLogSort,
-  RequestLogSortField as ServiceRequestLogSortField,
-  RequestLogStatusClass,
-} from "@/lib/services/request-logger";
-
-export type RequestLogSort = ServiceRequestLogSort;
-export type RequestLogSortField = ServiceRequestLogSortField;
+export type RequestLogStatusClass = "2xx" | "4xx" | "5xx";
 export type RequestLogScope = "admin" | "user";
+
+/** Normalized server read criteria shared by list and window stats. */
+export interface RequestLogFilterCriteria {
+  id?: string;
+  apiKeyId?: string;
+  userId?: string;
+  upstreamId?: string;
+  statusCode?: number;
+  statusClass?: RequestLogStatusClass;
+  model?: string;
+  startTime?: Date;
+  endTime?: Date;
+  ttftMinMs?: number;
+  durationMinMs?: number;
+  tpsMax?: number;
+}
 
 export const REQUEST_LOG_SORT_FIELDS = [
   "created_at",
@@ -18,7 +26,14 @@ export const REQUEST_LOG_SORT_FIELDS = [
   "total_tokens",
   "ttft_ms",
   "cost",
-] as const satisfies readonly RequestLogSortField[];
+] as const;
+export type RequestLogSortField = (typeof REQUEST_LOG_SORT_FIELDS)[number];
+export type RequestLogSortOrder = "asc" | "desc";
+
+export interface RequestLogSort {
+  field: RequestLogSortField;
+  order: RequestLogSortOrder;
+}
 
 export type RequestLogPerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
 
@@ -84,13 +99,17 @@ export interface RequestLogFilter {
   readonly model?: string;
   readonly time?: RequestLogTime;
   readonly performance: Readonly<RequestLogPerformanceThresholds>;
+}
+
+export interface RequestLogQuery {
+  readonly filter: RequestLogFilter;
   list(options: RequestLogListProjectionOptions): RequestLogQueryProjection;
   stats(options: RequestLogStatsProjectionOptions): RequestLogQueryProjection;
   url(options: RequestLogUrlProjectionOptions): { search: string };
 }
 
 export interface ParsedRequestLogFilterUrl {
-  filter: RequestLogFilter;
+  query: RequestLogQuery;
   sort?: RequestLogSort;
   canonical: { search: string };
 }
@@ -239,13 +258,12 @@ function normalizeModel(input: RequestLogFilterInput): NormalizedRequestLogFilte
   };
 }
 
-export function normalizeRequestLogFilter(input: RequestLogFilterInput = {}): RequestLogFilter {
+export function createRequestLogQuery(input: RequestLogFilterInput = {}): RequestLogQuery {
   const model = normalizeModel(input);
-  const performance = Object.freeze({ ...model.performance });
+  const filter = Object.freeze({ ...model, performance: Object.freeze({ ...model.performance }) });
 
   return Object.freeze({
-    ...model,
-    performance,
+    filter,
     list(options: RequestLogListProjectionOptions) {
       const params = new URLSearchParams();
       params.set("page", String(Math.max(1, options.page ?? 1)));
@@ -276,17 +294,17 @@ export function normalizeRequestLogFilter(input: RequestLogFilterInput = {}): Re
 }
 
 export function buildRequestLogListProjection(
-  filter: RequestLogFilter | undefined,
+  query: RequestLogQuery | undefined,
   options: Omit<RequestLogListProjectionOptions, "readAt">
 ): { search: string; identity: string | null } {
-  if (!filter) {
+  if (!query) {
     return {
       search: `page=${options.page ?? 1}&page_size=${options.pageSize ?? 20}`,
       identity: null,
     };
   }
 
-  return filter.list({ ...options, readAt: new Date() });
+  return query.list({ ...options, readAt: new Date() });
 }
 
 function appendFilterParams(
@@ -416,7 +434,7 @@ export function parseRequestLogFilterUrl(
       ? rawStatusClass
       : undefined;
   const sort = parseUrlSort(params);
-  const filter = normalizeRequestLogFilter({
+  const query = createRequestLogQuery({
     id: normalizeText(params.get("id") ?? undefined),
     apiKeyId: normalizeText(params.get("api_key_id") ?? undefined),
     userId: normalizeText(params.get("user_id") ?? undefined),
@@ -428,14 +446,14 @@ export function parseRequestLogFilterUrl(
     performance: parseUrlPerformance(params),
   });
   return {
-    filter,
+    query,
     sort,
-    canonical: filter.url({ scope, sort }),
+    canonical: query.url({ scope, sort }),
   };
 }
 
 export type ParsedRequestLogListQuery =
-  | { ok: true; filters: ListRequestLogsFilter; sort?: RequestLogSort }
+  | { ok: true; filters: RequestLogFilterCriteria; sort?: RequestLogSort }
   | { ok: false; error: string };
 
 /**
@@ -448,7 +466,7 @@ export function parseRequestLogListQuery(
   scope: RequestLogScope
 ): ParsedRequestLogListQuery {
   const params = url.searchParams;
-  const filters: ListRequestLogsFilter = {};
+  const filters: RequestLogFilterCriteria = {};
 
   const id = params.get("id");
   if (id) filters.id = id;

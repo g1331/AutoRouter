@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalRequestLogs } from "@/hooks/use-portal-logs";
 import { useRequestLogStats } from "@/hooks/use-request-log-stats";
-import { normalizeRequestLogFilter, type RequestLogSort } from "@/lib/utils/request-log-filters";
+import { createRequestLogQuery, type RequestLogSort } from "@/lib/utils/request-log-query";
 
 export default function PortalRequestsPage() {
   const t = useTranslations("portal");
@@ -33,9 +33,9 @@ export default function PortalRequestsPage() {
     setPage(1);
   }, []);
 
-  const filter = useMemo(
+  const query = useMemo(
     () =>
-      normalizeRequestLogFilter({
+      createRequestLogQuery({
         apiKeyId: tableFilters.apiKeyId,
         statusCode: tableFilters.statusCode,
         statusClass: tableFilters.statusClass,
@@ -54,12 +54,12 @@ export default function PortalRequestsPage() {
     [tableFilters.sortField, tableFilters.sortOrder]
   );
 
-  const { data, isLoading, isFetching, refetch } = usePortalRequestLogs(page, pageSize, filter, {
+  const { data, isLoading, isFetching, refetch } = usePortalRequestLogs(page, pageSize, query, {
     refetchInterval: refreshInterval,
     sort,
   });
 
-  const { data: windowStats } = useRequestLogStats("user", filter);
+  const { data: windowStats } = useRequestLogStats("user", query);
 
   return (
     <>
