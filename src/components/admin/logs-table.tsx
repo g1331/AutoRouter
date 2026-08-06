@@ -62,7 +62,11 @@ import {
 import { ModelIdentity, getReasoningEffortLevel } from "@/components/logs/model-identity";
 import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
 
-export type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
+import {
+  performancePresetToThresholds,
+  performanceThresholdsToPreset,
+  type RequestLogPerformanceThresholds,
+} from "@/lib/utils/request-log-filters";
 
 /** Sortable list columns; created_at desc is the implicit default order. */
 export type LogsSortField = "created_at" | "duration_ms" | "total_tokens" | "cost";
@@ -83,7 +87,7 @@ export interface LogsServerFilters {
   /** Empty string = all upstreams / keys. */
   upstreamId: string;
   apiKeyId: string;
-  perfPreset: PerformancePreset;
+  performance: RequestLogPerformanceThresholds;
   sortField: LogsSortField | null;
   sortOrder: "asc" | "desc";
 }
@@ -96,31 +100,10 @@ export const DEFAULT_LOGS_SERVER_FILTERS: LogsServerFilters = {
   customRange: null,
   upstreamId: "",
   apiKeyId: "",
-  perfPreset: "all",
+  performance: {},
   sortField: null,
   sortOrder: "desc",
 };
-
-/**
- * Maps a quick-filter preset onto the server-side threshold params shared by
- * the admin and portal logs endpoints (same thresholds the chips advertise).
- */
-export function resolvePerfPresetParams(preset: PerformancePreset): {
-  ttft_min_ms?: number;
-  duration_min_ms?: number;
-  tps_max?: number;
-} {
-  switch (preset) {
-    case "high_ttft":
-      return { ttft_min_ms: HIGH_TTFT_THRESHOLD_MS };
-    case "low_tps":
-      return { tps_max: LOW_TPS_THRESHOLD };
-    case "slow_duration":
-      return { duration_min_ms: SLOW_DURATION_THRESHOLD_MS };
-    default:
-      return {};
-  }
-}
 
 export interface LogsFilterOption {
   id: string;
@@ -164,8 +147,6 @@ interface LogsTableProps {
   windowStats?: RequestLogStatsResponse | null;
 }
 
-const HIGH_TTFT_THRESHOLD_MS = 5000;
-const LOW_TPS_THRESHOLD = 30;
 const SLOW_DURATION_THRESHOLD_MS = 20000;
 const DURATION_WARNING_THRESHOLD_MS = 8000;
 const COST_HEAT_THRESHOLD_USD = 0.1;
@@ -554,9 +535,9 @@ export function LogsTable({
     };
   }, []);
   // Quick-filter presets are server-side filters like the rest: the parent
-  // maps them onto threshold params (resolvePerfPresetParams) so they span
-  // the whole window, not just the fetched page.
-  const performancePreset = serverFilters.perfPreset;
+  // keeps the complete threshold object so URL recovery and combined filters
+  // do not lose criteria while the table derives the matching preset label.
+  const performancePreset = performanceThresholdsToPreset(serverFilters.performance);
   // The selector wants Dates; filters keep ISO strings for query-key stability.
   const customRangeIso = serverFilters.customRange;
   const selectorCustomRange = useMemo(
@@ -2424,13 +2405,15 @@ export function LogsTable({
   // 30d window may hide older entries, and without the bar there would be no
   // way to widen the range or clear a filter. The empty-state copy below
   // distinguishes "nothing matching" / "nothing in this window" / "nothing at all".
+  const hasPerformanceFilters = Object.keys(serverFilters.performance).length > 0;
+
   const hasNarrowingFilters =
     serverFilters.statusClass !== "all" ||
     serverFilters.statusCode !== "" ||
     serverFilters.model.trim() !== "" ||
     serverFilters.upstreamId !== "" ||
     serverFilters.apiKeyId !== "" ||
-    performancePreset !== "all";
+    hasPerformanceFilters;
   // Any time window short of ALL is still a filter: users whose logs are all
   // older must be pointed at the ALL preset instead of "no logs yet".
   const emptyState = hasNarrowingFilters
@@ -2657,7 +2640,9 @@ export function LogsTable({
               <button
                 key={value}
                 type="button"
-                onClick={() => onServerFiltersChange({ perfPreset: value })}
+                onClick={() =>
+                  onServerFiltersChange({ performance: performancePresetToThresholds(value) })
+                }
                 className={cn(
                   "rounded-cf-sm border px-2 py-1 font-mono text-xs",
                   LOGS_SURFACE_TRANSITION_CLASS,

@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Link } from "@/i18n/navigation";
+import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
 import { cn } from "@/lib/utils";
 import type {
   DistributionItem,
@@ -23,10 +24,9 @@ import type {
   RankingsItem,
   RankingsSortField,
 } from "@/types/api";
-
 export interface RankingsLogsWindow {
   startIso: string;
-  endIso?: string;
+  endIso: string;
 }
 
 interface RankingsTableProps {
@@ -117,27 +117,23 @@ export function itemKey(dimension: RankingsDimension, item: RankingsItem): strin
 function itemDistribution(item: RankingsItem): DistributionItem[] {
   return "upstream_distribution" in item ? item.upstream_distribution : item.model_distribution;
 }
-
 function logsHref(
   dimension: RankingsDimension,
   item: RankingsItem,
   window: RankingsLogsWindow
 ): string {
-  const params = new URLSearchParams();
-  if (dimension === "models" && "model" in item) {
-    params.set("model", item.model);
-  } else if (dimension === "upstreams") {
-    params.set("upstream_id", (item as { id: string }).id);
-  } else if (dimension === "api_keys") {
-    params.set("api_key_id", (item as { id: string }).id);
-  } else {
-    params.set("user_id", (item as { id: string }).id);
-  }
-  params.set("start_time", window.startIso);
-  if (window.endIso) {
-    params.set("end_time", window.endIso);
-  }
-  return `/logs?${params.toString()}`;
+  const itemId = "id" in item ? item.id : undefined;
+  const filter = normalizeRequestLogFilter({
+    model: dimension === "models" && "model" in item ? item.model : undefined,
+    upstreamId: dimension === "upstreams" ? itemId : undefined,
+    apiKeyId: dimension === "api_keys" ? itemId : undefined,
+    userId: dimension === "users" ? itemId : undefined,
+    customRange: {
+      startIso: window.startIso,
+      endIso: window.endIso,
+    },
+  });
+  return `/logs${filter.url({ scope: "admin" }).search}`;
 }
 
 function errorRateClass(rate: number): string | undefined {

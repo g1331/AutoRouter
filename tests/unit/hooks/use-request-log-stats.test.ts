@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createElement, type ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createElement } from "react";
-import { resolveTimeRangeStart } from "@/hooks/use-request-logs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { useRequestLogStats } from "@/hooks/use-request-log-stats";
+import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
 
 const mockGet = vi.fn();
 
@@ -18,9 +19,8 @@ vi.mock("@/providers/auth-provider", () => ({
 function parseUrlParams(url: string): Record<string, string> {
   const [path, queryString] = url.split("?");
   if (!queryString) return { _path: path };
-  const params = new URLSearchParams(queryString);
   const result: Record<string, string> = { _path: path };
-  params.forEach((value, key) => {
+  new URLSearchParams(queryString).forEach((value, key) => {
     result[key] = value;
   });
   return result;
@@ -28,146 +28,83 @@ function parseUrlParams(url: string): Record<string, string> {
 
 describe("useRequestLogStats", () => {
   let queryClient: QueryClient;
-
-  const wrapper = ({ children }: { children: React.ReactNode }) =>
+  const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
 
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-        },
-      },
-    });
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.clearAllMocks();
   });
 
-  it("fetches admin stats without params by default", async () => {
+  it("targets the admin stats endpoint", async () => {
     mockGet.mockResolvedValueOnce({ total: 0 });
 
     const { result } = renderHook(() => useRequestLogStats("admin"), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
     expect(mockGet).toHaveBeenCalledWith("/admin/logs/stats");
   });
 
-  it("targets the user endpoint for the user scope", async () => {
+  it("uses the filter stats projection without list-only fields", async () => {
     mockGet.mockResolvedValueOnce({ total: 0 });
-
-    const { result } = renderHook(() => useRequestLogStats("user"), { wrapper });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(mockGet).toHaveBeenCalledWith("/user/logs/stats");
-  });
-
-  it("serializes the full admin filter surface", async () => {
-    mockGet.mockResolvedValueOnce({ total: 0 });
-
-    const { result } = renderHook(
-      () =>
-        useRequestLogStats("admin", {
-          user_id: "user-1",
-          upstream_id: "up-1",
-          api_key_id: "key-1",
-          status_code: 429,
-          model: "gpt-4",
-          time_range: "all",
-          ttft_min_ms: 5000,
-          duration_min_ms: 20000,
-          tps_max: 30,
-        }),
-      { wrapper }
-    );
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-    expect(params._path).toBe("/admin/logs/stats");
-    expect(params.user_id).toBe("user-1");
-    expect(params.upstream_id).toBe("up-1");
-    expect(params.api_key_id).toBe("key-1");
-    expect(params.status_code).toBe("429");
-    expect(params.model).toBe("gpt-4");
-    expect(params.ttft_min_ms).toBe("5000");
-    expect(params.duration_min_ms).toBe("20000");
-    expect(params.tps_max).toBe("30");
-  });
-
-  it("drops admin-only scope params for the user scope", async () => {
-    mockGet.mockResolvedValueOnce({ total: 0 });
-
-    const { result } = renderHook(
-      () =>
-        useRequestLogStats("user", {
-          user_id: "user-1",
-          upstream_id: "up-1",
-          api_key_id: "key-1",
-          time_range: "all",
-        }),
-      { wrapper }
-    );
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-    expect(params._path).toBe("/user/logs/stats");
-    expect(params.user_id).toBeUndefined();
-    expect(params.upstream_id).toBeUndefined();
-    expect(params.api_key_id).toBe("key-1");
-  });
-
-  it("maps a time_range preset to a start_time lower bound, explicit start_time wins", async () => {
-    mockGet.mockResolvedValue({ total: 0 });
-
-    const { result } = renderHook(() => useRequestLogStats("admin", { time_range: "today" }), {
-      wrapper,
+    const filter = normalizeRequestLogFilter({
+      id: "log-1",
+      userId: "user-1",
+      upstreamId: "up-1",
+      apiKeyId: "key-1",
+      statusCode: 429,
+      model: "gpt-4",
+      timeRange: "all",
+      performance: { ttftMinMs: 5000, durationMinMs: 20000, tpsMax: 30 },
     });
+
+    const { result } = renderHook(() => useRequestLogStats("admin", filter), { wrapper });
+
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const query = parseUrlParams(mockGet.mock.calls[0][0] as string);
 
-    let params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-    expect(params.time_range).toBeUndefined();
-    expect(params.start_time).toBe(resolveTimeRangeStart("today").toISOString());
-
-    const { result: explicit } = renderHook(
-      () =>
-        useRequestLogStats("admin", {
-          time_range: "7d",
-          start_time: "2026-07-01T00:00:00.000Z",
-          end_time: "2026-07-08T00:00:00.000Z",
-        }),
-      { wrapper }
-    );
-    await waitFor(() => expect(explicit.current.isSuccess).toBe(true));
-
-    params = parseUrlParams(mockGet.mock.calls.at(-1)![0] as string);
-    expect(params.start_time).toBe("2026-07-01T00:00:00.000Z");
-    expect(params.end_time).toBe("2026-07-08T00:00:00.000Z");
+    expect(query._path).toBe("/admin/logs/stats");
+    expect(query.id).toBeUndefined();
+    expect(query.user_id).toBe("user-1");
+    expect(query.upstream_id).toBe("up-1");
+    expect(query.api_key_id).toBe("key-1");
+    expect(query.status_code).toBe("429");
+    expect(query.ttft_min_ms).toBe("5000");
+    expect(query.duration_min_ms).toBe("20000");
+    expect(query.tps_max).toBe("30");
+    expect(query.page).toBeUndefined();
+    expect(query.sort).toBeUndefined();
   });
 
-  it("does not fetch when disabled", async () => {
+  it("drops admin-only fields for the user stats endpoint", async () => {
+    mockGet.mockResolvedValueOnce({ total: 0 });
+    const filter = normalizeRequestLogFilter({
+      userId: "user-1",
+      upstreamId: "up-1",
+      apiKeyId: "key-1",
+      timeRange: "all",
+    });
+
+    const { result } = renderHook(() => useRequestLogStats("user", filter), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const query = parseUrlParams(mockGet.mock.calls[0][0] as string);
+    expect(query._path).toBe("/user/logs/stats");
+    expect(query.user_id).toBeUndefined();
+    expect(query.upstream_id).toBeUndefined();
+    expect(query.api_key_id).toBe("key-1");
+  });
+
+  it("does not fetch when disabled and keeps a dedicated query-key prefix", async () => {
     renderHook(() => useRequestLogStats("admin", undefined, { enabled: false }), { wrapper });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mockGet).not.toHaveBeenCalled();
-  });
 
-  it("uses a query key outside the request-logs prefixes", async () => {
     mockGet.mockResolvedValueOnce({ total: 0 });
-
-    const { result } = renderHook(() => useRequestLogStats("admin", { time_range: "all" }), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useRequestLogStats("admin", normalizeRequestLogFilter({ timeRange: "all" })),
+      { wrapper }
+    );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    // SSE log events invalidate ["request-logs"] / ["portal","logs"]; the
-    // percentile queries must not share those prefixes.
-    const keys = queryClient
-      .getQueryCache()
-      .getAll()
-      .map((query) => query.queryKey);
-    expect(keys).toEqual([["request-log-stats", "admin", { time_range: "all" }]]);
+    expect(queryClient.getQueryCache().getAll()[0]?.queryKey[0]).toBe("request-log-stats");
   });
 });

@@ -8,7 +8,6 @@ import { ScrollText, X } from "lucide-react";
 import {
   DEFAULT_LOGS_SERVER_FILTERS,
   LogsTable,
-  resolvePerfPresetParams,
   type LogsFilterOption,
   type LogsServerFilters,
 } from "@/components/admin/logs-table";
@@ -33,15 +32,55 @@ import {
 import { cn } from "@/lib/utils";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
-import { useRequestLogStats, type RequestLogStatsFilters } from "@/hooks/use-request-log-stats";
-import { useRequestLogs, type RequestLogsFilters } from "@/hooks/use-request-logs";
+import { useRequestLogStats } from "@/hooks/use-request-log-stats";
+import { useRequestLogs } from "@/hooks/use-request-logs";
 import { useAllUpstreams } from "@/hooks/use-upstreams";
+import {
+  normalizeRequestLogFilter,
+  parseRequestLogFilterUrl,
+  type RequestLogSort,
+} from "@/lib/utils/request-log-filters";
 
 interface LogsLoadingSkeletonProps {
   loadingLabel: string;
 }
 
 const LOGS_SECTION_ENTER_CLASS = "animate-log-section-enter motion-reduce:animate-none";
+function resolveLogsSortField(
+  field: RequestLogSort["field"] | undefined
+): LogsServerFilters["sortField"] {
+  switch (field) {
+    case "created_at":
+    case "duration_ms":
+    case "total_tokens":
+    case "cost":
+      return field;
+    default:
+      return null;
+  }
+}
+
+function recoverInitialTableFilters(searchParams: { toString?: () => string }): LogsServerFilters {
+  const url = new URL("https://autorouter.local/logs");
+  const query = searchParams.toString?.();
+  if (query) url.search = query;
+
+  const parsed = parseRequestLogFilterUrl(url, "admin");
+  const time = parsed.filter.time;
+  return {
+    ...DEFAULT_LOGS_SERVER_FILTERS,
+    statusClass: parsed.filter.statusClass ?? DEFAULT_LOGS_SERVER_FILTERS.statusClass,
+    statusCode: parsed.filter.statusCode === undefined ? "" : String(parsed.filter.statusCode),
+    model: parsed.filter.model ?? "",
+    timeRange: time?.kind === "custom" ? "custom" : (time?.value ?? "30d"),
+    customRange: time?.kind === "custom" ? { startIso: time.startIso, endIso: time.endIso } : null,
+    upstreamId: parsed.filter.upstreamId ?? "",
+    apiKeyId: parsed.filter.apiKeyId ?? "",
+    performance: { ...parsed.filter.performance },
+    sortField: resolveLogsSortField(parsed.sort?.field),
+    sortOrder: parsed.sort?.order ?? DEFAULT_LOGS_SERVER_FILTERS.sortOrder,
+  };
+}
 
 function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
   return (
@@ -153,31 +192,9 @@ export default function LogsPage() {
   // URL params seed the initial filters only (same pattern as user_id above);
   // afterwards the filter bar owns the state. The rankings page links here
   // with an object filter plus its current time window.
-  const [tableFilters, setTableFilters] = useState<LogsServerFilters>(() => {
-    const upstreamId = searchParams.get("upstream_id")?.trim() || "";
-    const apiKeyId = searchParams.get("api_key_id")?.trim() || "";
-    const model = searchParams.get("model")?.trim() || "";
-
-    let customRange: LogsServerFilters["customRange"] = null;
-    const startStr = searchParams.get("start_time");
-    if (startStr) {
-      const start = new Date(startStr);
-      // A missing end_time means "up to now" (preset windows from rankings).
-      const endStr = searchParams.get("end_time");
-      const end = endStr ? new Date(endStr) : new Date();
-      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start < end) {
-        customRange = { startIso: start.toISOString(), endIso: end.toISOString() };
-      }
-    }
-
-    return {
-      ...DEFAULT_LOGS_SERVER_FILTERS,
-      upstreamId,
-      apiKeyId,
-      model,
-      ...(customRange ? { timeRange: "custom" as const, customRange } : {}),
-    };
-  });
+  const [tableFilters, setTableFilters] = useState<LogsServerFilters>(() =>
+    recoverInitialTableFilters(searchParams)
+  );
   // Functional merge: a debounced patch (e.g. the model input) can arrive after
   // a newer status/time change and must not overwrite it.
   const handleTableFiltersChange = useCallback((patch: Partial<LogsServerFilters>) => {
@@ -201,46 +218,42 @@ export default function LogsPage() {
     [apiKeysData]
   );
 
-  const filters = useMemo<RequestLogsFilters>(() => {
-    if (focusId) return { id: focusId };
-    const statusCode = tableFilters.statusCode ? Number.parseInt(tableFilters.statusCode, 10) : NaN;
-    const customRange = tableFilters.timeRange === "custom" ? tableFilters.customRange : null;
-    return {
-      ...(userId ? { user_id: userId } : {}),
-      ...(tableFilters.upstreamId ? { upstream_id: tableFilters.upstreamId } : {}),
-      ...(tableFilters.apiKeyId ? { api_key_id: tableFilters.apiKeyId } : {}),
-      // Exact status code wins over the class range, mirroring the backend.
-      ...(Number.isFinite(statusCode)
-        ? { status_code: statusCode }
-        : tableFilters.statusClass !== "all"
-          ? { status_class: tableFilters.statusClass }
-          : {}),
-      ...(tableFilters.model ? { model: tableFilters.model } : {}),
-      ...resolvePerfPresetParams(tableFilters.perfPreset),
-      ...(customRange
-        ? { start_time: customRange.startIso, end_time: customRange.endIso }
-        : { time_range: tableFilters.timeRange === "custom" ? "all" : tableFilters.timeRange }),
-      ...(tableFilters.sortField
-        ? { sort: tableFilters.sortField, order: tableFilters.sortOrder }
-        : {}),
-    };
-  }, [focusId, userId, tableFilters]);
-  // Stats describe the window, not the page: drop sort/order so a header
-  // click never refires the percentile queries.
-  const statsFilters = useMemo<RequestLogStatsFilters>(() => {
-    const { id: _id, sort: _sort, order: _order, ...rest } = filters;
-    return rest;
-  }, [filters]);
-  const { data: windowStats } = useRequestLogStats("admin", statsFilters, {
+  const filter = useMemo(
+    () =>
+      focusId
+        ? normalizeRequestLogFilter({ id: focusId })
+        : normalizeRequestLogFilter({
+            userId: userId ?? undefined,
+            upstreamId: tableFilters.upstreamId,
+            apiKeyId: tableFilters.apiKeyId,
+            statusCode: tableFilters.statusCode,
+            statusClass: tableFilters.statusClass,
+            model: tableFilters.model,
+            timeRange: tableFilters.timeRange,
+            customRange: tableFilters.customRange,
+            performance: tableFilters.performance,
+          }),
+    [focusId, userId, tableFilters]
+  );
+  const sort = useMemo<RequestLogSort | undefined>(
+    () =>
+      tableFilters.sortField
+        ? { field: tableFilters.sortField, order: tableFilters.sortOrder }
+        : undefined,
+    [tableFilters.sortField, tableFilters.sortOrder]
+  );
+
+  const { data: windowStats } = useRequestLogStats("admin", filter, {
     enabled: !focusId,
   });
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
   const { data, isLoading, refetch } = useRequestLogs(
     focusId ? 1 : page,
     focusId ? 1 : pageSize,
-    filters,
+    filter,
     {
       refetchInterval: focusId ? false : effectiveRefetchInterval,
+      sort,
     }
   );
 

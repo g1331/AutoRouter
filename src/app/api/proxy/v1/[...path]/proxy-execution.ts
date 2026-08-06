@@ -113,20 +113,24 @@ export interface FailoverErrorWithHistory extends Error {
   queue?: RoutingQueueLog | null;
 }
 
+interface FailoverContext {
+  failoverHistory: FailoverAttempt[];
+  didSendUpstream: boolean;
+  concurrencyExcludedCandidates: RoutingExcluded[];
+  headerDiff?: HeaderDiff | null;
+  queue?: RoutingQueueLog | null;
+}
+
 function attachFailoverContext<T extends Error>(
   error: T,
-  failoverHistory: FailoverAttempt[],
-  didSendUpstream: boolean,
-  concurrencyExcludedCandidates: RoutingExcluded[] = [],
-  headerDiff: HeaderDiff | null = null,
-  queue: RoutingQueueLog | null = null
+  context: FailoverContext
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
-  enrichedError.failoverHistory = [...failoverHistory];
-  enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
-  enrichedError.didSendUpstream = didSendUpstream;
-  enrichedError.headerDiff = headerDiff;
-  enrichedError.queue = queue ?? enrichedError.queue ?? null;
+  enrichedError.failoverHistory = [...context.failoverHistory];
+  enrichedError.concurrencyExcludedCandidates = [...context.concurrencyExcludedCandidates];
+  enrichedError.didSendUpstream = context.didSendUpstream;
+  enrichedError.headerDiff = context.headerDiff ?? null;
+  enrichedError.queue = context.queue ?? enrichedError.queue ?? null;
   return enrichedError;
 }
 
@@ -426,6 +430,44 @@ export function resolveUpstreamProvider(
     (upstream ? getPrimaryProviderByCapabilities(upstream.routeCapabilities) : null) ??
     getProviderByRouteCapability(routeCapability)
   );
+}
+
+interface FailoverAttemptEvidence {
+  errorType: FailoverAttempt["error_type"];
+  errorMessage: string;
+  statusCode: number | null;
+  responseHeaders: Record<string, string>;
+  responseBodyText: string | null;
+  responseBodyJson: unknown | null;
+  headerDiff: FailoverAttempt["header_diff"];
+  circuitBreakerRecorded: boolean;
+  matchedFailureRule: MatchedFailureRule | null;
+}
+
+function buildFailoverAttempt(
+  selectedUpstream: Upstream,
+  routeCapability: RouteCapability,
+  attemptUpstreamBaseUrl: string,
+  selectionReason: RoutingSelectionReason | null,
+  evidence: FailoverAttemptEvidence
+): FailoverAttempt {
+  return {
+    upstream_id: selectedUpstream.id,
+    upstream_name: selectedUpstream.name,
+    upstream_provider_type: resolveUpstreamProvider(selectedUpstream, routeCapability),
+    upstream_base_url: attemptUpstreamBaseUrl,
+    attempted_at: new Date().toISOString(),
+    error_type: evidence.errorType,
+    error_message: evidence.errorMessage,
+    status_code: evidence.statusCode,
+    response_headers: evidence.responseHeaders,
+    response_body_text: evidence.responseBodyText,
+    response_body_json: evidence.responseBodyJson,
+    selection_reason: selectionReason,
+    header_diff: evidence.headerDiff ?? null,
+    circuit_breaker_recorded: evidence.circuitBreakerRecorded,
+    matched_failure_rule: evidence.matchedFailureRule,
+  };
 }
 
 const MAX_FAILOVER_ERROR_BODY_BYTES = 256 * 1024;
@@ -788,9 +830,11 @@ export async function forwardWithFailover(
       log.warn({ requestId }, "client disconnected during failover, stopping retries");
       throw attachFailoverContext(
         new ClientDisconnectedError("Client disconnected during failover"),
-        failoverHistory,
-        didSendUpstream,
-        concurrencyExcludedCandidates
+        {
+          failoverHistory,
+          didSendUpstream,
+          concurrencyExcludedCandidates,
+        }
       );
     }
 
@@ -827,12 +871,11 @@ export async function forwardWithFailover(
       }
     } catch (error) {
       if (isNoAuthorizedUpstreamsError(error)) {
-        throw attachFailoverContext(
-          error instanceof Error ? error : new Error(String(error)),
+        throw attachFailoverContext(error instanceof Error ? error : new Error(String(error)), {
           failoverHistory,
           didSendUpstream,
-          concurrencyExcludedCandidates
-        );
+          concurrencyExcludedCandidates,
+        });
       }
       if (error instanceof AllCandidatesConcurrencyFullError) {
         appendConcurrencyExclusions(error.excludedCandidates);
@@ -862,22 +905,21 @@ export async function forwardWithFailover(
               lastError = resumeError;
               hasMoreUpstreams = false;
             } else if (resumeError instanceof ClientDisconnectedError) {
-              throw attachFailoverContext(
-                resumeError,
+              throw attachFailoverContext(resumeError, {
                 failoverHistory,
                 didSendUpstream,
                 concurrencyExcludedCandidates,
-                null,
-                (resumeError as FailoverErrorWithHistory).queue ?? null
-              );
+                queue: (resumeError as FailoverErrorWithHistory).queue ?? null,
+              });
             } else {
               throw attachFailoverContext(
                 resumeError instanceof Error ? resumeError : new Error(String(resumeError)),
-                failoverHistory,
-                didSendUpstream,
-                concurrencyExcludedCandidates,
-                null,
-                (resumeError as FailoverErrorWithHistory).queue ?? null
+                {
+                  failoverHistory,
+                  didSendUpstream,
+                  concurrencyExcludedCandidates,
+                  queue: (resumeError as FailoverErrorWithHistory).queue ?? null,
+                }
               );
             }
           }
@@ -889,14 +931,12 @@ export async function forwardWithFailover(
         appendCircuitBlocked(error);
         hasMoreUpstreams = false;
       } else {
-        throw attachFailoverContext(
-          error instanceof Error ? error : new Error(String(error)),
+        throw attachFailoverContext(error instanceof Error ? error : new Error(String(error)), {
           failoverHistory,
           didSendUpstream,
           concurrencyExcludedCandidates,
-          null,
-          queueLifecycle
-        );
+          queue: queueLifecycle,
+        });
       }
     }
 
@@ -910,21 +950,19 @@ export async function forwardWithFailover(
       if (circuitBlockedCandidates.length > 0) {
         exhaustedError.circuitBlockedCandidates = circuitBlockedCandidates;
       }
-      throw attachFailoverContext(
-        exhaustedError,
+      throw attachFailoverContext(exhaustedError, {
         failoverHistory,
         didSendUpstream,
-        concurrencyExcludedCandidates
-      );
+        concurrencyExcludedCandidates,
+      });
     }
 
     if (!selectedUpstream) {
-      throw attachFailoverContext(
-        new NoHealthyUpstreamsError("No upstream available"),
+      throw attachFailoverContext(new NoHealthyUpstreamsError("No upstream available"), {
         failoverHistory,
         didSendUpstream,
-        concurrencyExcludedCandidates
-      );
+        concurrencyExcludedCandidates,
+      });
     }
 
     attemptCount++;
@@ -997,23 +1035,25 @@ export async function forwardWithFailover(
           void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
         }
         // Record failover attempt
-        failoverHistory.push({
-          upstream_id: selectedUpstream.id,
-          upstream_name: selectedUpstream.name,
-          upstream_provider_type: resolveUpstreamProvider(selectedUpstream, routeCapability),
-          upstream_base_url: attemptUpstreamBaseUrl,
-          attempted_at: new Date().toISOString(),
-          error_type: errorType,
-          error_message: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
-          status_code: result.statusCode,
-          response_headers: failedResponse.headers,
-          response_body_text: failedResponse.bodyText,
-          response_body_json: failedResponse.bodyJson,
-          selection_reason: finalSelectionReason,
-          header_diff: result.headerDiff ?? null,
-          circuit_breaker_recorded: circuitBreakerRecorded,
-          matched_failure_rule: matchedFailureRule,
-        });
+        failoverHistory.push(
+          buildFailoverAttempt(
+            selectedUpstream,
+            routeCapability,
+            attemptUpstreamBaseUrl,
+            finalSelectionReason,
+            {
+              errorType,
+              errorMessage: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
+              statusCode: result.statusCode,
+              responseHeaders: failedResponse.headers,
+              responseBodyText: failedResponse.bodyText,
+              responseBodyJson: failedResponse.bodyJson,
+              headerDiff: result.headerDiff,
+              circuitBreakerRecorded,
+              matchedFailureRule,
+            }
+          )
+        );
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
         continue;
@@ -1123,11 +1163,12 @@ export async function forwardWithFailover(
         log.warn({ requestId }, "client disconnected during request, stopping");
         throw attachFailoverContext(
           new ClientDisconnectedError("Client disconnected during request"),
-          failoverHistory,
-          didSendUpstream,
-          concurrencyExcludedCandidates,
-          null,
-          queueLifecycle
+          {
+            failoverHistory,
+            didSendUpstream,
+            concurrencyExcludedCandidates,
+            queue: queueLifecycle,
+          }
         );
       }
 
@@ -1156,23 +1197,25 @@ export async function forwardWithFailover(
         const errorMessage = errorEvidence.errorMessage;
         void markUnhealthy(selectedUpstream.id, errorMessage);
         // Record failover attempt
-        failoverHistory.push({
-          upstream_id: selectedUpstream.id,
-          upstream_name: selectedUpstream.name,
-          upstream_provider_type: resolveUpstreamProvider(selectedUpstream, routeCapability),
-          upstream_base_url: attemptUpstreamBaseUrl,
-          attempted_at: new Date().toISOString(),
-          error_type: errorType,
-          error_message: errorMessage,
-          status_code: errorEvidence.statusCode,
-          response_headers: errorEvidence.responseHeaders,
-          response_body_text: errorEvidence.responseBodyText,
-          response_body_json: errorEvidence.responseBodyJson,
-          selection_reason: finalSelectionReason,
-          header_diff: errorHeaderDiff,
-          circuit_breaker_recorded: circuitBreakerRecorded,
-          matched_failure_rule: matchedFailureRule,
-        });
+        failoverHistory.push(
+          buildFailoverAttempt(
+            selectedUpstream,
+            routeCapability,
+            attemptUpstreamBaseUrl,
+            finalSelectionReason,
+            {
+              errorType,
+              errorMessage,
+              statusCode: errorEvidence.statusCode,
+              responseHeaders: errorEvidence.responseHeaders,
+              responseBodyText: errorEvidence.responseBodyText,
+              responseBodyJson: errorEvidence.responseBodyJson,
+              headerDiff: errorHeaderDiff,
+              circuitBreakerRecorded,
+              matchedFailureRule,
+            }
+          )
+        );
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = error instanceof Error ? error : new Error(String(error));
         continue;
@@ -1182,14 +1225,13 @@ export async function forwardWithFailover(
       const nonFailoverError = (error instanceof Error ? error : new Error(String(error))) as
         | Error
         | FailoverErrorWithHistory;
-      throw attachFailoverContext(
-        nonFailoverError,
+      throw attachFailoverContext(nonFailoverError, {
         failoverHistory,
         didSendUpstream,
         concurrencyExcludedCandidates,
-        errorHeaderDiff,
-        queueLifecycle
-      );
+        headerDiff: errorHeaderDiff,
+        queue: queueLifecycle,
+      });
     }
   }
 }
