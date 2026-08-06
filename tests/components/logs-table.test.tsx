@@ -227,7 +227,10 @@ describe("LogsTable", () => {
       try {
         // An active server filter with an empty page shows the filtered empty
         // state (the filter bar stays mounted so the filter can be cleared).
-        const activeFilters = { statusClass: "5xx" as const, model: "", timeRange: "30d" as const };
+        const activeFilters = {
+          ...DEFAULT_LOGS_SERVER_FILTERS,
+          statusClass: "5xx" as const,
+        };
         const { rerender } = render(<LogsTable logs={[]} serverFilters={activeFilters} />);
 
         expect(screen.getByText("noMatchingLogs")).toBeInTheDocument();
@@ -1138,24 +1141,26 @@ describe("LogsTable", () => {
       expect(quickFilter.className).toContain("motion-safe:hover:-translate-y-0.5");
     });
 
-    it("emits a perfPreset patch when a quick filter chip is clicked", () => {
+    it("emits performance threshold patches when quick filter chips are clicked", () => {
       const onServerFiltersChange = vi.fn();
       render(<LogsTable logs={[mockLog]} onServerFiltersChange={onServerFiltersChange} />);
 
       fireEvent.click(screen.getByRole("button", { name: "presetHighTtft" }));
-      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "high_ttft" });
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ performance: { ttftMinMs: 5000 } });
 
       fireEvent.click(screen.getByRole("button", { name: "presetLowTps" }));
-      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "low_tps" });
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ performance: { tpsMax: 30 } });
 
       fireEvent.click(screen.getByRole("button", { name: "presetSlowDuration" }));
-      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "slow_duration" });
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({
+        performance: { durationMinMs: 20000 },
+      });
 
       fireEvent.click(screen.getByRole("button", { name: "presetAll" }));
-      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "all" });
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ performance: {} });
     });
 
-    it("renders every row regardless of the active preset (narrowing is server-side)", () => {
+    it("renders every row regardless of the active threshold (narrowing is server-side)", () => {
       const slowLog: RequestLog = {
         ...mockLog,
         id: "slow-duration",
@@ -1172,7 +1177,10 @@ describe("LogsTable", () => {
       render(
         <LogsTable
           logs={[slowLog, fastLog]}
-          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, perfPreset: "slow_duration" }}
+          serverFilters={{
+            ...DEFAULT_LOGS_SERVER_FILTERS,
+            performance: { durationMinMs: 20000 },
+          }}
           onServerFiltersChange={vi.fn()}
         />
       );
@@ -1186,7 +1194,7 @@ describe("LogsTable", () => {
       render(
         <LogsTable
           logs={[mockLog]}
-          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, perfPreset: "high_ttft" }}
+          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, performance: { ttftMinMs: 5000 } }}
           onServerFiltersChange={vi.fn()}
         />
       );

@@ -54,8 +54,8 @@ vi.mock("@/components/portal/portal-usage-chart", () => ({
   ),
 }));
 
-// Keep the real DEFAULT_LOGS_SERVER_FILTERS / resolvePerfPresetParams so the
-// page-level filter mapping runs against the actual module contract.
+// Keep the real DEFAULT_LOGS_SERVER_FILTERS so portal filter state runs against
+// the actual component contract.
 vi.mock("@/components/admin/logs-table", async (importActual) => {
   const actual = await importActual<typeof import("@/components/admin/logs-table")>();
   return {

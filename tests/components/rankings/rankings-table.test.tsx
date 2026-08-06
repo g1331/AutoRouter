@@ -43,7 +43,10 @@ function upstreamItem(overrides: Partial<LeaderboardUpstreamItem>): LeaderboardU
   };
 }
 
-const defaultWindow = { startIso: "2024-06-08T12:00:00.000Z" };
+const defaultWindow = {
+  startIso: "2024-06-08T12:00:00.000Z",
+  endIso: "2024-06-15T12:00:00.000Z",
+};
 
 describe("RankingsTable", () => {
   it("renders ranked rows with metrics and ratio bars scaled to the leader", () => {

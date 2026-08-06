@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createElement, type ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createElement } from "react";
-import { resolveTimeRangeStart, useRequestLogs } from "@/hooks/use-request-logs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { RequestLogFilter } from "@/lib/utils/request-log-filters";
+import { normalizeRequestLogFilter } from "@/lib/utils/request-log-filters";
+import { useRequestLogs } from "@/hooks/use-request-logs";
 
-// Mock API client
 const mockGet = vi.fn();
 
 vi.mock("@/providers/auth-provider", () => ({
@@ -15,292 +16,85 @@ vi.mock("@/providers/auth-provider", () => ({
   }),
 }));
 
-// Helper to parse URL and extract params for flexible assertions
 function parseUrlParams(url: string): Record<string, string> {
   const [path, queryString] = url.split("?");
   if (!queryString) return { _path: path };
-  const params = new URLSearchParams(queryString);
   const result: Record<string, string> = { _path: path };
-  params.forEach((value, key) => {
+  new URLSearchParams(queryString).forEach((value, key) => {
     result[key] = value;
   });
   return result;
 }
 
-describe("use-request-logs hooks", () => {
+describe("useRequestLogs", () => {
   let queryClient: QueryClient;
-
-  const wrapper = ({ children }: { children: React.ReactNode }) =>
+  const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
 
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-        },
-      },
-    });
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.clearAllMocks();
   });
 
-  describe("useRequestLogs", () => {
-    it("fetches logs with default pagination", async () => {
-      const mockResponse = {
-        items: [{ id: "log-1", path: "/v1/chat/completions" }],
-        total: 1,
-        page: 1,
-        page_size: 20,
-      };
-      mockGet.mockResolvedValueOnce(mockResponse);
+  it("fetches the admin endpoint with default pagination", async () => {
+    mockGet.mockResolvedValueOnce({ items: [], total: 0 });
 
-      const { result } = renderHook(() => useRequestLogs(), { wrapper });
+    const { result } = renderHook(() => useRequestLogs(), { wrapper });
 
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20");
+  });
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20");
-      expect(result.current.data).toEqual(mockResponse);
+  it("passes the list projection and list controls to the admin endpoint", async () => {
+    mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+    const filter = normalizeRequestLogFilter({
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      statusCode: 500,
+      timeRange: "all",
     });
 
-    it("fetches logs with custom pagination", async () => {
-      const mockResponse = {
-        items: [],
-        total: 0,
-        page: 3,
-        page_size: 50,
-      };
-      mockGet.mockResolvedValueOnce(mockResponse);
+    const { result } = renderHook(
+      () =>
+        useRequestLogs(2, 50, filter, {
+          sort: { field: "cost", order: "asc" },
+        }),
+      { wrapper }
+    );
 
-      const { result } = renderHook(() => useRequestLogs(3, 50), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const query = parseUrlParams(mockGet.mock.calls[0][0] as string);
 
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(query._path).toBe("/admin/logs");
+    expect(query.page).toBe("2");
+    expect(query.page_size).toBe("50");
+    expect(query.api_key_id).toBe("key-1");
+    expect(query.upstream_id).toBe("up-1");
+    expect(query.status_code).toBe("500");
+    expect(query.sort).toBe("cost");
+    expect(query.order).toBe("asc");
+  });
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=3&page_size=50");
-    });
+  it("does not carry a focused request into the list placeholder", async () => {
+    mockGet.mockResolvedValue({ items: [], total: 0 });
+    const { result, rerender } = renderHook(
+      ({ filter }: { filter?: RequestLogFilter }) => useRequestLogs(1, 20, filter),
+      { initialProps: { filter: undefined }, wrapper }
+    );
 
-    it("fetches logs with api_key_id filter", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    rerender({ filter: normalizeRequestLogFilter({ id: "log-1" }) });
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ items: [], total: 0 });
+  });
 
-      const { result } = renderHook(() => useRequestLogs(1, 20, { api_key_id: "key-123" }), {
-        wrapper,
-      });
+  it("surfaces fetch errors", async () => {
+    mockGet.mockRejectedValueOnce(new Error("Failed to fetch logs"));
 
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const { result } = renderHook(() => useRequestLogs(), { wrapper });
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&api_key_id=key-123");
-    });
-
-    it("fetches logs with upstream_id filter", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { upstream_id: "upstream-456" }), {
-        wrapper,
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      expect(mockGet).toHaveBeenCalledWith(
-        "/admin/logs?page=1&page_size=20&upstream_id=upstream-456"
-      );
-    });
-
-    it("fetches logs with status_code filter", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { status_code: 200 }), { wrapper });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&status_code=200");
-    });
-
-    it("fetches logs with time range filters", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(
-        () =>
-          useRequestLogs(1, 20, {
-            start_time: "2024-01-01T00:00:00Z",
-            end_time: "2024-01-31T23:59:59Z",
-          }),
-        { wrapper }
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      // Use parsed params to avoid URL encoding order sensitivity
-      const calledUrl = mockGet.mock.calls[0][0] as string;
-      const params = parseUrlParams(calledUrl);
-      expect(params._path).toBe("/admin/logs");
-      expect(params.page).toBe("1");
-      expect(params.page_size).toBe("20");
-      expect(params.start_time).toBe("2024-01-01T00:00:00Z");
-      expect(params.end_time).toBe("2024-01-31T23:59:59Z");
-    });
-
-    it("fetches logs with multiple filters", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(
-        () =>
-          useRequestLogs(1, 20, {
-            api_key_id: "key-123",
-            upstream_id: "upstream-456",
-            status_code: 500,
-          }),
-        { wrapper }
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      // Use parsed params to avoid parameter order sensitivity
-      const calledUrl = mockGet.mock.calls[0][0] as string;
-      const params = parseUrlParams(calledUrl);
-      expect(params._path).toBe("/admin/logs");
-      expect(params.page).toBe("1");
-      expect(params.page_size).toBe("20");
-      expect(params.api_key_id).toBe("key-123");
-      expect(params.upstream_id).toBe("upstream-456");
-      expect(params.status_code).toBe("500");
-    });
-
-    it("serializes status_class into the query", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { status_class: "5xx" }), {
-        wrapper,
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&status_class=5xx");
-    });
-
-    it("serializes the model filter into the query", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { model: "claude" }), { wrapper });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&model=claude");
-    });
-
-    it("maps a time_range preset to a start_time lower bound", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { time_range: "today" }), {
-        wrapper,
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-      expect(params.time_range).toBeUndefined();
-      expect(params.start_time).toBe(resolveTimeRangeStart("today").toISOString());
-    });
-
-    it("applies no lower bound for the all time range", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { time_range: "all" }), {
-        wrapper,
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-      expect(params.start_time).toBeUndefined();
-      expect(params.time_range).toBeUndefined();
-    });
-
-    it("prefers an explicit start_time over the time_range preset", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(
-        () => useRequestLogs(1, 20, { time_range: "7d", start_time: "2024-01-01T00:00:00Z" }),
-        { wrapper }
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-      expect(params.start_time).toBe("2024-01-01T00:00:00Z");
-    });
-
-    it("serializes performance threshold filters into the query", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(
-        () =>
-          useRequestLogs(1, 20, {
-            time_range: "all",
-            ttft_min_ms: 5000,
-            duration_min_ms: 20000,
-            tps_max: 30,
-          }),
-        { wrapper }
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-      expect(params.ttft_min_ms).toBe("5000");
-      expect(params.duration_min_ms).toBe("20000");
-      expect(params.tps_max).toBe("30");
-    });
-
-    it("serializes sort and defaults order to desc", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(
-        () => useRequestLogs(1, 20, { time_range: "all", sort: "cost" }),
-        {
-          wrapper,
-        }
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-      expect(params.sort).toBe("cost");
-      expect(params.order).toBe("desc");
-    });
-
-    it("omits order when sort is not set", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(
-        () => useRequestLogs(1, 20, { time_range: "all", order: "asc" }),
-        { wrapper }
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
-      expect(params.sort).toBeUndefined();
-      expect(params.order).toBeUndefined();
-    });
-
-    it("handles fetch error", async () => {
-      mockGet.mockRejectedValueOnce(new Error("Failed to fetch logs"));
-
-      const { result } = renderHook(() => useRequestLogs(), { wrapper });
-
-      await waitFor(() => expect(result.current.isError).toBe(true));
-
-      expect(result.current.error?.message).toBe("Failed to fetch logs");
-    });
-
-    it("handles status_code 0 correctly", async () => {
-      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
-
-      const { result } = renderHook(() => useRequestLogs(1, 20, { status_code: 0 }), { wrapper });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      // status_code 0 should still be included since !== undefined check is used
-      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&status_code=0");
-    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe("Failed to fetch logs");
   });
 });

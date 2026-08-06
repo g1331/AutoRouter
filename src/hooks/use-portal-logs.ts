@@ -1,89 +1,41 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
-import { resolveTimeRangeStart } from "@/hooks/use-request-logs";
-import type { PaginatedRequestLogsResponse, TimeRange } from "@/types/api";
-
-export interface PortalRequestLogsFilters {
-  api_key_id?: string;
-  status_code?: number;
-  status_class?: "2xx" | "4xx" | "5xx";
-  model?: string;
-  start_time?: string; // ISO 8601
-  end_time?: string; // ISO 8601
-  // Preset resolved to start_time at fetch time; ignored when start_time is
-  // set. "all" applies no lower bound.
-  time_range?: TimeRange | "all";
-  // Performance threshold filters (same surface as the admin logs endpoint).
-  ttft_min_ms?: number;
-  duration_min_ms?: number;
-  tps_max?: number;
-  sort?: "created_at" | "duration_ms" | "total_tokens" | "ttft_ms" | "cost";
-  order?: "asc" | "desc";
-}
+import type { PaginatedRequestLogsResponse } from "@/types/api";
+import {
+  buildRequestLogListProjection,
+  type RequestLogFilter,
+  type RequestLogSort,
+} from "@/lib/utils/request-log-filters";
 
 export interface UsePortalRequestLogsOptions {
   refetchInterval?: number | false;
+  sort?: RequestLogSort;
 }
 
 /**
- * Fetch the caller's own request logs. The owner scope is enforced
- * server-side; filters keep AND semantics and can only narrow the result.
+ * Fetch the caller's own request logs. Owner scope remains server-enforced;
+ * this hook only adapts a filter projection to TanStack Query.
  */
 export function usePortalRequestLogs(
   page: number = 1,
   pageSize: number = 20,
-  filters?: PortalRequestLogsFilters,
+  filter?: RequestLogFilter,
   options?: UsePortalRequestLogsOptions
 ) {
   const { apiClient } = useAuth();
+  const listProjection = buildRequestLogListProjection(filter, {
+    scope: "user",
+    page,
+    pageSize,
+    sort: options?.sort,
+  });
 
   return useQuery({
-    queryKey: ["portal", "logs", page, pageSize, filters],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("page_size", String(pageSize));
-
-      if (filters?.api_key_id) {
-        params.set("api_key_id", filters.api_key_id);
-      }
-      if (filters?.status_code !== undefined) {
-        params.set("status_code", String(filters.status_code));
-      }
-      if (filters?.status_class) {
-        params.set("status_class", filters.status_class);
-      }
-      if (filters?.model) {
-        params.set("model", filters.model);
-      }
-      const timeRange = filters?.time_range;
-      if (filters?.start_time) {
-        params.set("start_time", filters.start_time);
-      } else if (timeRange && timeRange !== "all") {
-        params.set("start_time", resolveTimeRangeStart(timeRange).toISOString());
-      }
-      if (filters?.end_time) {
-        params.set("end_time", filters.end_time);
-      }
-      if (filters?.ttft_min_ms !== undefined) {
-        params.set("ttft_min_ms", String(filters.ttft_min_ms));
-      }
-      if (filters?.duration_min_ms !== undefined) {
-        params.set("duration_min_ms", String(filters.duration_min_ms));
-      }
-      if (filters?.tps_max !== undefined) {
-        params.set("tps_max", String(filters.tps_max));
-      }
-      if (filters?.sort) {
-        params.set("sort", filters.sort);
-        params.set("order", filters.order ?? "desc");
-      }
-
-      return apiClient.get<PaginatedRequestLogsResponse>(`/user/logs?${params.toString()}`);
-    },
+    queryKey: ["portal", "logs", page, pageSize, listProjection.identity],
+    queryFn: () =>
+      apiClient.get<PaginatedRequestLogsResponse>(`/user/logs?${listProjection.search}`),
     refetchInterval: options?.refetchInterval,
-    // Keep previous data during filter/pagination changes so the filter bar
-    // stays mounted instead of flashing the loading skeleton.
+    // Keep previous data during filter changes so the filter bar stays mounted.
     placeholderData: (previous) => previous,
   });
 }

@@ -54,11 +54,10 @@ interface LogsTableMockProps {
   apiKeyFilterOptions?: Array<{ id: string; name: string }>;
   windowStats?: Record<string, unknown> | null;
 }
-
 let lastLogsTableProps: LogsTableMockProps | null = null;
 
-// Keep the real DEFAULT_LOGS_SERVER_FILTERS / resolvePerfPresetParams so the
-// page-level preset→param mapping under test uses the actual thresholds.
+// Keep the real DEFAULT_LOGS_SERVER_FILTERS so page-level performance threshold state
+// mapping runs against the actual component contract.
 vi.mock("@/components/admin/logs-table", async (importActual) => {
   const actual = await importActual<typeof import("@/components/admin/logs-table")>();
   return {
@@ -190,12 +189,11 @@ describe("LogsPage focus query param", () => {
 
     render(<LogsPage />);
 
-    expect(useRequestLogsMock).toHaveBeenCalledWith(
-      1,
-      1,
-      { id: "log-1" },
-      expect.objectContaining({ refetchInterval: false })
-    );
+    const focusCall = useRequestLogsMock.mock.calls.at(-1)!;
+    expect(focusCall[0]).toBe(1);
+    expect(focusCall[1]).toBe(1);
+    expect(focusCall[2]).toEqual(expect.objectContaining({ id: "log-1" }));
+    expect(focusCall[3]).toEqual({ refetchInterval: false, sort: undefined });
 
     expect(screen.getByText("logs.focusActive")).toBeInTheDocument();
     expect(screen.getByText("log-1")).toBeInTheDocument();
@@ -230,15 +228,15 @@ describe("LogsPage focus query param", () => {
       data: { items: [{ id: "log-1" }], total: 1, total_pages: 1, page: 1, page_size: 20 },
       refetch: vi.fn(),
     });
-
     render(<LogsPage />);
 
-    expect(useRequestLogsMock).toHaveBeenCalledWith(
-      1,
-      20,
-      { user_id: "user-42", time_range: "30d" },
-      expect.objectContaining({ refetchInterval: 5000 })
+    const userCall = useRequestLogsMock.mock.calls.at(-1)!;
+    expect(userCall[0]).toBe(1);
+    expect(userCall[1]).toBe(20);
+    expect(userCall[2]).toEqual(
+      expect.objectContaining({ userId: "user-42", time: { kind: "preset", value: "30d" } })
     );
+    expect(userCall[3]).toEqual({ refetchInterval: 5000, sort: undefined });
 
     expect(screen.getByText("logs.userFilterActive")).toBeInTheDocument();
     expect(screen.getByText("user-42")).toBeInTheDocument();
@@ -265,12 +263,11 @@ describe("LogsPage focus query param", () => {
 
     render(<LogsPage />);
 
-    expect(useRequestLogsMock).toHaveBeenCalledWith(
-      1,
-      1,
-      { id: "log-1" },
-      expect.objectContaining({ refetchInterval: false })
-    );
+    const focusCall = useRequestLogsMock.mock.calls.at(-1)!;
+    expect(focusCall[0]).toBe(1);
+    expect(focusCall[1]).toBe(1);
+    expect(focusCall[2]).toEqual(expect.objectContaining({ id: "log-1", userId: undefined }));
+    expect(focusCall[3]).toEqual({ refetchInterval: false, sort: undefined });
     expect(screen.queryByText("logs.userFilterActive")).not.toBeInTheDocument();
   });
 });
@@ -299,7 +296,11 @@ describe("LogsPage server filter mapping", () => {
 
   function lastFilters() {
     const call = useRequestLogsMock.mock.calls.at(-1)!;
-    return { page: call[0] as number, filters: call[2] as Record<string, unknown> };
+    return {
+      page: call[0] as number,
+      filters: call[2] as Record<string, unknown>,
+      options: call[3] as Record<string, unknown>,
+    };
   }
 
   function patchFilters(patch: Record<string, unknown>) {
@@ -313,14 +314,31 @@ describe("LogsPage server filter mapping", () => {
     fireEvent.click(screen.getByTestId("go-page-2"));
     expect(lastFilters().page).toBe(2);
 
-    patchFilters({ perfPreset: "high_ttft" });
-    expect(lastFilters()).toEqual({ page: 1, filters: { ttft_min_ms: 5000, time_range: "30d" } });
+    patchFilters({ performance: { ttftMinMs: 5000 } });
+    expect(lastFilters()).toEqual({
+      page: 1,
+      filters: expect.objectContaining({
+        time: { kind: "preset", value: "30d" },
+        performance: { ttftMinMs: 5000 },
+      }),
+      options: expect.any(Object),
+    });
 
-    patchFilters({ perfPreset: "low_tps" });
-    expect(lastFilters().filters).toEqual({ tps_max: 30, time_range: "30d" });
+    patchFilters({ performance: { tpsMax: 30 } });
+    expect(lastFilters().filters).toEqual(
+      expect.objectContaining({
+        time: { kind: "preset", value: "30d" },
+        performance: { tpsMax: 30 },
+      })
+    );
 
-    patchFilters({ perfPreset: "slow_duration" });
-    expect(lastFilters().filters).toEqual({ duration_min_ms: 20000, time_range: "30d" });
+    patchFilters({ performance: { durationMinMs: 20000 } });
+    expect(lastFilters().filters).toEqual(
+      expect.objectContaining({
+        time: { kind: "preset", value: "30d" },
+        performance: { durationMinMs: 20000 },
+      })
+    );
   });
 
   it("sends start_time/end_time instead of time_range for a custom range", () => {
@@ -329,30 +347,51 @@ describe("LogsPage server filter mapping", () => {
       timeRange: "custom",
       customRange: { startIso: "2026-07-01T00:00:00.000Z", endIso: "2026-07-08T00:00:00.000Z" },
     });
-    expect(lastFilters().filters).toEqual({
-      start_time: "2026-07-01T00:00:00.000Z",
-      end_time: "2026-07-08T00:00:00.000Z",
-    });
+    expect(lastFilters().filters).toEqual(
+      expect.objectContaining({
+        time: {
+          kind: "custom",
+          startIso: "2026-07-01T00:00:00.000Z",
+          endIso: "2026-07-08T00:00:00.000Z",
+        },
+      })
+    );
   });
 
   it("prefers the exact status code over the status class", () => {
     render(<LogsPage />);
     patchFilters({ statusClass: "5xx", statusCode: "429" });
-    expect(lastFilters().filters).toEqual({ status_code: 429, time_range: "30d" });
+    expect(lastFilters().filters).toEqual(
+      expect.objectContaining({
+        statusCode: 429,
+        statusClass: undefined,
+        time: { kind: "preset", value: "30d" },
+      })
+    );
 
     patchFilters({ statusCode: "" });
-    expect(lastFilters().filters).toEqual({ status_class: "5xx", time_range: "30d" });
+    expect(lastFilters().filters).toEqual(
+      expect.objectContaining({
+        statusCode: undefined,
+        statusClass: "5xx",
+        time: { kind: "preset", value: "30d" },
+      })
+    );
   });
 
   it("maps upstream/key selections and sort state to query params", () => {
     render(<LogsPage />);
     patchFilters({ upstreamId: "up-1", apiKeyId: "key-1", sortField: "cost", sortOrder: "asc" });
-    expect(lastFilters().filters).toEqual({
-      upstream_id: "up-1",
-      api_key_id: "key-1",
-      time_range: "30d",
-      sort: "cost",
-      order: "asc",
+    expect(lastFilters().filters).toEqual(
+      expect.objectContaining({
+        upstreamId: "up-1",
+        apiKeyId: "key-1",
+        time: { kind: "preset", value: "30d" },
+      })
+    );
+    expect(lastFilters().options).toEqual({
+      refetchInterval: 5000,
+      sort: { field: "cost", order: "asc" },
     });
   });
 
@@ -396,7 +435,12 @@ describe("LogsPage server filter mapping", () => {
     const statsCall = useRequestLogStatsMock.mock.calls.at(-1)!;
     expect(statsCall[0]).toBe("admin");
     // Sort state must not leak into the stats query key.
-    expect(statsCall[1]).toEqual({ upstream_id: "up-1", time_range: "30d" });
+    expect(statsCall[1]).toEqual(
+      expect.objectContaining({
+        upstreamId: "up-1",
+        time: { kind: "preset", value: "30d" },
+      })
+    );
     expect(statsCall[2]).toEqual({ enabled: true });
     expect(lastLogsTableProps?.windowStats).toEqual(stats);
   });
@@ -466,8 +510,10 @@ describe("LogsPage URL filter initialization", () => {
   });
 
   function setParams(params: Record<string, string>) {
+    const query = new URLSearchParams(params).toString();
     useSearchParamsMock.mockReturnValue({
       get: (key: string) => params[key] ?? null,
+      toString: () => query,
     });
   }
 
@@ -482,32 +528,45 @@ describe("LogsPage URL filter initialization", () => {
 
     render(<LogsPage />);
 
-    expect(useRequestLogsMock).toHaveBeenCalledWith(
-      1,
-      20,
-      {
-        upstream_id: "up-1",
-        api_key_id: "key-1",
+    const logsCall = useRequestLogsMock.mock.calls.at(-1)!;
+    expect(logsCall[0]).toBe(1);
+    expect(logsCall[1]).toBe(20);
+    expect(logsCall[2]).toEqual(
+      expect.objectContaining({
+        upstreamId: "up-1",
+        apiKeyId: "key-1",
         model: "gpt-5",
-        start_time: "2024-06-08T12:00:00.000Z",
-        end_time: "2024-06-15T12:00:00.000Z",
-      },
-      expect.objectContaining({ refetchInterval: 5000 })
+        time: {
+          kind: "custom",
+          startIso: "2024-06-08T12:00:00.000Z",
+          endIso: "2024-06-15T12:00:00.000Z",
+        },
+      })
     );
+    expect(logsCall[3]).toEqual({ refetchInterval: 5000, sort: undefined });
+  });
+  it("preserves combined performance thresholds from URL params", () => {
+    setParams({ ttft_min_ms: "5000", duration_min_ms: "20000", tps_max: "30" });
+
+    render(<LogsPage />);
+
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as {
+      performance?: { ttftMinMs?: number; durationMinMs?: number; tpsMax?: number };
+    };
+    expect(filters.performance).toEqual({ ttftMinMs: 5000, durationMinMs: 20000, tpsMax: 30 });
   });
 
-  it("defaults the window end to now when only start_time is provided", () => {
+  it("falls back to the default range when only start_time is provided", () => {
     setParams({ upstream_id: "up-1", start_time: "2024-06-08T12:00:00.000Z" });
 
     render(<LogsPage />);
 
-    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as Record<string, string>;
-    expect(filters.upstream_id).toBe("up-1");
-    expect(filters.start_time).toBe("2024-06-08T12:00:00.000Z");
-    expect(new Date(filters.end_time).getTime()).toBeGreaterThan(
-      new Date(filters.start_time).getTime()
-    );
-    expect(filters.time_range).toBeUndefined();
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as {
+      upstreamId?: string;
+      time?: { kind: string; value?: string };
+    };
+    expect(filters.upstreamId).toBe("up-1");
+    expect(filters.time).toEqual({ kind: "preset", value: "30d" });
   });
 
   it("ignores an invalid time window and falls back to the default range", () => {
@@ -515,9 +574,10 @@ describe("LogsPage URL filter initialization", () => {
 
     render(<LogsPage />);
 
-    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as Record<string, string>;
-    expect(filters.start_time).toBeUndefined();
-    expect(filters.time_range).toBe("30d");
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as {
+      time?: { kind: string; value?: string };
+    };
+    expect(filters.time).toEqual({ kind: "preset", value: "30d" });
   });
 
   it("does not lock later filter interactions to the URL seed", () => {
@@ -529,7 +589,7 @@ describe("LogsPage URL filter initialization", () => {
       lastLogsTableProps?.onServerFiltersChange?.({ upstreamId: "" });
     });
 
-    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as Record<string, string>;
-    expect(filters.upstream_id).toBeUndefined();
+    const filters = useRequestLogsMock.mock.calls.at(-1)![2] as { upstreamId?: string };
+    expect(filters.upstreamId).toBeUndefined();
   });
 });
