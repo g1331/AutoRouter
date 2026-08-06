@@ -1,10 +1,15 @@
 import { eq, and, inArray } from "drizzle-orm";
-import { db, upstreams, type Upstream, type CircuitBreakerState } from "../db";
+import {
+  db,
+  upstreams,
+  circuitBreakerStates,
+  type Upstream,
+  type CircuitBreakerState,
+} from "../db";
 import {
   acquireCircuitBreakerPermit,
   CircuitBreakerOpenError,
   DEFAULT_CONFIG as CB_DEFAULT_CONFIG,
-  getCircuitBreakerState,
   CircuitBreakerStateEnum,
 } from "./circuit-breaker";
 import { VALID_PROVIDER_TYPES, type ProviderType } from "./model-router";
@@ -131,6 +136,7 @@ export type ProviderTypeSelectionResult = UpstreamSelectionResult;
 
 export interface SelectFromProviderOptions {
   candidateUpstreamIds?: string[];
+  candidateSnapshot?: UpstreamWithCircuitBreaker[];
   affinityScope?: AffinityScope;
 }
 
@@ -567,78 +573,101 @@ function selectWeightedWithHealthScore(
 /**
  * Get all upstreams by provider type with circuit breaker status.
  */
-export async function getUpstreamsByProviderType(
-  providerType: ProviderType
-): Promise<UpstreamWithCircuitBreaker[]> {
-  const activeUpstreams = await db.query.upstreams.findMany({
-    where: eq(upstreams.isActive, true),
-    with: {
-      health: true,
-    },
+async function enrichUpstreamsWithCircuitBreakerState<
+  T extends Upstream & {
+    health?: { isHealthy: boolean; latencyMs: number | null } | null;
+  },
+>(upstreamList: T[]): Promise<UpstreamWithCircuitBreaker[]> {
+  if (upstreamList.length === 0) {
+    return [];
+  }
+
+  const circuitStateRows = await db.query.circuitBreakerStates.findMany({
+    where: inArray(
+      circuitBreakerStates.upstreamId,
+      upstreamList.map((upstream) => upstream.id)
+    ),
   });
-
-  return Promise.all(
-    activeUpstreams
-      .filter(
-        (upstream) => getPrimaryProviderByCapabilities(upstream.routeCapabilities) === providerType
-      )
-      .map(async (upstream) => {
-        const cbState = await getCircuitBreakerState(upstream.id);
-        const isHealthy = upstream.health?.isHealthy ?? true;
-        const circuitState = cbState?.state ?? null;
-
-        return {
-          upstream,
-          isHealthy,
-          latencyMs: upstream.health?.latencyMs ?? null,
-          circuitState,
-          circuitBreaker: cbState,
-        };
-      })
+  const circuitStateMap = new Map(
+    circuitStateRows.map((state) => [state.upstreamId, state] as const)
   );
+
+  return upstreamList.map((upstream) => {
+    const cbState = circuitStateMap.get(upstream.id) ?? null;
+    return {
+      upstream,
+      isHealthy: upstream.health?.isHealthy ?? true,
+      latencyMs: upstream.health?.latencyMs ?? null,
+      circuitState: cbState?.state ?? null,
+      circuitBreaker: cbState,
+    };
+  });
 }
 
 /**
- * Get active upstreams by explicit upstream IDs with circuit breaker status.
+ * Load every active upstream and its health/circuit state in one snapshot.
  */
-async function getUpstreamsByIds(upstreamIds: string[]): Promise<UpstreamWithCircuitBreaker[]> {
+export async function loadActiveUpstreamSnapshot(): Promise<UpstreamWithCircuitBreaker[]> {
+  const activeUpstreams = await db.query.upstreams.findMany({
+    where: eq(upstreams.isActive, true),
+    with: { health: true },
+  });
+
+  return enrichUpstreamsWithCircuitBreakerState(activeUpstreams);
+}
+
+/**
+ * Load active upstreams by explicit IDs and preserve caller order.
+ */
+export async function loadUpstreamSnapshotByIds(
+  upstreamIds: string[]
+): Promise<UpstreamWithCircuitBreaker[]> {
   if (upstreamIds.length === 0) {
     return [];
   }
 
-  const idSet = new Set(upstreamIds);
   const matchedUpstreams = await db.query.upstreams.findMany({
     where: and(eq(upstreams.isActive, true), inArray(upstreams.id, upstreamIds)),
-    with: {
-      health: true,
-    },
+    with: { health: true },
   });
+  const snapshot = await enrichUpstreamsWithCircuitBreakerState(matchedUpstreams);
+  const order = new Map(upstreamIds.map((id, index) => [id, index]));
 
-  const sortedUpstreams = matchedUpstreams.sort((a, b) => {
-    const aIndex = upstreamIds.indexOf(a.id);
-    const bIndex = upstreamIds.indexOf(b.id);
-    return aIndex - bIndex;
-  });
-
-  return Promise.all(
-    sortedUpstreams
-      .filter((upstream) => idSet.has(upstream.id))
-      .map(async (upstream) => {
-        const cbState = await getCircuitBreakerState(upstream.id);
-        const isHealthy = upstream.health?.isHealthy ?? true;
-        const circuitState = cbState?.state ?? null;
-
-        return {
-          upstream,
-          isHealthy,
-          latencyMs: upstream.health?.latencyMs ?? null,
-          circuitState,
-          circuitBreaker: cbState,
-        };
-      })
+  return snapshot.sort(
+    (a, b) =>
+      (order.get(a.upstream.id) ?? Number.MAX_SAFE_INTEGER) -
+      (order.get(b.upstream.id) ?? Number.MAX_SAFE_INTEGER)
   );
 }
 
+/**
+ * Get all upstreams by provider type with circuit breaker status.
+ */
+export async function getUpstreamsByProviderType(
+  providerType: ProviderType
+): Promise<UpstreamWithCircuitBreaker[]> {
+  const snapshot = await loadActiveUpstreamSnapshot();
+  return snapshot.filter(
+    (entry) => getPrimaryProviderByCapabilities(entry.upstream.routeCapabilities) === providerType
+  );
+}
+
+function selectSnapshotEntries(
+  snapshot: UpstreamWithCircuitBreaker[],
+  upstreamIds: string[]
+): UpstreamWithCircuitBreaker[] {
+  const byId = new Map(snapshot.map((entry) => [entry.upstream.id, entry] as const));
+  const selected: UpstreamWithCircuitBreaker[] = [];
+
+  for (const upstreamId of upstreamIds) {
+    const entry = byId.get(upstreamId);
+    if (entry) {
+      selected.push(entry);
+    }
+  }
+
+  return selected;
+}
 /**
  * Check if an upstream is available (circuit breaker allows traffic).
  */
@@ -697,9 +726,16 @@ export async function selectFromProviderType(
     throw new Error(`Invalid provider type: ${providerType}`);
   }
 
-  const allUpstreams = options?.candidateUpstreamIds
-    ? await getUpstreamsByIds(options.candidateUpstreamIds)
-    : await getUpstreamsByProviderType(providerType);
+  const allUpstreams = options?.candidateSnapshot
+    ? options.candidateUpstreamIds
+      ? selectSnapshotEntries(options.candidateSnapshot, options.candidateUpstreamIds)
+      : options.candidateSnapshot.filter(
+          (entry) =>
+            getPrimaryProviderByCapabilities(entry.upstream.routeCapabilities) === providerType
+        )
+    : options?.candidateUpstreamIds
+      ? await loadUpstreamSnapshotByIds(options.candidateUpstreamIds)
+      : await getUpstreamsByProviderType(providerType);
 
   return selectFromUpstreamPool(
     allUpstreams,
@@ -721,9 +757,12 @@ export async function selectFromUpstreamCandidates(
     sessionId: string;
     contentLength: number;
     affinityScope?: AffinityScope;
-  }
+  },
+  options?: Pick<SelectFromProviderOptions, "candidateSnapshot">
 ): Promise<UpstreamSelectionResult> {
-  const allUpstreams = await getUpstreamsByIds(candidateUpstreamIds);
+  const allUpstreams = options?.candidateSnapshot
+    ? selectSnapshotEntries(options.candidateSnapshot, candidateUpstreamIds)
+    : await loadUpstreamSnapshotByIds(candidateUpstreamIds);
   return selectFromUpstreamPool(
     allUpstreams,
     excludeIds,
@@ -739,10 +778,13 @@ export async function selectFromUpstreamCandidates(
 export async function decideQueuedUpstreamResume(
   boundUpstreamId: string,
   candidateUpstreamIds: string[],
-  excludeIds?: string[]
+  excludeIds?: string[],
+  options?: Pick<SelectFromProviderOptions, "candidateSnapshot">
 ): Promise<ResumeQueuedUpstreamDecision> {
   const nextExcludeIds = Array.from(new Set([...(excludeIds ?? []), boundUpstreamId]));
-  const allUpstreams = await getUpstreamsByIds(candidateUpstreamIds);
+  const allUpstreams = options?.candidateSnapshot
+    ? selectSnapshotEntries(options.candidateSnapshot, candidateUpstreamIds)
+    : await loadUpstreamSnapshotByIds(candidateUpstreamIds);
   const boundUpstream =
     allUpstreams.find((candidate) => candidate.upstream.id === boundUpstreamId) ?? null;
 
@@ -796,10 +838,11 @@ export async function decideQueuedUpstreamResume(
 export async function reselectQueuedUpstreamOnce(
   boundUpstreamId: string,
   candidateUpstreamIds: string[],
-  excludeIds?: string[]
+  excludeIds?: string[],
+  options?: Pick<SelectFromProviderOptions, "candidateSnapshot">
 ): Promise<UpstreamSelectionResult> {
   const nextExcludeIds = Array.from(new Set([...(excludeIds ?? []), boundUpstreamId]));
-  return selectFromUpstreamCandidates(candidateUpstreamIds, nextExcludeIds);
+  return selectFromUpstreamCandidates(candidateUpstreamIds, nextExcludeIds, undefined, options);
 }
 
 async function selectFromUpstreamPool(

@@ -120,6 +120,7 @@ function recordingRow(overrides = {}) {
 
 describe("traffic-recording-service", () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     delete process.env.RECORDER_FIXTURES_DIR;
   });
@@ -134,9 +135,12 @@ describe("traffic-recording-service", () => {
       }),
     });
     findFirstMock.mockResolvedValueOnce(settingsRow());
-
     const result = await getTrafficRecordingSettings();
+    const cachedResult = await getTrafficRecordingSettings();
 
+    expect(cachedResult).toEqual(result);
+    expect(dbInsertMock).toHaveBeenCalledTimes(1);
+    expect(findFirstMock).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       enabled: false,
       mode: "failure",

@@ -285,6 +285,40 @@ vi.mock("@/lib/services/load-balancer", () => {
       }
     }
   }
+  async function loadActiveUpstreamSnapshot() {
+    type SnapshotRow = {
+      id: string;
+      isActive?: boolean;
+      isHealthy?: boolean;
+      latencyMs?: number | null;
+      upstreamId?: string;
+      state?: string;
+      health?: { isHealthy?: boolean; latencyMs?: number | null } | null;
+    };
+
+    // Keep the mocked database module instance aligned with the route under test.
+    const { db } = await import("@/lib/db");
+    const upstreamRows = (await db.query.upstreams.findMany()) as unknown as SnapshotRow[];
+    const healthRows = (await db.query.upstreamHealth.findMany()) as unknown as SnapshotRow[];
+    const circuitStateRows =
+      (await db.query.circuitBreakerStates.findMany()) as unknown as SnapshotRow[];
+    const healthByUpstreamId = new Map(healthRows.map((row) => [row.upstreamId, row]));
+    const circuitStateByUpstreamId = new Map(circuitStateRows.map((row) => [row.upstreamId, row]));
+
+    return upstreamRows
+      .filter((upstream) => upstream.isActive !== false)
+      .map((upstream) => {
+        const health = upstream.health ?? healthByUpstreamId.get(upstream.id);
+        const circuitBreaker = circuitStateByUpstreamId.get(upstream.id) ?? null;
+        return {
+          upstream,
+          isHealthy: health?.isHealthy ?? true,
+          latencyMs: health?.latencyMs ?? null,
+          circuitState: circuitBreaker?.state ?? null,
+          circuitBreaker,
+        };
+      });
+  }
 
   return {
     selectFromProviderType: mockSelectFromUpstreamCandidates,
@@ -294,6 +328,7 @@ vi.mock("@/lib/services/load-balancer", () => {
     recordConnection: vi.fn(),
     releaseConnection: vi.fn(),
     mergeCircuitBlockedCandidates,
+    loadActiveUpstreamSnapshot: vi.fn(loadActiveUpstreamSnapshot),
     NoHealthyUpstreamsError,
     NoAuthorizedUpstreamsError,
     AllCandidatesConcurrencyFullError,
@@ -566,6 +601,82 @@ describe("proxy route upstream selection", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+  it("dispatches before request-start logging resolves and records routing duration", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+    const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
+    const apiKey = {
+      id: "key-timing",
+      keyHash: "hash-timing",
+      keyPrefix: "sk-timing",
+      name: "Timing Key",
+      expiresAt: null,
+      isActive: true,
+      accessMode: "restricted",
+      allowedModels: null,
+      rpmLimit: null,
+      tpmLimit: null,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([apiKey]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValue([{ upstreamId: upstream.id }]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    const events: string[] = [];
+    let resolveStartLog: ((value: { id: string }) => void) | undefined;
+    const startLogPromise = new Promise<{ id: string }>((resolve) => {
+      resolveStartLog = resolve;
+    });
+    vi.mocked(logRequestStart).mockImplementationOnce(() => {
+      events.push("request-log-start");
+      return startLogPromise;
+    });
+    vi.mocked(forwardRequest).mockImplementationOnce(async () => {
+      events.push("dispatch");
+      return {
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      };
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-timing",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+    const responsePromise = POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    await expect.poll(() => vi.mocked(forwardRequest).mock.calls.length).toBe(1);
+    expect(events).toEqual(["request-log-start", "dispatch"]);
+
+    resolveStartLog?.({ id: "log-timing" });
+    const response = await responsePromise;
+
+    expect(response.status).toBe(200);
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-timing",
+      expect.objectContaining({ routingDurationMs: expect.any(Number) })
+    );
   });
 
   describe("proxy auth header compatibility", () => {
@@ -1507,7 +1618,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-codex"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       codexUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -1617,7 +1733,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex-cli"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-codex-cli"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       codexCliUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -1710,7 +1831,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-openai"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       genericResponsesUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -1827,7 +1953,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-google"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       googleUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -1957,7 +2088,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-anthropic"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-anthropic"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       anthropicUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -2081,7 +2217,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-google"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       googleUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -2192,7 +2333,8 @@ describe("proxy route upstream selection", () => {
     expect(selectFromProviderType).toHaveBeenCalledWith(
       ["up-google-redirect"],
       undefined,
-      undefined
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
     );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       googleUpstream,
@@ -3063,13 +3205,15 @@ describe("proxy route upstream selection", () => {
       1,
       ["up-anthropic-1", "up-anthropic-2"],
       undefined,
-      undefined
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
     );
     expect(selectFromProviderType).toHaveBeenNthCalledWith(
       2,
       ["up-anthropic-1", "up-anthropic-2"],
       ["up-anthropic-1"],
-      undefined
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
     );
 
     expect(forwardRequest).toHaveBeenCalledTimes(2);
@@ -3699,7 +3843,8 @@ describe("proxy route upstream selection", () => {
     expect(vi.mocked(decideQueuedUpstreamResume)).toHaveBeenCalledWith(
       "up-queued",
       ["up-queued"],
-      undefined
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
     );
     expect(forwardRequest).toHaveBeenCalled();
     expect(releaseConnection).toHaveBeenCalledWith("up-queued");
@@ -3865,7 +4010,8 @@ describe("proxy route upstream selection", () => {
     expect(vi.mocked(reselectQueuedUpstreamOnce)).toHaveBeenCalledWith(
       "up-queued",
       ["up-queued", "up-fallback"],
-      ["up-queued"]
+      ["up-queued"],
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
     );
     expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
       "up-queued",
@@ -6591,7 +6737,12 @@ describe("proxy route upstream selection", () => {
     const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
 
     expect(response.status).toBe(200);
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-anthropic"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-anthropic"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(forwardRequest).toHaveBeenCalledTimes(1);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -6753,7 +6904,12 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-openai"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       genericResponsesUpstream,
       DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
@@ -6834,7 +6990,12 @@ describe("proxy route upstream selection", () => {
       data: [{ id: "gpt-4.1" }, { id: "gpt-5.2" }],
     });
     expect(routeByModel).not.toHaveBeenCalled();
-    expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-openai"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
     expect(forwardRequest).toHaveBeenCalledTimes(1);
   });
 
@@ -7988,7 +8149,12 @@ describe("proxy route upstream selection", () => {
 
       expect(response.status).toBe(200);
       // Verify selectFromProviderType was called with allowedUpstreamIds
-      expect(selectFromProviderType).toHaveBeenCalledWith(["up-privnode"], undefined, undefined);
+      expect(selectFromProviderType).toHaveBeenCalledWith(
+        ["up-privnode"],
+        undefined,
+        undefined,
+        expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+      );
       // Verify the request was forwarded to privnode, not duck
       expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
         privnodeUpstream,
@@ -8204,13 +8370,15 @@ describe("proxy route upstream selection", () => {
         1,
         ["up-privnode", "up-rightcode"],
         undefined,
-        undefined
+        undefined,
+        expect.objectContaining({ candidateSnapshot: expect.any(Array) })
       );
       expect(selectFromProviderType).toHaveBeenNthCalledWith(
         2,
         ["up-privnode", "up-rightcode"],
-        ["up-privnode"], // excludeIds - failed upstream
-        undefined // affinityContext
+        ["up-privnode"],
+        undefined,
+        expect.objectContaining({ candidateSnapshot: expect.any(Array) })
       );
       expect(markUnhealthy).toHaveBeenCalledWith("up-privnode", "HTTP 500 error");
       expect(markHealthy).toHaveBeenCalledWith("up-rightcode", 100);
@@ -8357,7 +8525,7 @@ describe("proxy route upstream selection", () => {
     it("should apply failure rules before recording stream idle timeout failures", async () => {
       const { recordFailure } = await import("@/lib/services/circuit-breaker");
       const { settleStreamRuntimeFailureForCircuitBreaker } =
-        await import("@/app/api/proxy/v1/[...path]/route");
+        await import("@/app/api/proxy/v1/[...path]/proxy-execution");
       mockMatchFailureRule.mockResolvedValueOnce({
         id: "idle-rule",
         name: "Ignore stream idle timeout",

@@ -4,12 +4,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Mock db – the load-balancer uses `db.query.upstreams.findMany`
+// Mock db – the load-balancer loads active upstreams and circuit states in one snapshot.
 const mockFindMany = vi.fn();
+const mockCircuitStateFindMany = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
       upstreams: { findMany: (...args: unknown[]) => mockFindMany(...args) },
+      circuitBreakerStates: {
+        findMany: (...args: unknown[]) => mockCircuitStateFindMany(...args),
+      },
     },
   },
   upstreams: {
@@ -17,6 +21,9 @@ vi.mock("@/lib/db", () => ({
     providerType: "providerType",
     isActive: "isActive",
     priority: "priority",
+  },
+  circuitBreakerStates: {
+    upstreamId: "upstreamId",
   },
 }));
 
@@ -219,6 +226,18 @@ describe("load-balancer", () => {
     mockQuotaInitialize.mockResolvedValue(undefined);
     mockQuotaSyncFromDb.mockResolvedValue(undefined);
     mockQuotaSyncUpstreamFromDb.mockResolvedValue(undefined);
+    mockCircuitStateFindMany.mockImplementation(async () => {
+      const latestResult = mockFindMany.mock.results.at(-1)?.value;
+      const upstreamList = (latestResult ? await latestResult : []) as Array<{ id: string }>;
+      const states = await Promise.all(
+        upstreamList.map(async (upstream) => {
+          const state = await mockGetCircuitBreakerState(upstream.id);
+          if (!state || typeof state !== "object") return null;
+          return { ...(state as Record<string, unknown>), upstreamId: upstream.id };
+        })
+      );
+      return states.filter((state): state is Record<string, unknown> => state !== null);
+    });
   });
 
   // =========================================================================
