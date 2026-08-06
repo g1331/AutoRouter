@@ -43,9 +43,13 @@ function upstreamItem(overrides: Partial<LeaderboardUpstreamItem>): LeaderboardU
   };
 }
 
-const defaultWindow = {
-  startIso: "2024-06-08T12:00:00.000Z",
-  endIso: "2024-06-15T12:00:00.000Z",
+const presetWindow = { timeRange: "7d" as const };
+const customWindow = {
+  timeRange: "custom" as const,
+  customRange: {
+    startIso: "2024-06-08T12:00:00.000Z",
+    endIso: "2024-06-15T12:00:00.000Z",
+  },
 };
 
 describe("RankingsTable", () => {
@@ -63,7 +67,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
       />
     );
 
@@ -88,7 +92,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={onSortChange}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
       />
     );
 
@@ -105,7 +109,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={{ startIso: "2024-06-08T12:00:00.000Z", endIso: "2024-06-15T12:00:00.000Z" }}
+        logsWindow={customWindow}
       />
     );
 
@@ -124,6 +128,26 @@ describe("RankingsTable", () => {
     // Clicking again collapses the row.
     fireEvent.click(screen.getByTestId("rankings-row"));
     expect(screen.queryByTestId("rankings-detail-row")).not.toBeInTheDocument();
+  });
+  it("encodes preset windows instead of materializing stale timestamps", () => {
+    render(
+      <RankingsTable
+        dimension="upstreams"
+        items={[upstreamItem({ id: "up-1" })]}
+        isLoading={false}
+        sortBy="requests"
+        order="desc"
+        onSortChange={vi.fn()}
+        logsWindow={presetWindow}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId("rankings-row"));
+    const href = screen.getByRole("link", { name: /viewLogs/ }).getAttribute("href") ?? "";
+    expect(href).toContain("upstream_id=up-1");
+    expect(href).toContain("time_range=7d");
+    expect(href).not.toContain("start_time=");
+    expect(href).not.toContain("end_time=");
   });
 
   it("uses the model filter param for the models dimension", () => {
@@ -147,7 +171,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
       />
     );
 
@@ -180,7 +204,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
       />
     );
 
@@ -215,7 +239,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
         ranks={ranks}
       />
     );
@@ -237,7 +261,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
       />
     );
 
@@ -253,7 +277,7 @@ describe("RankingsTable", () => {
         sortBy="requests"
         order="desc"
         onSortChange={vi.fn()}
-        logsWindow={defaultWindow}
+        logsWindow={presetWindow}
         emptyLabel="no-match-label"
       />
     );

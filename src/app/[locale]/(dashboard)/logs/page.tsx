@@ -52,6 +52,7 @@ function resolveLogsSortField(
   switch (field) {
     case "created_at":
     case "duration_ms":
+    case "ttft_ms":
     case "total_tokens":
     case "cost":
       return field;

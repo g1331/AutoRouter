@@ -499,10 +499,13 @@ export function parseRequestLogListQuery(
 
   const startTime = parseDateFilterParam(params.get("start_time"));
   if (startTime === null) return { ok: false, error: "Invalid start_time" };
-  if (startTime !== undefined) filters.startTime = startTime;
 
   const endTime = parseDateFilterParam(params.get("end_time"));
   if (endTime === null) return { ok: false, error: "Invalid end_time" };
+  if (startTime !== undefined && endTime !== undefined && startTime >= endTime) {
+    return { ok: false, error: "Invalid time range" };
+  }
+  if (startTime !== undefined) filters.startTime = startTime;
   if (endTime !== undefined) filters.endTime = endTime;
 
   const ttftMinMs = parseIntFilterParam(params.get("ttft_min_ms"));

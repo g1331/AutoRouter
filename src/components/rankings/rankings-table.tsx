@@ -23,10 +23,32 @@ import type {
   RankingsDimension,
   RankingsItem,
   RankingsSortField,
+  TimeRange,
 } from "@/types/api";
+
 export interface RankingsLogsWindow {
-  startIso: string;
-  endIso: string;
+  timeRange: TimeRange | "custom";
+  customRange?: {
+    startIso: string;
+    endIso: string;
+  };
+}
+
+function logsHref(
+  dimension: RankingsDimension,
+  item: RankingsItem,
+  window: RankingsLogsWindow
+): string {
+  const itemId = "id" in item ? item.id : undefined;
+  const query = createRequestLogQuery({
+    model: dimension === "models" && "model" in item ? item.model : undefined,
+    upstreamId: dimension === "upstreams" ? itemId : undefined,
+    apiKeyId: dimension === "api_keys" ? itemId : undefined,
+    userId: dimension === "users" ? itemId : undefined,
+    timeRange: window.timeRange,
+    customRange: window.customRange,
+  });
+  return `/logs${query.url({ scope: "admin" }).search}`;
 }
 
 interface RankingsTableProps {
@@ -116,24 +138,6 @@ export function itemKey(dimension: RankingsDimension, item: RankingsItem): strin
 
 function itemDistribution(item: RankingsItem): DistributionItem[] {
   return "upstream_distribution" in item ? item.upstream_distribution : item.model_distribution;
-}
-function logsHref(
-  dimension: RankingsDimension,
-  item: RankingsItem,
-  window: RankingsLogsWindow
-): string {
-  const itemId = "id" in item ? item.id : undefined;
-  const query = createRequestLogQuery({
-    model: dimension === "models" && "model" in item ? item.model : undefined,
-    upstreamId: dimension === "upstreams" ? itemId : undefined,
-    apiKeyId: dimension === "api_keys" ? itemId : undefined,
-    userId: dimension === "users" ? itemId : undefined,
-    customRange: {
-      startIso: window.startIso,
-      endIso: window.endIso,
-    },
-  });
-  return `/logs${query.url({ scope: "admin" }).search}`;
 }
 
 function errorRateClass(rate: number): string | undefined {

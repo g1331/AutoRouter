@@ -91,6 +91,16 @@ describe("request log query module", () => {
     });
     expect(parsed.sort).toEqual({ field: "cost", order: "asc" });
   });
+  it("rejects a reversed explicit time range", () => {
+    const parsed = parseRequestLogListQuery(
+      new URL(
+        "https://example.test/logs?start_time=2026-08-05T00:00:00.000Z&end_time=2026-08-01T00:00:00.000Z"
+      ),
+      "admin"
+    );
+
+    expect(parsed).toEqual({ ok: false, error: "Invalid time range" });
+  });
 
   it("projects member scope without client-controlled owner fields", () => {
     const filter = createRequestLogQuery({

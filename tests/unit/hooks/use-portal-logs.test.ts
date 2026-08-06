@@ -77,4 +77,23 @@ describe("usePortalRequestLogs", () => {
     expect(query.upstream_id).toBeUndefined();
     expect(query.sort).toBe("duration_ms");
   });
+  it("rebuilds relative time bounds when a query refetches", async () => {
+    vi.useFakeTimers({ now: new Date("2026-08-06T12:00:00.000Z"), shouldAdvanceTime: true });
+    try {
+      mockGet.mockResolvedValue({ items: [], total: 0 });
+      const filter = createRequestLogQuery({ timeRange: "7d" });
+      const { result } = renderHook(() => usePortalRequestLogs(1, 20, filter), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      const firstStart = parseUrlParams(mockGet.mock.calls[0][0] as string).start_time;
+
+      vi.setSystemTime(new Date("2026-08-07T12:00:00.000Z"));
+      await result.current.refetch();
+      const secondStart = parseUrlParams(mockGet.mock.calls[1][0] as string).start_time;
+
+      expect(secondStart).not.toBe(firstStart);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

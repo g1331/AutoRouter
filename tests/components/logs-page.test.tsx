@@ -559,6 +559,19 @@ describe("LogsPage URL filter initialization", () => {
     const filters = queryFilter(useRequestLogsMock.mock.calls.at(-1)![2]);
     expect(filters.performance).toEqual({ ttftMinMs: 5000, durationMinMs: 20000, tpsMax: 30 });
   });
+  it("hydrates TTFT sort state from URL params", () => {
+    setParams({ sort: "ttft_ms", order: "asc" });
+
+    render(<LogsPage />);
+
+    const logsCall = useRequestLogsMock.mock.calls.at(-1)!;
+    expect(logsCall[3]).toEqual({
+      refetchInterval: 5000,
+      sort: { field: "ttft_ms", order: "asc" },
+    });
+    expect(lastLogsTableProps?.serverFilters?.sortField).toBe("ttft_ms");
+    expect(lastLogsTableProps?.serverFilters?.sortOrder).toBe("asc");
+  });
 
   it("falls back to the default range when only start_time is provided", () => {
     setParams({ upstream_id: "up-1", start_time: "2024-06-08T12:00:00.000Z" });

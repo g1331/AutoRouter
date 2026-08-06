@@ -32,8 +32,16 @@ export function usePortalRequestLogs(
 
   return useQuery({
     queryKey: ["portal", "logs", page, pageSize, listProjection.identity],
-    queryFn: () =>
-      apiClient.get<PaginatedRequestLogsResponse>(`/user/logs?${listProjection.search}`),
+    queryFn: () => {
+      // Keep relative time bounds fresh on every fetch without changing the cache identity.
+      const search = buildRequestLogListProjection(query, {
+        scope: "user",
+        page,
+        pageSize,
+        sort: options?.sort,
+      }).search;
+      return apiClient.get<PaginatedRequestLogsResponse>(`/user/logs?${search}`);
+    },
     refetchInterval: options?.refetchInterval,
     // Keep previous data during filter changes so the filter bar stays mounted.
     placeholderData: (previous) => previous,

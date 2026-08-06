@@ -33,8 +33,16 @@ export function useRequestLogs(
 
   return useQuery({
     queryKey: ["request-logs", page, pageSize, listProjection.identity, focusId],
-    queryFn: () =>
-      apiClient.get<PaginatedRequestLogsResponse>(`/admin/logs?${listProjection.search}`),
+    queryFn: () => {
+      // Keep relative time bounds fresh on every fetch without changing the cache identity.
+      const search = buildRequestLogListProjection(query, {
+        scope: "admin",
+        page,
+        pageSize,
+        sort: options?.sort,
+      }).search;
+      return apiClient.get<PaginatedRequestLogsResponse>(`/admin/logs?${search}`);
+    },
     refetchInterval: options?.refetchInterval,
     // Keep previous data during filter/pagination changes so the filter bar
     // stays mounted, but never carry a list page into a focused log view.

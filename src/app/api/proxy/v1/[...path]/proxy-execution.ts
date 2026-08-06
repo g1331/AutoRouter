@@ -13,6 +13,7 @@ import {
   selectFromUpstreamCandidates,
   decideQueuedUpstreamResume,
   reselectQueuedUpstreamOnce,
+  loadActiveUpstreamSnapshot,
   releaseConnection,
   AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
@@ -885,7 +886,6 @@ export async function forwardWithFailover(
               request,
               requestId,
               candidateUpstreamIds,
-              candidateSnapshot,
               failedUpstreamIds,
               failoverHistory,
               waitableCandidate: error.waitableCandidate,
@@ -1252,7 +1252,6 @@ async function resumeQueuedUpstreamSelection(options: {
   request: Request;
   requestId: string;
   candidateUpstreamIds: string[];
-  candidateSnapshot?: UpstreamWithCircuitBreaker[];
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
   waitableCandidate: WaitableUpstreamCandidate;
@@ -1267,7 +1266,6 @@ async function resumeQueuedUpstreamSelection(options: {
     request,
     requestId,
     candidateUpstreamIds,
-    candidateSnapshot,
     failedUpstreamIds,
     failoverHistory,
     waitableCandidate,
@@ -1347,12 +1345,14 @@ async function resumeQueuedUpstreamSelection(options: {
     throw error;
   }
 
+  const refreshedCandidateSnapshot = await loadActiveUpstreamSnapshot();
+
   const excludeIds = failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined;
   const resumeDecision = await decideQueuedUpstreamResume(
     waitableCandidate.upstream.id,
     candidateUpstreamIds,
     excludeIds,
-    { candidateSnapshot }
+    { candidateSnapshot: refreshedCandidateSnapshot }
   );
 
   if (resumeDecision.action === "resume" && resumeDecision.upstream) {
@@ -1374,7 +1374,7 @@ async function resumeQueuedUpstreamSelection(options: {
     waitableCandidate.upstream.id,
     candidateUpstreamIds,
     resumeDecision.excludeIds,
-    { candidateSnapshot }
+    { candidateSnapshot: refreshedCandidateSnapshot }
   );
 
   return {

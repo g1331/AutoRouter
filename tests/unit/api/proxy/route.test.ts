@@ -3722,6 +3722,7 @@ describe("proxy route upstream selection", () => {
     const {
       selectFromProviderType,
       decideQueuedUpstreamResume,
+      loadActiveUpstreamSnapshot,
       AllCandidatesConcurrencyFullError,
       releaseConnection,
     } = await import("@/lib/services/load-balancer");
@@ -3740,11 +3741,14 @@ describe("proxy route upstream selection", () => {
         max_queue_length: 4,
       },
     };
+    const refreshedUpstream = { ...waitableUpstream, name: "queued-upstream-refreshed" };
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
-    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([waitableUpstream]);
+    vi.mocked(db.query.upstreams.findMany)
+      .mockResolvedValueOnce([waitableUpstream])
+      .mockResolvedValueOnce([refreshedUpstream]);
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
       { upstreamId: "up-queued" },
     ]);
@@ -3845,6 +3849,17 @@ describe("proxy route upstream selection", () => {
       ["up-queued"],
       undefined,
       expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
+    expect(vi.mocked(loadActiveUpstreamSnapshot)).toHaveBeenCalledTimes(2);
+    const resumeOptions = vi.mocked(decideQueuedUpstreamResume).mock.calls[0]?.[3] as {
+      candidateSnapshot?: Array<{ upstream?: { name?: string } }>;
+    };
+    expect(resumeOptions.candidateSnapshot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          upstream: expect.objectContaining({ name: "queued-upstream-refreshed" }),
+        }),
+      ])
     );
     expect(forwardRequest).toHaveBeenCalled();
     expect(releaseConnection).toHaveBeenCalledWith("up-queued");
