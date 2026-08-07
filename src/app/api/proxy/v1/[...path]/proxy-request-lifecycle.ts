@@ -91,7 +91,7 @@ import {
   resolveUpstreamProvider,
   withQueueStreamFlag,
   type FailoverErrorWithHistory,
-  type ProxyResultWithStreamFailure,
+  type ProxyResultWithStreamSettlement,
 } from "./proxy-execution";
 import {
   settleNonStreamRequest,
@@ -1944,7 +1944,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       finalSelectionReason,
       queue: queueLifecycle,
     } = proxySelection;
-    const result: ProxyResultWithStreamFailure = proxyResult;
+    const result: ProxyResultWithStreamSettlement = proxyResult;
     const upstreamForLogging: Upstream = selected;
     failoverHistory = history;
     excludedCapabilityCandidates = mergeExcludedCandidates(

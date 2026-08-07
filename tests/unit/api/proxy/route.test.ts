@@ -5306,6 +5306,9 @@ describe("proxy route upstream selection", () => {
       await import("@/lib/services/load-balancer");
     const { markHealthy } = await import("@/lib/services/health-checker");
     const { recordSuccess } = await import("@/lib/services/circuit-breaker");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
 
     const upstream = {
       ...DEFAULT_ACTIVE_UPSTREAMS[0],
@@ -5418,6 +5421,14 @@ describe("proxy route upstream selection", () => {
     expect(markHealthy).toHaveBeenCalledWith("up-release-stream", 100);
     expect(recordSuccess).toHaveBeenCalledTimes(1);
     expect(recordSuccess).toHaveBeenCalledWith("up-release-stream");
+    await expect
+      .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
+      .toBe(1);
+    const settledLogWrites = vi
+      .mocked(updateRequestLog)
+      .mock.calls.filter(([, payload]) => payload?.statusCode === 200);
+    expect(settledLogWrites).toHaveLength(1);
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("should attribute failed upstream to last sent attempt when final exclusion is concurrency_full", async () => {
@@ -6988,8 +6999,7 @@ describe("proxy route upstream selection", () => {
     while (!(await reader!.read()).done) {
       // Drain the downstream response to trigger normal terminal settlement.
     }
-    await Promise.resolve();
-    await Promise.resolve();
+    await expect.poll(() => vi.mocked(buildFixture).mock.calls.length).toBe(1);
 
     expect(readStreamChunks).toHaveBeenCalledTimes(1);
     expect(buildFixture).toHaveBeenCalledTimes(1);
@@ -9261,10 +9271,13 @@ describe("proxy route upstream selection", () => {
     it("should settle logs and billing when stream idle timeout interrupts the response", async () => {
       const { db } = await import("@/lib/db");
       const { forwardRequest } = await import("@/lib/services/proxy-client");
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { selectFromProviderType, releaseConnection } =
+        await import("@/lib/services/load-balancer");
       const { updateRequestLog } = await import("@/lib/services/request-logger");
       const { calculateAndPersistRequestBillingSnapshot } =
         await import("@/lib/services/billing-cost-service");
+      const { markUnhealthy } = await import("@/lib/services/health-checker");
+      const { recordFailure } = await import("@/lib/services/circuit-breaker");
 
       mockGetEffectiveCircuitBreakerConfig.mockResolvedValueOnce({
         ...DEFAULT_CIRCUIT_BREAKER_TIMEOUTS,
@@ -9314,20 +9327,12 @@ describe("proxy route upstream selection", () => {
         headers: new Headers({ "content-type": "text/event-stream" }),
         body: new ReadableStream<Uint8Array>({
           start(controller) {
-            controller.close();
+            controller.enqueue(new TextEncoder().encode("data: partial\n\n"));
           },
         }),
         isStream: true,
         streamMetricsPromise: new Promise(() => undefined),
-        streamFailurePromise: Promise.resolve({
-          errorType: "stream_idle_timeout",
-          errorMessage: "Upstream stream was idle for 0s",
-          statusCode: 504,
-          matchedFailureRule: null,
-          circuitBreakerRecorded: true,
-          occurredAt: "2026-05-17T00:00:00.000Z",
-        }),
-      } as Awaited<ReturnType<typeof forwardRequest>>);
+      });
 
       const abortController = new AbortController();
       const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
@@ -9350,25 +9355,35 @@ describe("proxy route upstream selection", () => {
       });
 
       expect(response.status).toBe(200);
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+      while (!(await reader!.read()).done) {
+        // Drain the response to trigger the upstream idle timeout.
+      }
 
-      await expect
-        .poll(() =>
-          vi
-            .mocked(updateRequestLog)
-            .mock.calls.some(
-              ([, payload]) =>
-                payload.statusCode === 504 &&
-                payload.errorMessage === "Upstream stream was idle for 0s"
-            )
-        )
-        .toBe(true);
+      expect(releaseConnection).toHaveBeenCalledTimes(1);
+      await expect.poll(() => vi.mocked(markUnhealthy).mock.calls.length).toBe(1);
+      expect(markUnhealthy).toHaveBeenCalledWith(
+        "up-openai",
+        expect.stringContaining("Upstream stream was idle")
+      );
+      expect(recordFailure).toHaveBeenCalledWith("up-openai", "stream_idle_timeout");
+
+      const getTimeoutLogWrites = () =>
+        vi
+          .mocked(updateRequestLog)
+          .mock.calls.filter(
+            ([, payload]) =>
+              payload.statusCode === 504 &&
+              payload.errorMessage === "Upstream stream was idle for 0s"
+          );
+      await expect.poll(() => getTimeoutLogWrites().length).toBe(1);
       await expect
         .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
         .toBe(1);
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
 
-      const failureLogPayload = vi
-        .mocked(updateRequestLog)
-        .mock.calls.find(([, payload]) => payload.statusCode === 504)?.[1];
+      const failureLogPayload = getTimeoutLogWrites()[0]?.[1];
       expect(failureLogPayload).toEqual(
         expect.objectContaining({
           requestedServiceTier: "fast",
