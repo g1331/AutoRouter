@@ -8,6 +8,7 @@ import {
   type CompensationHeader,
   getProxyRequestErrorMetadata,
   type HeaderDiff,
+  type StreamMetrics,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
 import {
@@ -742,7 +743,7 @@ export interface ProxyExecutionInput {
 }
 
 export interface ProxyExecutionResult {
-  result: ProxyResultWithStreamFailure;
+  result: ProxyResultWithStreamSettlement;
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
@@ -1188,22 +1189,20 @@ export async function forwardWithFailover(
         // For streaming, wrap the stream to release connection when done
         // and handle mid-stream errors
         const originalStream = result.body as ReadableStream<Uint8Array>;
-        const upstreamStreamFailurePromise = (result as ProxyResultWithStreamFailure)
-          .streamFailurePromise;
-        const streamCancellationSignal = (result as ProxyResultWithStreamFailure)
+        const streamCancellationSignal = (result as ProxyResultWithStreamSettlement)
           .streamCancellationSignal;
         const streamAbortSignal = streamCancellationSignal
           ? AbortSignal.any([request.signal, streamCancellationSignal])
           : request.signal;
-        let resolveStreamFailure!: (settlement: StreamRuntimeFailureSettlement) => void;
-        const trackedStreamFailurePromise = new Promise<StreamRuntimeFailureSettlement>(
-          (resolve) => {
-            resolveStreamFailure = resolve;
-          }
-        );
-        const streamFailurePromise = upstreamStreamFailurePromise
-          ? Promise.race([trackedStreamFailurePromise, upstreamStreamFailurePromise])
-          : trackedStreamFailurePromise;
+        const streamMetricsPromise =
+          result.streamMetricsPromise ??
+          Promise.resolve({
+            usage: result.usage ?? null,
+            effectiveServiceTier: result.effectiveServiceTier ?? null,
+            ttftMs: result.ttftMs,
+          });
+        const { promise: streamSettlementPromise, resolve: resolveStreamSettlement } =
+          Promise.withResolvers<StreamRuntimeSettlement>();
         const wrappedStream = wrapStreamWithConnectionTracking(
           originalStream,
           selectedUpstream.id,
@@ -1239,12 +1238,22 @@ export async function forwardWithFailover(
                 occurredAt: new Date().toISOString(),
               };
             }
-            resolveStreamFailure(settlement);
+            resolveStreamSettlement({ type: "failure", failure: settlement });
             return settlement;
+          },
+          () => {
+            void streamMetricsPromise
+              .then((metrics) => resolveStreamSettlement({ type: "success", metrics }))
+              .catch((error) =>
+                log.error(
+                  { err: error, upstreamId: selectedUpstream.id },
+                  "failed to settle successful stream runtime outcome"
+                )
+              );
           }
         );
         return {
-          result: { ...result, body: wrappedStream, streamFailurePromise },
+          result: { ...result, body: wrappedStream, streamSettlementPromise },
           selectedUpstream,
           failedUpstreamIds,
           failoverHistory,
@@ -1716,8 +1725,12 @@ export interface StreamRuntimeFailureSettlement {
   occurredAt: string;
 }
 
-export interface ProxyResultWithStreamFailure extends ProxyResult {
-  streamFailurePromise?: Promise<StreamRuntimeFailureSettlement>;
+export type StreamRuntimeSettlement =
+  | { type: "success"; metrics: StreamMetrics }
+  | { type: "failure"; failure: StreamRuntimeFailureSettlement };
+
+export interface ProxyResultWithStreamSettlement extends ProxyResult {
+  streamSettlementPromise?: Promise<StreamRuntimeSettlement>;
 }
 
 /**
@@ -1770,7 +1783,8 @@ function wrapStreamWithConnectionTracking(
   onStreamFailure?: (failure: {
     errorType: StreamRuntimeFailureType;
     errorMessage: string;
-  }) => Promise<StreamRuntimeFailureSettlement>
+  }) => Promise<StreamRuntimeFailureSettlement>,
+  onStreamComplete?: () => void
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
@@ -1792,8 +1806,9 @@ function wrapStreamWithConnectionTracking(
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       timeoutId = setTimeout(() => {
-        void reader?.cancel("stream_idle_timeout").catch(() => undefined);
+        // Reject before cancelling so the pending read cannot win the race as a normal EOF.
         reject(new StreamIdleTimeoutError(streamIdleTimeoutMs));
+        void reader?.cancel("stream_idle_timeout").catch(() => undefined);
       }, streamIdleTimeoutMs);
     });
 
@@ -1854,6 +1869,7 @@ function wrapStreamWithConnectionTracking(
           // Stream completed successfully - mark healthy and record circuit breaker success.
           void markHealthy(upstreamId, 100);
           void recordSuccess(upstreamId);
+          onStreamComplete?.();
         }
       } catch (error) {
         // Check if this is due to client disconnect

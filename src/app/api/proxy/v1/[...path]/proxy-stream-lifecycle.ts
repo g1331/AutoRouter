@@ -29,8 +29,9 @@ import type { RouteCapability } from "@/lib/route-capabilities";
 import { createLogger } from "@/lib/utils/logger";
 import {
   resolveUpstreamProvider,
-  type ProxyResultWithStreamFailure,
+  type ProxyResultWithStreamSettlement,
   type StreamRuntimeFailureSettlement,
+  type StreamRuntimeSettlement,
 } from "./proxy-execution";
 import type {
   EffectiveServiceTier,
@@ -93,7 +94,7 @@ export interface StreamLifecycleContext {
 }
 
 export interface StreamLifecycleTerminal {
-  result: ProxyResultWithStreamFailure;
+  result: ProxyResultWithStreamSettlement;
   upstream: Upstream;
   resolvedModel: string | null;
   routingType: "tiered" | "direct" | "provider_type" | null;
@@ -550,14 +551,12 @@ export function createStreamResponse(
       )
     );
 
-  const streamOutcomePromise: Promise<StreamOutcome> = terminal.result.streamFailurePromise
-    ? Promise.race([
-        metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics })),
-        terminal.result.streamFailurePromise.then((failure) => ({
-          type: "failure" as const,
-          failure,
-        })),
-      ])
+  const streamOutcomePromise: Promise<StreamOutcome> = terminal.result.streamSettlementPromise
+    ? terminal.result.streamSettlementPromise.then((settlement: StreamRuntimeSettlement) =>
+        settlement.type === "failure"
+          ? { type: "failure" as const, failure: settlement.failure }
+          : { type: "metrics" as const, metrics: settlement.metrics }
+      )
     : metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics }));
   let streamOutcome: StreamOutcome | null = null;
   let downstreamCompleted = false;

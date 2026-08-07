@@ -268,6 +268,61 @@ describe("createStreamResponse", () => {
     expect(mocks.recordApiKeyTokenUsage).toHaveBeenCalledWith("key-1", 12, 10_000);
     expect(mocks.recordApiKeyTokenUsage).toHaveBeenCalledTimes(1);
   });
+  it("settles runtime stream failure when metrics finish before failure evidence", async () => {
+    const failure = Promise.withResolvers<{
+      type: "failure";
+      failure: {
+        errorType: "stream_idle_timeout";
+        errorMessage: string;
+        statusCode: number;
+        matchedFailureRule: null;
+        circuitBreakerRecorded: boolean;
+        occurredAt: string;
+      };
+    }>();
+    const terminal = makeTerminal(makeFiniteStream(["data: partial\n\n"]));
+    terminal.result.streamMetricsPromise = Promise.resolve({
+      usage: null,
+      effectiveServiceTier: null,
+      ttftMs: 42,
+    });
+    terminal.result.streamSettlementPromise = failure.promise;
+
+    const response = createStreamResponse(makeContext(new AbortController().signal), terminal);
+    const reader = response.body!.getReader();
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: false }));
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: true }));
+    expect(mocks.persistBillingSnapshot).not.toHaveBeenCalled();
+
+    failure.resolve({
+      type: "failure",
+      failure: {
+        errorType: "stream_idle_timeout",
+        errorMessage: "Upstream stream was idle for 1s",
+        statusCode: 504,
+        matchedFailureRule: null,
+        circuitBreakerRecorded: true,
+        occurredAt: "2026-08-07T00:00:00.000Z",
+      },
+    });
+    await expect.poll(() => mocks.persistBillingSnapshot.mock.calls.length).toBe(1);
+    await Promise.resolve();
+
+    expect(mocks.updateRequestLog).toHaveBeenCalledWith(
+      "log-1",
+      expect.objectContaining({
+        statusCode: 504,
+        errorMessage: "Upstream stream was idle for 1s",
+        failoverHistory: [
+          expect.objectContaining({
+            error_type: "stream_idle_timeout",
+          }),
+        ],
+      })
+    );
+    expect(mocks.persistBillingSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.updateRequestLog).toHaveBeenCalledTimes(1);
+  });
   it("waits for downstream completion before settling stream success", async () => {
     const metrics = Promise.withResolvers<StreamMetrics>();
     const releaseStream = Promise.withResolvers<void>();
