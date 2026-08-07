@@ -18,6 +18,7 @@ import {
 import {
   buildFixture,
   recordTrafficFixture,
+  type BuildFixtureParams,
   type InboundBody,
 } from "@/lib/services/traffic-recorder";
 import type { TrafficRecordingSettingsValue } from "@/lib/services/traffic-recording-service";
@@ -34,13 +35,13 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("proxy-non-stream-lifecycle");
 
-export interface NonStreamApiKeySnapshot {
+interface NonStreamApiKeySnapshot {
   apiKeyName: string | null;
   apiKeyPrefix: string | null;
   userId: string | null;
 }
 
-export interface NonStreamBillingUsage {
+interface NonStreamBillingUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -90,7 +91,7 @@ export type NonStreamProxyResult = Omit<ProxyResult, "body" | "isStream"> & {
   isStream: false;
 };
 
-export interface NonStreamSuccessTerminal {
+interface NonStreamSuccessTerminal {
   outcome: "success";
   result: NonStreamProxyResult;
   upstream: Upstream;
@@ -108,7 +109,7 @@ export interface NonStreamSuccessTerminal {
   routingDurationMs: number | null;
 }
 
-export interface NonStreamFailureFixtureUpstream {
+interface NonStreamFailureFixtureUpstream {
   id: string;
   name: string;
   providerType: string;
@@ -145,7 +146,7 @@ export interface NonStreamFailureTerminal {
   };
 }
 
-export type NonStreamTerminal = NonStreamSuccessTerminal | NonStreamFailureTerminal;
+type NonStreamTerminal = NonStreamSuccessTerminal | NonStreamFailureTerminal;
 type NonStreamLogFields = Omit<LogRequestInput, "apiKeyId">;
 
 function toBillingUsage(usage: TokenUsage | null): NonStreamBillingUsage {
@@ -275,6 +276,52 @@ async function persistTerminalRequestLog(
   context.setRequestLogId(requestLogId);
   return requestLogId;
 }
+type NonStreamFixtureBuildInput = Omit<
+  BuildFixtureParams,
+  "requestId" | "startTime" | "route" | "inboundRequest" | "redactSensitive"
+>;
+
+interface NonStreamFixtureMetadata {
+  upstreamId: string | null;
+  statusCode: number;
+  outcome: "success" | "failure";
+}
+
+function buildAndRecordNonStreamFixture(
+  context: NonStreamLifecycleContext,
+  inboundBody: InboundBody,
+  requestLogId: string | null,
+  input: NonStreamFixtureBuildInput,
+  metadata: NonStreamFixtureMetadata
+): void {
+  const fixture = buildFixture({
+    ...input,
+    requestId: context.requestId,
+    startTime: context.startTime,
+    route: context.path,
+    inboundRequest: {
+      method: context.request.method,
+      path: context.path,
+      headers: context.request.headers,
+      bodyText: inboundBody.text,
+      bodyJson: inboundBody.json,
+    },
+    redactSensitive: context.trafficRecordingSettings.redactSensitive,
+  });
+
+  void recordTrafficFixture(fixture, {
+    requestLogId,
+    apiKeyId: context.apiKeyId,
+    upstreamId: metadata.upstreamId,
+    method: context.request.method,
+    path: context.path,
+    model: input.model,
+    statusCode: metadata.statusCode,
+    outcome: metadata.outcome,
+  }).catch((error) =>
+    log.error({ err: error, requestId: context.requestId }, "failed to record non-stream fixture")
+  );
+}
 
 async function settleNonStreamSuccess(
   context: NonStreamLifecycleContext,
@@ -299,7 +346,8 @@ async function settleNonStreamSuccess(
     });
   }
 
-  if (context.shouldRecordSuccess && context.inboundBody) {
+  const inboundBody = context.inboundBody;
+  if (context.shouldRecordSuccess && inboundBody) {
     try {
       const upstreamForProxy = prepareUpstreamForProxy(terminal.upstream);
       const outboundHeadersBase = filterHeaders(new Headers(context.request.headers)).filtered;
@@ -315,51 +363,37 @@ async function settleNonStreamSuccess(
         }
       }
 
-      const fixture = buildFixture({
-        requestId: context.requestId,
-        startTime: context.startTime,
-        providerType: resolveUpstreamProvider(terminal.upstream, context.matchedRouteCapability),
-        route: context.path,
-        model: terminal.resolvedModel,
-        inboundRequest: {
-          method: context.request.method,
-          path: context.path,
-          headers: context.request.headers,
-          bodyText: context.inboundBody.text,
-          bodyJson: context.inboundBody.json,
-        },
-        upstream: {
-          id: terminal.upstream.id,
-          name: terminal.upstream.name,
+      buildAndRecordNonStreamFixture(
+        context,
+        inboundBody,
+        persistedLogId,
+        {
           providerType: resolveUpstreamProvider(terminal.upstream, context.matchedRouteCapability),
-          baseUrl: upstreamForProxy.baseUrl,
+          model: terminal.resolvedModel,
+          upstream: {
+            id: terminal.upstream.id,
+            name: terminal.upstream.name,
+            providerType: resolveUpstreamProvider(
+              terminal.upstream,
+              context.matchedRouteCapability
+            ),
+            baseUrl: upstreamForProxy.baseUrl,
+          },
+          outboundHeaders,
+          response: {
+            statusCode: terminal.result.statusCode,
+            headers: terminal.result.headers,
+            bodyText: responseText,
+            bodyJson: responseJson,
+          },
+          outboundRequestSent: true,
+          outboundResponseSource: "upstream",
         },
-        outboundHeaders,
-        response: {
+        {
+          upstreamId: terminal.upstream.id,
           statusCode: terminal.result.statusCode,
-          headers: terminal.result.headers,
-          bodyText: responseText,
-          bodyJson: responseJson,
-        },
-        outboundRequestSent: true,
-        outboundResponseSource: "upstream",
-        redactSensitive: context.trafficRecordingSettings.redactSensitive,
-      });
-
-      void recordTrafficFixture(fixture, {
-        requestLogId: persistedLogId,
-        apiKeyId: context.apiKeyId,
-        upstreamId: terminal.upstream.id,
-        method: context.request.method,
-        path: context.path,
-        model: terminal.resolvedModel,
-        statusCode: terminal.result.statusCode,
-        outcome: "success",
-      }).catch((error) =>
-        log.error(
-          { err: error, requestId: context.requestId },
-          "failed to record non-stream fixture"
-        )
+          outcome: "success",
+        }
       );
     } catch (error) {
       log.error({ err: error, requestId: context.requestId }, "failed to build non-stream fixture");
@@ -401,59 +435,37 @@ async function settleNonStreamFailure(
     });
   }
 
-  if (
-    terminal.fixture &&
-    context.shouldRecordFailure &&
-    context.inboundBody &&
-    terminal.didSendUpstream
-  ) {
+  const inboundBody = context.inboundBody;
+  const fixture = terminal.fixture;
+  if (fixture && context.shouldRecordFailure && inboundBody && terminal.didSendUpstream) {
     try {
-      const fixture = buildFixture({
-        requestId: context.requestId,
-        startTime: context.startTime,
-        providerType: terminal.fixture.providerType,
-        route: context.path,
-        model: terminal.resolvedModel,
-        inboundRequest: {
-          method: context.request.method,
-          path: context.path,
-          headers: context.request.headers,
-          bodyText: context.inboundBody.text,
-          bodyJson: context.inboundBody.json,
+      buildAndRecordNonStreamFixture(
+        context,
+        inboundBody,
+        persistedLogId,
+        {
+          providerType: fixture.providerType,
+          model: terminal.resolvedModel,
+          upstream: fixture.upstream,
+          outboundHeaders: fixture.outboundHeaders,
+          response: fixture.response,
+          outboundRequestSent: true,
+          outboundResponseSource: fixture.responseSource,
+          downstreamResponse: {
+            statusCode: terminal.errorStatusCode,
+            headers: { "content-type": "application/json" },
+            bodyJson: fixture.downstreamBody,
+          },
+          failoverHistory: terminal.failoverHistory.length > 0 ? terminal.failoverHistory : null,
         },
-        upstream: terminal.fixture.upstream,
-        outboundHeaders: terminal.fixture.outboundHeaders,
-        response: terminal.fixture.response,
-        outboundRequestSent: true,
-        outboundResponseSource: terminal.fixture.responseSource,
-        downstreamResponse: {
+        {
+          upstreamId: terminal.actualUpstreamId,
           statusCode: terminal.errorStatusCode,
-          headers: { "content-type": "application/json" },
-          bodyJson: terminal.fixture.downstreamBody,
-        },
-        failoverHistory: terminal.failoverHistory.length > 0 ? terminal.failoverHistory : null,
-        redactSensitive: context.trafficRecordingSettings.redactSensitive,
-      });
-      void recordTrafficFixture(fixture, {
-        requestLogId: persistedLogId,
-        apiKeyId: context.apiKeyId,
-        upstreamId: terminal.actualUpstreamId,
-        method: context.request.method,
-        path: context.path,
-        model: terminal.resolvedModel,
-        statusCode: terminal.errorStatusCode,
-        outcome: "failure",
-      }).catch((error) =>
-        log.error(
-          { err: error, requestId: context.requestId },
-          "failed to record non-stream failure fixture"
-        )
+          outcome: "failure",
+        }
       );
     } catch (error) {
-      log.error(
-        { err: error, requestId: context.requestId },
-        "failed to build non-stream failure fixture"
-      );
+      log.error({ err: error, requestId: context.requestId }, "failed to build non-stream fixture");
     }
   }
 
