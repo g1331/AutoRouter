@@ -470,26 +470,19 @@ function tryReserveConnectionSlot(upstream: Upstream): {
   current: number;
   max: number | null;
 } {
-  const current = getConnectionCount(upstream.id);
   const max = upstream.maxConcurrency;
-
-  if (max === null || max === undefined || max <= 0) {
-    upstreamQueueAdmission.tryReserveImmediate({
-      upstreamId: upstream.id,
-      maxConcurrency: null,
-    });
-    return { reserved: true, current, max: null };
-  }
-
-  if (current >= max) {
-    return { reserved: false, current, max };
-  }
-
-  upstreamQueueAdmission.tryReserveImmediate({
+  const reservation = upstreamQueueAdmission.tryReserveImmediate({
     upstreamId: upstream.id,
-    maxConcurrency: max,
+    maxConcurrency: max == null || max <= 0 ? null : max,
   });
-  return { reserved: true, current, max };
+
+  return {
+    reserved: reservation.reserved,
+    current: reservation.reserved
+      ? Math.max(0, reservation.activeCount - 1)
+      : reservation.activeCount,
+    max: max == null || max <= 0 ? null : max,
+  };
 }
 
 /**

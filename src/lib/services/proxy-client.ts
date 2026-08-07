@@ -67,7 +67,40 @@ export interface HeaderDiff {
   unchanged: Array<{ header: string; value: string }>;
 }
 
-type ProxyRequestErrorWithHeaderDiff = Error & { headerDiff?: HeaderDiff };
+/** Metadata attached to errors raised while preparing or dispatching an upstream request. */
+export interface ProxyRequestErrorMetadata {
+  headerDiff?: HeaderDiff | null;
+  fetchStarted: boolean;
+}
+
+type ProxyRequestErrorWithMetadata = Error & {
+  proxyRequestMetadata?: ProxyRequestErrorMetadata;
+};
+
+/** Attach typed lifecycle evidence to a proxy request error. */
+export function attachProxyRequestErrorMetadata<T extends Error>(
+  error: T,
+  metadata: ProxyRequestErrorMetadata
+): T {
+  const existing = getProxyRequestErrorMetadata(error);
+  (error as ProxyRequestErrorWithMetadata).proxyRequestMetadata = {
+    ...(existing ?? {}),
+    ...metadata,
+  };
+  return error;
+}
+
+/** Read lifecycle evidence attached to a proxy request error. */
+export function getProxyRequestErrorMetadata(error: unknown): ProxyRequestErrorMetadata | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+  const metadata = (error as ProxyRequestErrorWithMetadata).proxyRequestMetadata;
+  if (!metadata || typeof metadata !== "object" || typeof metadata.fetchStarted !== "boolean") {
+    return null;
+  }
+  return metadata;
+}
 
 /**
  * Error raised when a streaming upstream does not emit usable content in time.
@@ -990,7 +1023,8 @@ function applyModelOverride(
   return { body: nextBody, path: nextPath };
 }
 
-function isStreamRequest(
+/** Determine whether the request expects a streaming response. */
+export function isStreamRequest(
   bodyJson: Record<string, unknown>,
   path: string,
   requestUrl: URL
@@ -1058,7 +1092,8 @@ export async function forwardRequest(
   path: string,
   requestId: string,
   compensationHeaders?: CompensationHeader[],
-  modelOverride?: string
+  modelOverride?: string,
+  onDispatchStart?: () => void
 ): Promise<ProxyResult> {
   // Prepare headers
   const originalHeaders = new Headers(request.headers);
@@ -1158,7 +1193,17 @@ export async function forwardRequest(
   const requestSearch = requestUrl.search;
 
   // Read request body
-  let body = await request.arrayBuffer();
+  let body: ArrayBuffer;
+  try {
+    body = await request.arrayBuffer();
+  } catch (error) {
+    const requestError =
+      error instanceof Error ? error : new Error(typeof error === "string" ? error : String(error));
+    throw attachProxyRequestErrorMetadata(requestError, {
+      headerDiff: requestHeaderDiff,
+      fetchStarted: false,
+    });
+  }
   let effectivePath = path;
 
   // CLIProxyAPI 单账号映射上游：将模型名改写为携带账号前缀的形式，
@@ -1189,20 +1234,39 @@ export async function forwardRequest(
     }
   }
 
-  // Create abort controller for timeout
+  // Abort the upstream fetch when either its timeout or the downstream request ends.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), upstream.timeout * 1000);
+  const fetchSignal = AbortSignal.any([request.signal, controller.signal]);
+  let timeoutTriggered = false;
+  const timeoutId = setTimeout(() => {
+    timeoutTriggered = true;
+    controller.abort();
+  }, upstream.timeout * 1000);
 
   const upstreamSendTime = Date.now();
+  let fetchStarted = false;
 
   try {
-    // Make upstream request
-    const upstreamResponse = await fetch(url, {
+    if (request.signal.aborted) {
+      const abortError = new Error("The downstream request was aborted before upstream dispatch");
+      abortError.name = "AbortError";
+      throw abortError;
+    }
+    const upstreamResponsePromise = fetch(url, {
       method: request.method,
       headers,
       body: body.byteLength > 0 ? body : undefined,
-      signal: controller.signal,
+      signal: fetchSignal,
     });
+    fetchStarted = true;
+    try {
+      onDispatchStart?.();
+    } catch (error) {
+      controller.abort();
+      await upstreamResponsePromise.catch(() => undefined);
+      throw error;
+    }
+    const upstreamResponse = await upstreamResponsePromise;
 
     clearTimeout(timeoutId);
 
@@ -1352,17 +1416,30 @@ export async function forwardRequest(
     clearTimeout(timeoutId);
 
     if (error instanceof Error && error.name === "AbortError") {
+      if (request.signal.aborted && !timeoutTriggered) {
+        reqLog.warn({ upstream: upstream.name }, "upstream request cancelled by downstream client");
+        const cancellationError = new Error("Upstream request cancelled by downstream client");
+        throw attachProxyRequestErrorMetadata(cancellationError, {
+          headerDiff: requestHeaderDiff,
+          fetchStarted,
+        });
+      }
       reqLog.error({ timeout: upstream.timeout }, "upstream request timed out");
       const timeoutError = new Error(`Upstream request timed out after ${upstream.timeout}s`);
-      (timeoutError as ProxyRequestErrorWithHeaderDiff).headerDiff = requestHeaderDiff;
-      throw timeoutError;
+      throw attachProxyRequestErrorMetadata(timeoutError, {
+        headerDiff: requestHeaderDiff,
+        fetchStarted,
+      });
     }
 
     const requestError =
       error instanceof Error ? error : new Error(typeof error === "string" ? error : String(error));
-    (requestError as ProxyRequestErrorWithHeaderDiff).headerDiff = requestHeaderDiff;
-    reqLog.error({ err: requestError }, "upstream request failed");
-    throw requestError;
+    const requestErrorWithMetadata = attachProxyRequestErrorMetadata(requestError, {
+      headerDiff: requestHeaderDiff,
+      fetchStarted,
+    });
+    reqLog.error({ err: requestErrorWithMetadata }, "upstream request failed");
+    throw requestErrorWithMetadata;
   }
 }
 

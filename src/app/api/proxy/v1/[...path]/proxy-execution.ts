@@ -6,6 +6,7 @@ import {
   UpstreamEmptyResponseError,
   UpstreamNoContentStreamError,
   type CompensationHeader,
+  getProxyRequestErrorMetadata,
   type HeaderDiff,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
@@ -110,6 +111,7 @@ export interface FailoverErrorWithHistory extends Error {
   failoverHistory?: FailoverAttempt[];
   concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
+  lastDispatchedFailoverAttempt?: FailoverAttempt;
   headerDiff?: HeaderDiff | null;
   queue?: RoutingQueueLog | null;
 }
@@ -117,6 +119,7 @@ export interface FailoverErrorWithHistory extends Error {
 interface FailoverContext {
   failoverHistory: FailoverAttempt[];
   didSendUpstream: boolean;
+  lastDispatchedFailoverAttempt?: FailoverAttempt;
   concurrencyExcludedCandidates: RoutingExcluded[];
   headerDiff?: HeaderDiff | null;
   queue?: RoutingQueueLog | null;
@@ -130,6 +133,7 @@ function attachFailoverContext<T extends Error>(
   enrichedError.failoverHistory = [...context.failoverHistory];
   enrichedError.concurrencyExcludedCandidates = [...context.concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = context.didSendUpstream;
+  enrichedError.lastDispatchedFailoverAttempt = context.lastDispatchedFailoverAttempt;
   enrichedError.headerDiff = context.headerDiff ?? null;
   enrichedError.queue = context.queue ?? enrichedError.queue ?? null;
   return enrichedError;
@@ -149,22 +153,6 @@ export function withQueueStreamFlag(
   };
 }
 
-function extractHeaderDiffFromError(error: unknown): HeaderDiff | null {
-  if (!error || typeof error !== "object" || !("headerDiff" in error)) {
-    return null;
-  }
-  const candidate = (error as { headerDiff?: unknown }).headerDiff;
-  if (!candidate || typeof candidate !== "object") {
-    return null;
-  }
-
-  return candidate as HeaderDiff;
-}
-
-function isSyntheticFailoverAttempt(attempt: FailoverAttempt): boolean {
-  return attempt.error_type === "concurrency_full";
-}
-
 const CIRCUIT_BREAKER_NEUTRAL_PATHS = new Set(["messages/count_tokens"]);
 
 function normalizeCircuitBreakerPath(path: string): string {
@@ -175,18 +163,6 @@ function normalizeCircuitBreakerPath(path: string): string {
 function shouldRecordCircuitBreakerFailure(path: string): boolean {
   const normalizedPath = normalizeCircuitBreakerPath(path);
   return !CIRCUIT_BREAKER_NEUTRAL_PATHS.has(normalizedPath);
-}
-
-export function getLastSentFailoverAttempt(
-  failoverHistory: FailoverAttempt[]
-): FailoverAttempt | undefined {
-  for (let index = failoverHistory.length - 1; index >= 0; index -= 1) {
-    const attempt = failoverHistory[index];
-    if (!isSyntheticFailoverAttempt(attempt)) {
-      return attempt;
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -291,11 +267,22 @@ export function resolveFailureStage(
   if (isNoAuthorizedUpstreamsError(error)) {
     return "auth_filter";
   }
+  if (isQueueWaitTimeoutError(error) || isQueueWaitAbortedError(error)) {
+    return "candidate_selection";
+  }
   if (isDownstreamStreamingError(error)) {
     return "downstream_streaming";
   }
-  if (error instanceof ClientDisconnectedError && didSendUpstream) {
-    return "downstream_streaming";
+  if (error instanceof ClientDisconnectedError) {
+    if (error.failureStage) {
+      return error.failureStage;
+    }
+    if (error.queue?.status === "aborted") {
+      return "candidate_selection";
+    }
+    if (didSendUpstream) {
+      return "downstream_streaming";
+    }
   }
   if (!didSendUpstream) {
     return "candidate_selection";
@@ -349,18 +336,9 @@ export function getCircuitBlockedCandidates(error: unknown): CircuitBlockedCandi
 }
 
 export function resolveDidSendUpstream(
-  error: FailoverErrorWithHistory | null | undefined,
-  lastSentFailoverAttempt: FailoverAttempt | undefined
+  error: FailoverErrorWithHistory | null | undefined
 ): boolean {
-  const attachedDidSend =
-    typeof error?.didSendUpstream === "boolean" ? error.didSendUpstream : undefined;
-
-  // Prefer positive evidence: if any non-synthetic failover attempt exists, upstream was sent.
-  if (lastSentFailoverAttempt != null) {
-    return true;
-  }
-
-  return attachedDidSend === true;
+  return error?.didSendUpstream === true;
 }
 
 export function getUserHint(
@@ -787,10 +765,35 @@ export async function forwardWithFailover(
   const concurrencyExcludedCandidates: RoutingExcluded[] = [];
   let lastError: Error | null = null;
   let didSendUpstream = false;
+  let lastDispatchedFailoverAttempt: FailoverAttempt | undefined;
   let affinityHit = false;
   let affinityMigrated = false;
   let finalSelectionReason: RoutingSelectionReason | null = null;
   let queueLifecycle: RoutingQueueLog | null = null;
+  let queueReservationPending = false;
+  let didDispatchCurrentAttempt = false;
+  const markQueueAborted = () => {
+    if (!queueReservationPending || !queueLifecycle || queueLifecycle.status === "aborted") {
+      return;
+    }
+    queueLifecycle = {
+      ...queueLifecycle,
+      status: "aborted",
+      resumed_at: null,
+    };
+  };
+
+  const attachCurrentFailoverContext = <T extends Error>(
+    error: T,
+    queue: RoutingQueueLog | null = queueLifecycle
+  ): T & FailoverErrorWithHistory =>
+    attachFailoverContext(error, {
+      failoverHistory,
+      didSendUpstream,
+      lastDispatchedFailoverAttempt,
+      concurrencyExcludedCandidates,
+      queue,
+    });
 
   const circuitBlockedCandidates: CircuitBlockedCandidate[] = [];
 
@@ -818,23 +821,45 @@ export async function forwardWithFailover(
       }
     }
   };
-
-  // Clone the request body once for potential retries
-  const requestClone = request.clone();
-  const requestBodyBuffer = await requestClone.arrayBuffer();
+  let requestBodyBuffer: ArrayBuffer;
+  try {
+    requestBodyBuffer = await awaitBeforeDispatch(
+      request.signal,
+      async () => {
+        const requestClone = request.clone();
+        return requestClone.arrayBuffer();
+      },
+      () => {}
+    );
+  } catch (error) {
+    const bodyReadError =
+      error instanceof Error ? error : new Error(typeof error === "string" ? error : String(error));
+    const clientDisconnected = request.signal.aborted
+      ? new ClientDisconnectedError(
+          "Client disconnected before upstream dispatch",
+          "candidate_selection"
+        )
+      : bodyReadError;
+    throw attachCurrentFailoverContext(clientDisconnected);
+  }
 
   // Loop until we succeed, exhaust all upstreams, or hit max attempts
   let attemptCount = 0;
   while (true) {
+    didDispatchCurrentAttempt = false;
     // Check if downstream client has disconnected
     if (request.signal.aborted) {
+      markQueueAborted();
+      queueReservationPending = false;
       log.warn({ requestId }, "client disconnected during failover, stopping retries");
       throw attachFailoverContext(
-        new ClientDisconnectedError("Client disconnected during failover"),
+        new ClientDisconnectedError("Client disconnected during failover", "candidate_selection"),
         {
           failoverHistory,
           didSendUpstream,
+          lastDispatchedFailoverAttempt,
           concurrencyExcludedCandidates,
+          queue: queueLifecycle,
         }
       );
     }
@@ -875,6 +900,7 @@ export async function forwardWithFailover(
         throw attachFailoverContext(error instanceof Error ? error : new Error(String(error)), {
           failoverHistory,
           didSendUpstream,
+          lastDispatchedFailoverAttempt,
           concurrencyExcludedCandidates,
         });
       }
@@ -895,7 +921,12 @@ export async function forwardWithFailover(
             selectedUpstream = resumedSelection.selectedUpstream;
             finalSelectionReason = resumedSelection.selectionReason;
             queueLifecycle = resumedSelection.queue;
+            queueReservationPending = queueLifecycle?.status === "resumed";
           } catch (resumeError) {
+            const resumedQueue = (resumeError as FailoverErrorWithHistory | null)?.queue ?? null;
+            if (resumedQueue) {
+              queueLifecycle = resumedQueue;
+            }
             if (resumeError instanceof AllCandidatesConcurrencyFullError) {
               appendConcurrencyExclusions(resumeError.excludedCandidates);
               lastError = resumeError;
@@ -908,6 +939,7 @@ export async function forwardWithFailover(
               throw attachFailoverContext(resumeError, {
                 failoverHistory,
                 didSendUpstream,
+                lastDispatchedFailoverAttempt,
                 concurrencyExcludedCandidates,
                 queue: (resumeError as FailoverErrorWithHistory).queue ?? null,
               });
@@ -917,6 +949,7 @@ export async function forwardWithFailover(
                 {
                   failoverHistory,
                   didSendUpstream,
+                  lastDispatchedFailoverAttempt,
                   concurrencyExcludedCandidates,
                   queue: (resumeError as FailoverErrorWithHistory).queue ?? null,
                 }
@@ -934,14 +967,38 @@ export async function forwardWithFailover(
         throw attachFailoverContext(error instanceof Error ? error : new Error(String(error)), {
           failoverHistory,
           didSendUpstream,
+          lastDispatchedFailoverAttempt,
           concurrencyExcludedCandidates,
           queue: queueLifecycle,
         });
       }
     }
+    if (request.signal.aborted) {
+      markQueueAborted();
+      queueReservationPending = false;
+      if (selectedUpstream) {
+        releaseConnection(selectedUpstream.id);
+      }
+      throw attachFailoverContext(
+        new ClientDisconnectedError(
+          "Client disconnected before upstream dispatch",
+          "candidate_selection"
+        ),
+        {
+          failoverHistory,
+          didSendUpstream,
+          lastDispatchedFailoverAttempt,
+          concurrencyExcludedCandidates,
+          queue: queueLifecycle,
+        }
+      );
+    }
 
-    // Check if we should continue trying
     if (!shouldContinueFailover(attemptCount, hasMoreUpstreams, config, request.signal.aborted)) {
+      queueReservationPending = false;
+      if (selectedUpstream) {
+        releaseConnection(selectedUpstream.id);
+      }
       // No more upstreams or hit max attempts - throw NoHealthyUpstreamsError
       // to indicate all failover attempts have been exhausted
       const exhaustedError = new NoHealthyUpstreamsError(
@@ -953,7 +1010,9 @@ export async function forwardWithFailover(
       throw attachFailoverContext(exhaustedError, {
         failoverHistory,
         didSendUpstream,
+        lastDispatchedFailoverAttempt,
         concurrencyExcludedCandidates,
+        queue: queueLifecycle,
       });
     }
 
@@ -961,7 +1020,9 @@ export async function forwardWithFailover(
       throw attachFailoverContext(new NoHealthyUpstreamsError("No upstream available"), {
         failoverHistory,
         didSendUpstream,
+        lastDispatchedFailoverAttempt,
         concurrencyExcludedCandidates,
+        queue: queueLifecycle,
       });
     }
 
@@ -969,23 +1030,45 @@ export async function forwardWithFailover(
 
     let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
     const releaseSelectedConnectionOnce = createReleaseConnectionOnce(selectedUpstream.id);
+    const dispatchUpstream = selectedUpstream;
+    const didSendBeforeAttempt: boolean = didSendUpstream;
+    let fetchStartedForAttempt = false;
+    let forwardRequestCalled = false;
+    const markDispatchStarted = () => {
+      fetchStartedForAttempt = true;
+      didDispatchCurrentAttempt = true;
+      didSendUpstream = true;
+      queueReservationPending = false;
+      onDispatchStart?.(dispatchUpstream);
+    };
 
     try {
-      // Create a new request with the buffered body
+      // Preserve the downstream signal so the outbound fetch is cancelled with the client.
       const proxyRequest = new Request(request.url, {
         method: request.method,
         headers: request.headers,
         body: requestBodyBuffer.byteLength > 0 ? requestBodyBuffer : undefined,
+        signal: request.signal,
       });
 
-      const circuitBreakerConfig = await getEffectiveCircuitBreakerConfig(selectedUpstream.id);
+      const circuitBreakerConfig = await awaitBeforeDispatch(
+        request.signal,
+        () => getEffectiveCircuitBreakerConfig(selectedUpstream.id),
+        releaseSelectedConnectionOnce
+      );
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream, {
         firstByteTimeout: circuitBreakerConfig.firstByteTimeout,
         streamIdleTimeout: circuitBreakerConfig.streamIdleTimeout,
       });
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
-      didSendUpstream = true;
 
+      // A cancellation observed before dispatch must never be reported as an upstream attempt.
+      if (request.signal.aborted) {
+        throw new ClientDisconnectedError(
+          "Client disconnected before upstream dispatch",
+          "candidate_selection"
+        );
+      }
       // CLIProxyAPI 单账号映射上游：按绑定账号的前缀拼出携带前缀的模型名注入转发，
       // 使 CLIProxyAPI 把请求固定路由到该账号。普通上游与池上游不带账号文件名，跳过注入。
       let cliproxyModelOverride: string | undefined;
@@ -994,25 +1077,40 @@ export async function forwardWithFailover(
         selectedUpstream.cliproxyInstanceId &&
         requestModel
       ) {
-        const accountPrefix = await resolveCliproxyAccountPrefix(
-          selectedUpstream.cliproxyInstanceId,
-          selectedUpstream.cliproxyAuthFileName
+        const accountPrefix = await awaitBeforeDispatch(
+          request.signal,
+          () =>
+            resolveCliproxyAccountPrefix(
+              selectedUpstream.cliproxyInstanceId!,
+              selectedUpstream.cliproxyAuthFileName!
+            ),
+          releaseSelectedConnectionOnce
         );
         if (accountPrefix) {
           cliproxyModelOverride = buildCliproxyPrefixedModel(accountPrefix, requestModel);
         }
       }
 
-      onDispatchStart?.(selectedUpstream);
+      if (request.signal.aborted) {
+        throw new ClientDisconnectedError(
+          "Client disconnected before upstream dispatch",
+          "candidate_selection"
+        );
+      }
+      forwardRequestCalled = true;
       const result = await forwardRequest(
         proxyRequest,
         upstreamForProxy,
         path,
         requestId,
         compensationHeaders,
-        cliproxyModelOverride
+        cliproxyModelOverride,
+        markDispatchStarted
       );
-
+      // A response proves dispatch for legacy/test forwarders that do not invoke the seam callback.
+      if (!fetchStartedForAttempt) {
+        markDispatchStarted();
+      }
       // Check if response indicates we should failover
       if (shouldTriggerFailover(result.statusCode, config)) {
         const failedResponse = await captureFailedResponse(result);
@@ -1035,25 +1133,25 @@ export async function forwardWithFailover(
           void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
         }
         // Record failover attempt
-        failoverHistory.push(
-          buildFailoverAttempt(
-            selectedUpstream,
-            routeCapability,
-            attemptUpstreamBaseUrl,
-            finalSelectionReason,
-            {
-              errorType,
-              errorMessage: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
-              statusCode: result.statusCode,
-              responseHeaders: failedResponse.headers,
-              responseBodyText: failedResponse.bodyText,
-              responseBodyJson: failedResponse.bodyJson,
-              headerDiff: result.headerDiff,
-              circuitBreakerRecorded,
-              matchedFailureRule,
-            }
-          )
+        const failoverAttempt = buildFailoverAttempt(
+          selectedUpstream,
+          routeCapability,
+          attemptUpstreamBaseUrl,
+          finalSelectionReason,
+          {
+            errorType,
+            errorMessage: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
+            statusCode: result.statusCode,
+            responseHeaders: failedResponse.headers,
+            responseBodyText: failedResponse.bodyText,
+            responseBodyJson: failedResponse.bodyJson,
+            headerDiff: result.headerDiff,
+            circuitBreakerRecorded,
+            matchedFailureRule,
+          }
         );
+        failoverHistory.push(failoverAttempt);
+        lastDispatchedFailoverAttempt = failoverAttempt;
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
         continue;
@@ -1156,24 +1254,46 @@ export async function forwardWithFailover(
     } catch (error) {
       // Release connection on error
       releaseSelectedConnectionOnce();
-      const errorHeaderDiff = extractHeaderDiffFromError(error);
+      const errorMetadata = getProxyRequestErrorMetadata(error);
+      const errorHeaderDiff = errorMetadata?.headerDiff ?? null;
+      const fetchStartedFromError = errorMetadata?.fetchStarted;
+      if (forwardRequestCalled && !fetchStartedForAttempt && fetchStartedFromError !== false) {
+        markDispatchStarted();
+      }
+      if (fetchStartedFromError === false) {
+        didDispatchCurrentAttempt = false;
+        didSendUpstream = didSendBeforeAttempt;
+      }
 
       // Check if client disconnected
       if (request.signal.aborted) {
+        if (!didDispatchCurrentAttempt) {
+          markQueueAborted();
+        }
+        queueReservationPending = false;
         log.warn({ requestId }, "client disconnected during request, stopping");
-        throw attachFailoverContext(
-          new ClientDisconnectedError("Client disconnected during request"),
-          {
-            failoverHistory,
-            didSendUpstream,
-            concurrencyExcludedCandidates,
-            queue: queueLifecycle,
-          }
-        );
+        const disconnectError =
+          error instanceof ClientDisconnectedError || isQueueWaitAbortedError(error)
+            ? error
+            : new ClientDisconnectedError(
+                "Client disconnected during request",
+                didDispatchCurrentAttempt ? "downstream_streaming" : "candidate_selection"
+              );
+        throw attachFailoverContext(disconnectError, {
+          failoverHistory,
+          didSendUpstream,
+          lastDispatchedFailoverAttempt,
+          concurrencyExcludedCandidates,
+          queue: queueLifecycle,
+        });
       }
+      queueReservationPending = false;
 
-      // Record failure in circuit breaker for failoverable errors
-      if (isFailoverableError(error) || error instanceof CircuitBreakerOpenError) {
+      // Setup/body failures before the fetch starts are gateway rejections, not upstream failures.
+      if (
+        didDispatchCurrentAttempt &&
+        (isFailoverableError(error) || error instanceof CircuitBreakerOpenError)
+      ) {
         const errorEvidence = extractFailoverErrorEvidence(error);
         const errorType = getErrorType(
           error instanceof Error ? error : null,
@@ -1197,25 +1317,27 @@ export async function forwardWithFailover(
         const errorMessage = errorEvidence.errorMessage;
         void markUnhealthy(selectedUpstream.id, errorMessage);
         // Record failover attempt
-        failoverHistory.push(
-          buildFailoverAttempt(
-            selectedUpstream,
-            routeCapability,
-            attemptUpstreamBaseUrl,
-            finalSelectionReason,
-            {
-              errorType,
-              errorMessage,
-              statusCode: errorEvidence.statusCode,
-              responseHeaders: errorEvidence.responseHeaders,
-              responseBodyText: errorEvidence.responseBodyText,
-              responseBodyJson: errorEvidence.responseBodyJson,
-              headerDiff: errorHeaderDiff,
-              circuitBreakerRecorded,
-              matchedFailureRule,
-            }
-          )
+        const failoverAttempt = buildFailoverAttempt(
+          selectedUpstream,
+          routeCapability,
+          attemptUpstreamBaseUrl,
+          finalSelectionReason,
+          {
+            errorType,
+            errorMessage,
+            statusCode: errorEvidence.statusCode,
+            responseHeaders: errorEvidence.responseHeaders,
+            responseBodyText: errorEvidence.responseBodyText,
+            responseBodyJson: errorEvidence.responseBodyJson,
+            headerDiff: errorHeaderDiff,
+            circuitBreakerRecorded,
+            matchedFailureRule,
+          }
         );
+        failoverHistory.push(failoverAttempt);
+        if (didDispatchCurrentAttempt) {
+          lastDispatchedFailoverAttempt = failoverAttempt;
+        }
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = error instanceof Error ? error : new Error(String(error));
         continue;
@@ -1228,12 +1350,76 @@ export async function forwardWithFailover(
       throw attachFailoverContext(nonFailoverError, {
         failoverHistory,
         didSendUpstream,
+        lastDispatchedFailoverAttempt,
         concurrencyExcludedCandidates,
         headerDiff: errorHeaderDiff,
         queue: queueLifecycle,
       });
     }
   }
+}
+async function awaitBeforeDispatch<T>(
+  signal: AbortSignal,
+  operation: () => Promise<T>,
+  onAbort: () => void
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => {
+      signal.removeEventListener("abort", abortHandler);
+    };
+    const abortHandler = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      onAbort();
+      reject(
+        new ClientDisconnectedError(
+          "Client disconnected before upstream dispatch",
+          "candidate_selection"
+        )
+      );
+    };
+
+    if (signal.aborted) {
+      abortHandler();
+      return;
+    }
+
+    signal.addEventListener("abort", abortHandler, { once: true });
+
+    let operationPromise: Promise<T>;
+    try {
+      operationPromise = Promise.resolve(operation());
+    } catch (error) {
+      settled = true;
+      cleanup();
+      reject(error);
+      return;
+    }
+
+    operationPromise.then(
+      (value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        reject(error);
+      }
+    );
+  });
 }
 
 function createReleaseConnectionOnce(upstreamId: string): () => void {
@@ -1313,19 +1499,62 @@ async function resumeQueuedUpstreamSelection(options: {
     throw new AllCandidatesConcurrencyFullError([], waitableCandidate);
   }
 
+  let handoffReservationGranted = false;
+  let ownsHandoffReservation = true;
+  let handoffAbortListener: (() => void) | null = null;
+  const cleanupHandoffAbortListener = () => {
+    if (handoffAbortListener) {
+      request.signal.removeEventListener("abort", handoffAbortListener);
+      handoffAbortListener = null;
+    }
+  };
+  const releaseHandoffReservation = () => {
+    if (!handoffReservationGranted) {
+      cleanupHandoffAbortListener();
+      return;
+    }
+    if (!ownsHandoffReservation) {
+      cleanupHandoffAbortListener();
+      return;
+    }
+    ownsHandoffReservation = false;
+    cleanupHandoffAbortListener();
+    releaseConnection(waitableCandidate.upstream.id);
+  };
+  handoffAbortListener = () => {
+    releaseHandoffReservation();
+  };
+  request.signal.addEventListener("abort", handoffAbortListener, { once: true });
+  const waitGrantPromise = queued.waitPromise.then((grant) => {
+    handoffReservationGranted = true;
+    if (request.signal.aborted) {
+      releaseHandoffReservation();
+    }
+    return grant;
+  });
+  void waitGrantPromise.catch(() => {});
   if (onQueueStateChange) {
-    void Promise.resolve(onQueueStateChange(waitingQueue)).catch((error) =>
+    try {
+      const queueStateChange = onQueueStateChange(waitingQueue);
+      void Promise.resolve(queueStateChange).catch((error) =>
+        log.error(
+          { err: error, requestId, upstreamId: waitableCandidate.upstream.id },
+          "failed to persist queue waiting state"
+        )
+      );
+    } catch (error) {
       log.error(
         { err: error, requestId, upstreamId: waitableCandidate.upstream.id },
         "failed to persist queue waiting state"
-      )
-    );
+      );
+    }
   }
 
   let waitGrant: Awaited<typeof queued.waitPromise>;
   try {
-    waitGrant = await queued.waitPromise;
+    waitGrant = await waitGrantPromise;
   } catch (error) {
+    cleanupHandoffAbortListener();
     if (isQueueWaitTimeoutError(error)) {
       (error as FailoverErrorWithHistory).queue = {
         ...waitingQueue,
@@ -1344,59 +1573,116 @@ async function resumeQueuedUpstreamSelection(options: {
     }
     throw error;
   }
-
-  const refreshedCandidateSnapshot = await loadActiveUpstreamSnapshot();
-
-  const excludeIds = failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined;
-  const resumeDecision = await decideQueuedUpstreamResume(
-    waitableCandidate.upstream.id,
-    candidateUpstreamIds,
-    excludeIds,
-    { candidateSnapshot: refreshedCandidateSnapshot }
-  );
-
-  if (resumeDecision.action === "resume" && resumeDecision.upstream) {
-    return {
-      selectedUpstream: resumeDecision.upstream,
-      selectionReason: attachRetryReason(null, failoverHistory),
-      concurrencyExcludedCandidates: [],
-      queue: {
-        ...waitingQueue,
-        status: "resumed",
-        resumed_at: new Date().toISOString(),
-        wait_duration_ms: waitGrant.waitDurationMs,
-      },
-    };
-  }
-
-  releaseConnection(waitableCandidate.upstream.id);
-  const reselection = await reselectQueuedUpstreamOnce(
-    waitableCandidate.upstream.id,
-    candidateUpstreamIds,
-    resumeDecision.excludeIds,
-    { candidateSnapshot: refreshedCandidateSnapshot }
-  );
-
-  return {
-    selectedUpstream: reselection.upstream,
-    selectionReason: attachRetryReason(reselection.selectionReason ?? null, failoverHistory),
-    concurrencyExcludedCandidates: reselection.concurrencyExcluded ?? [],
-    queue: {
-      ...waitingQueue,
-      status: "resumed",
-      resumed_at: new Date().toISOString(),
-      wait_duration_ms: waitGrant.waitDurationMs,
-    },
+  const resumedQueue = (): RoutingQueueLog => ({
+    ...waitingQueue,
+    status: "resumed",
+    resumed_at: new Date().toISOString(),
+    wait_duration_ms: waitGrant.waitDurationMs,
+  });
+  const abortedQueue = (): RoutingQueueLog => ({
+    ...waitingQueue,
+    status: "aborted",
+    wait_duration_ms: waitGrant.waitDurationMs,
+  });
+  const createAbortedQueueError = (message: string): ClientDisconnectedError => {
+    const abortError = new ClientDisconnectedError(message, "candidate_selection");
+    abortError.queue = abortedQueue();
+    return abortError;
   };
+
+  try {
+    if (request.signal.aborted) {
+      throw createAbortedQueueError("Client disconnected after queue admission");
+    }
+
+    const refreshedCandidateSnapshot = await awaitBeforeDispatch(
+      request.signal,
+      () => loadActiveUpstreamSnapshot(),
+      releaseHandoffReservation
+    );
+    if (request.signal.aborted) {
+      throw createAbortedQueueError("Client disconnected while refreshing queued upstream");
+    }
+
+    const excludeIds = failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined;
+    const resumeDecision = await awaitBeforeDispatch(
+      request.signal,
+      () =>
+        decideQueuedUpstreamResume(
+          waitableCandidate.upstream.id,
+          candidateUpstreamIds,
+          excludeIds,
+          { candidateSnapshot: refreshedCandidateSnapshot }
+        ),
+      releaseHandoffReservation
+    );
+
+    if (resumeDecision.action === "resume" && resumeDecision.upstream) {
+      ownsHandoffReservation = false;
+      cleanupHandoffAbortListener();
+      return {
+        selectedUpstream: resumeDecision.upstream,
+        selectionReason: attachRetryReason(null, failoverHistory),
+        concurrencyExcludedCandidates: [],
+        queue: resumedQueue(),
+      };
+    }
+
+    releaseHandoffReservation();
+    if (request.signal.aborted) {
+      throw createAbortedQueueError("Client disconnected before queued reselection");
+    }
+
+    const reselection = await reselectQueuedUpstreamOnce(
+      waitableCandidate.upstream.id,
+      candidateUpstreamIds,
+      resumeDecision.excludeIds,
+      { candidateSnapshot: refreshedCandidateSnapshot }
+    );
+
+    if (request.signal.aborted) {
+      releaseConnection(reselection.upstream.id);
+      throw createAbortedQueueError("Client disconnected after queued reselection");
+    }
+
+    return {
+      selectedUpstream: reselection.upstream,
+      selectionReason: attachRetryReason(reselection.selectionReason ?? null, failoverHistory),
+      concurrencyExcludedCandidates: reselection.concurrencyExcluded ?? [],
+      queue: resumedQueue(),
+    };
+  } catch (error) {
+    releaseHandoffReservation();
+    if (request.signal.aborted && !(error instanceof ClientDisconnectedError)) {
+      const abortError = new ClientDisconnectedError(
+        "Client disconnected during queued reselection",
+        "candidate_selection"
+      );
+      abortError.queue = abortedQueue();
+      throw abortError;
+    }
+    if (error instanceof ClientDisconnectedError) {
+      error.queue ??= abortedQueue();
+      throw error;
+    }
+    if (error instanceof Error) {
+      (error as FailoverErrorWithHistory).queue ??= resumedQueue();
+    }
+    throw error;
+  }
 }
 
 /**
  * Error thrown when downstream client disconnects.
  */
 export class ClientDisconnectedError extends Error {
-  constructor(message: string) {
+  queue?: RoutingQueueLog | null;
+  failureStage?: RoutingFailureStage;
+
+  constructor(message: string, failureStage?: RoutingFailureStage) {
     super(message);
     this.name = "ClientDisconnectedError";
+    this.failureStage = failureStage;
   }
 }
 
