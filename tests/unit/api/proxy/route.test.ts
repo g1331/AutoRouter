@@ -6096,6 +6096,9 @@ describe("proxy route upstream selection", () => {
     const { selectFromProviderType, NoHealthyUpstreamsError } =
       await import("@/lib/services/load-balancer");
     const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -6242,6 +6245,17 @@ describe("proxy route upstream selection", () => {
     );
 
     expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
+    const settledLogWrites = vi
+      .mocked(updateRequestLog)
+      .mock.calls.filter(([, payload]) => payload?.statusCode === 503);
+    expect(settledLogWrites).toHaveLength(1);
+    expect(settledLogWrites[0]?.[1]).toEqual(
+      expect.objectContaining({
+        errorMessage: expect.any(String),
+        failoverHistory: expect.arrayContaining([expect.any(Object)]),
+      })
+    );
   });
 
   it("should not record or bill a request that was never sent upstream", async () => {
@@ -6758,6 +6772,7 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(503);
     expect(buildFixture).not.toHaveBeenCalled();
     expect(recordTrafficFixture).not.toHaveBeenCalled();
+    expect(db.query.upstreams.findFirst).not.toHaveBeenCalled();
   });
 
   it("should record success fixture when RECORDER_MODE is success", async () => {
