@@ -678,6 +678,132 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({ routingDurationMs: expect.any(Number) })
     );
   });
+  it("runs a successful non-stream request through the proxy lifecycle seam", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    const { handleProxy } = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
+    const responseBody = { id: "lifecycle-success", object: "chat.completion" };
+    const lifecycleEvents: string[] = [];
+
+    vi.mocked(logRequestStart).mockImplementationOnce(async () => {
+      lifecycleEvents.push("request-log-start");
+      return { id: "log-id" } as never;
+    });
+    vi.mocked(updateRequestLog).mockImplementation(async (_id, payload) => {
+      lifecycleEvents.push(
+        payload.statusCode === 200 ? "request-log-settled" : "request-log-routing"
+      );
+      return {} as never;
+    });
+    vi.mocked(calculateAndPersistRequestBillingSnapshot).mockImplementationOnce(async () => {
+      lifecycleEvents.push("billing");
+      return {
+        status: "billed",
+        unbillableReason: null,
+        finalCost: 0.001,
+        source: "manual",
+      };
+    });
+    vi.mocked(recordTrafficFixture).mockImplementationOnce(async () => {
+      lifecycleEvents.push("recording");
+      return "/tmp/mock-fixture.json";
+    });
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-lifecycle",
+        keyHash: "hash-lifecycle",
+        keyPrefix: "sk-test",
+        name: "Lifecycle Key",
+        expiresAt: null,
+        isActive: true,
+        accessMode: "restricted",
+        allowedModels: null,
+        rpmLimit: null,
+        tpmLimit: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockImplementationOnce(async () => {
+      lifecycleEvents.push("forward");
+      return {
+        statusCode: 200,
+        headers: new Headers({
+          "content-type": "application/json",
+          "x-upstream": "yes",
+        }),
+        body: new TextEncoder().encode(JSON.stringify(responseBody)),
+        isStream: false,
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      };
+    });
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "success";
+
+    const response = await handleProxy(
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-lifecycle",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+      { params: Promise.resolve({ path: ["chat", "completions"] }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("x-upstream")).toBe("yes");
+    await expect(response.json()).resolves.toEqual(responseBody);
+    expect(selectFromProviderType).toHaveBeenCalledTimes(1);
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        upstreamId: upstream.id,
+        statusCode: 200,
+        isStream: false,
+        errorMessage: null,
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
+    expect(buildFixture).toHaveBeenCalledTimes(1);
+    expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+
+    expect(lifecycleEvents.indexOf("request-log-start")).toBeLessThan(
+      lifecycleEvents.indexOf("forward")
+    );
+    expect(lifecycleEvents.indexOf("forward")).toBeLessThan(
+      lifecycleEvents.indexOf("request-log-settled")
+    );
+    expect(lifecycleEvents.indexOf("request-log-settled")).toBeLessThan(
+      lifecycleEvents.indexOf("billing")
+    );
+    expect(lifecycleEvents.indexOf("billing")).toBeLessThan(lifecycleEvents.indexOf("recording"));
+  });
 
   describe("proxy auth header compatibility", () => {
     it("should authenticate using x-api-key when authorization is absent", async () => {
