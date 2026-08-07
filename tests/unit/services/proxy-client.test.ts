@@ -15,10 +15,11 @@ import type { Upstream } from "@/lib/db";
 const loggerSpies = vi.hoisted(() => {
   const info = vi.fn();
   const debug = vi.fn();
+  const warn = vi.fn();
   const error = vi.fn();
-  const child = vi.fn(() => ({ info, debug, error }));
+  const child = vi.fn(() => ({ info, debug, warn, error }));
   const createLogger = vi.fn(() => ({ child }));
-  return { info, debug, error, child, createLogger };
+  return { info, debug, warn, error, child, createLogger };
 });
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -1554,6 +1555,153 @@ describe("proxy-client", () => {
         expect.objectContaining({
           method: "POST",
         })
+      );
+    });
+    it("reports dispatch after the upstream fetch is invoked", async () => {
+      const mockResponse = new Response(JSON.stringify({ id: "dispatch" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse);
+      global.fetch = fetchMock;
+      const onDispatchStart = vi.fn();
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+      });
+
+      await forwardRequest(
+        request,
+        mockUpstream,
+        "chat/completions",
+        "req-dispatch",
+        undefined,
+        undefined,
+        onDispatchStart
+      );
+
+      expect(onDispatchStart).toHaveBeenCalledOnce();
+      expect(onDispatchStart.mock.invocationCallOrder[0]).toBeGreaterThan(
+        fetchMock.mock.invocationCallOrder[0]!
+      );
+    });
+    it("does not report dispatch when fetch invocation throws synchronously", async () => {
+      const fetchMock = vi.fn(() => {
+        throw new Error("fetch invocation failed");
+      });
+      global.fetch = fetchMock;
+      const onDispatchStart = vi.fn();
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+      });
+
+      await expect(
+        forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-sync-fetch-failure",
+          undefined,
+          undefined,
+          onDispatchStart
+        )
+      ).rejects.toMatchObject({
+        message: "fetch invocation failed",
+        proxyRequestMetadata: { fetchStarted: false },
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(onDispatchStart).not.toHaveBeenCalled();
+    });
+
+    it("marks request body failures as not dispatched", async () => {
+      const fetchMock = vi.fn();
+      global.fetch = fetchMock;
+      const bodyReadError = new Error("request body read failed");
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+      });
+      vi.spyOn(request, "arrayBuffer").mockRejectedValueOnce(bodyReadError);
+
+      await expect(
+        forwardRequest(request, mockUpstream, "chat/completions", "req-body-read")
+      ).rejects.toMatchObject({
+        message: "request body read failed",
+        proxyRequestMetadata: { fetchStarted: false },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+    it("does not fetch after the downstream request is already aborted", async () => {
+      const fetchMock = vi.fn();
+      global.fetch = fetchMock;
+      const controller = new AbortController();
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+        signal: controller.signal,
+      });
+      controller.abort();
+      const onDispatchStart = vi.fn();
+
+      await expect(
+        forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-already-aborted",
+          undefined,
+          undefined,
+          onDispatchStart
+        )
+      ).rejects.toThrow("Upstream request cancelled by downstream client");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(onDispatchStart).not.toHaveBeenCalled();
+    });
+
+    it("should abort the upstream fetch when the downstream request is aborted", async () => {
+      let resolveFetchStarted!: () => void;
+      const fetchStarted = new Promise<void>((resolve) => {
+        resolveFetchStarted = resolve;
+      });
+
+      global.fetch = vi.fn().mockImplementation((_url: string, options: RequestInit) => {
+        resolveFetchStarted();
+        return new Promise<Response>((_resolve, reject) => {
+          options.signal?.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("Aborted");
+              error.name = "AbortError";
+              reject(error);
+            },
+            { once: true }
+          );
+        });
+      });
+
+      const controller = new AbortController();
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+        signal: controller.signal,
+      });
+
+      const forwardPromise = forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+      await fetchStarted;
+
+      controller.abort();
+
+      await expect(forwardPromise).rejects.toThrow(
+        "Upstream request cancelled by downstream client"
+      );
+      expect(loggerSpies.warn).toHaveBeenCalledWith(
+        { upstream: mockUpstream.name },
+        "upstream request cancelled by downstream client"
+      );
+      expect(loggerSpies.error).not.toHaveBeenCalledWith(
+        { timeout: mockUpstream.timeout },
+        "upstream request timed out"
       );
     });
 

@@ -3,6 +3,7 @@ import { extractApiKey, getKeyPrefix, verifyApiKey } from "@/lib/utils/auth";
 import { db, apiKeys, apiKeyUpstreams, upstreams, users, type Upstream } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import {
+  isStreamRequest,
   prepareUpstreamForProxy,
   filterHeaders,
   injectAuthHeader,
@@ -50,6 +51,7 @@ import {
   type UnifiedErrorReason,
 } from "@/lib/services/unified-error";
 import type {
+  RequestThinkingConfig,
   ReasoningEffort,
   RequestedServiceTier,
   EffectiveServiceTier,
@@ -80,7 +82,6 @@ import {
   forwardWithFailover,
   ClientDisconnectedError,
   getCircuitBlockedCandidates,
-  getLastSentFailoverAttempt,
   getUserHint,
   isNoAuthorizedUpstreamsError,
   isQueueWaitAbortedError,
@@ -175,6 +176,98 @@ async function shouldRejectExceededApiKeyQuotaBeforeProxy(input: {
     return false;
   }
 }
+function buildRoutingDecisionLog(input: {
+  model: string | null;
+  matchedRouteCapability: RouteCapability | null;
+  routeMatchSource: RouteMatchSource | null;
+  failureStage: RoutingFailureStage | null;
+  providerType?: string | null;
+}): RoutingDecisionLog {
+  return {
+    original_model: input.model ?? "(path-based)",
+    resolved_model: input.model ?? "(path-based)",
+    model_redirect_applied: false,
+    provider_type:
+      input.providerType !== undefined
+        ? input.providerType
+        : input.matchedRouteCapability
+          ? getProviderByRouteCapability(input.matchedRouteCapability)
+          : null,
+    routing_type: "none",
+    matched_route_capability: input.matchedRouteCapability,
+    route_match_source: input.routeMatchSource,
+    capability_candidates_count: 0,
+    candidates: [],
+    excluded: [],
+    candidate_count: 0,
+    final_candidate_count: 0,
+    selected_upstream_id: null,
+    candidate_upstream_id: null,
+    actual_upstream_id: null,
+    did_send_upstream: false,
+    failure_stage: input.failureStage,
+    final_selection_reason: null,
+    selection_strategy: "weighted",
+  };
+}
+
+async function logRejectedRequest(input: {
+  apiKeyId: string | null;
+  apiKeyName?: string | null;
+  apiKeyPrefix?: string | null;
+  userId?: string | null;
+  request: NextRequest;
+  path: string;
+  model: string | null;
+  reasoningEffort?: ReasoningEffort | null;
+  requestedServiceTier?: RequestedServiceTier | null;
+  thinkingConfig?: RequestThinkingConfig | null;
+  requestId: string;
+  startTime: number;
+  statusCode: number;
+  errorMessage: string;
+  routingDecision: RoutingDecisionLog;
+  routingType?: "tiered" | "direct" | "provider_type" | null;
+  priorityTier?: number | null;
+  routingDurationMs?: number | null;
+  sessionId?: string | null;
+  isStream?: boolean;
+}): Promise<void> {
+  try {
+    await logRequest({
+      apiKeyId: input.apiKeyId,
+      apiKeyName: input.apiKeyName ?? null,
+      apiKeyPrefix: input.apiKeyPrefix ?? null,
+      userId: input.userId ?? null,
+      upstreamId: null,
+      method: input.request.method,
+      path: input.path,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort ?? null,
+      requestedServiceTier: input.requestedServiceTier ?? null,
+      effectiveServiceTier: null,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      statusCode: input.statusCode,
+      durationMs: Date.now() - input.startTime,
+      routingDurationMs: input.routingDurationMs ?? null,
+      errorMessage: input.errorMessage,
+      routingType: input.routingType ?? null,
+      priorityTier: input.priorityTier ?? null,
+      failoverAttempts: 0,
+      failoverHistory: null,
+      routingDecision: input.routingDecision,
+      thinkingConfig: input.thinkingConfig ?? null,
+      sessionId: input.sessionId ?? null,
+      affinityHit: false,
+      affinityMigrated: false,
+      isStream: input.isStream ?? false,
+    });
+  } catch (error) {
+    log.error({ err: error, requestId: input.requestId }, "failed to log rejected proxy request");
+  }
+}
 
 function buildApiKeyQuotaExceededErrorMessage(
   apiKeyId: string,
@@ -214,57 +307,32 @@ async function logApiKeyQuotaRejectedRequest(input: {
   matchedRouteCapability: RouteCapability | null;
   routeMatchSource: RouteMatchSource | null;
   errorMessage: string;
+  isStream: boolean;
 }): Promise<void> {
-  const routingDecision: RoutingDecisionLog = {
-    original_model: input.model ?? "(path-based)",
-    resolved_model: input.model ?? "(path-based)",
-    model_redirect_applied: false,
-    provider_type: null,
-    routing_type: "none",
-    matched_route_capability: input.matchedRouteCapability,
-    route_match_source: input.routeMatchSource,
-    capability_candidates_count: 0,
-    candidates: [],
-    excluded: [],
-    candidate_count: 0,
-    final_candidate_count: 0,
-    selected_upstream_id: null,
-    candidate_upstream_id: null,
-    actual_upstream_id: null,
-    did_send_upstream: false,
-    failure_stage: "candidate_selection",
-    selection_strategy: "weighted",
-  };
-
-  await logRequest({
+  await logRejectedRequest({
     apiKeyId: input.apiKeyId,
     apiKeyName: input.apiKeyName,
     apiKeyPrefix: input.apiKeyPrefix,
     userId: input.userId,
-    upstreamId: null,
-    method: input.request.method,
+    request: input.request,
     path: input.path,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     requestedServiceTier: input.requestedServiceTier,
-    effectiveServiceTier: null,
-    promptTokens: 0,
-    completionTokens: 0,
-    totalTokens: 0,
-    statusCode: getHttpStatusForError("API_KEY_QUOTA_EXCEEDED"),
-    durationMs: Date.now() - input.startTime,
-    routingDurationMs: null,
-    errorMessage: input.errorMessage,
-    routingType: null,
-    priorityTier: null,
-    failoverAttempts: 0,
-    failoverHistory: null,
-    routingDecision,
     thinkingConfig: input.thinkingConfig,
+    requestId: input.requestId,
+    startTime: input.startTime,
     sessionId: input.sessionId,
-    affinityHit: false,
-    affinityMigrated: false,
-    isStream: false,
+    statusCode: getHttpStatusForError("API_KEY_QUOTA_EXCEEDED"),
+    errorMessage: input.errorMessage,
+    isStream: input.isStream,
+    routingDecision: buildRoutingDecisionLog({
+      model: input.model,
+      matchedRouteCapability: input.matchedRouteCapability,
+      routeMatchSource: input.routeMatchSource,
+      failureStage: "auth_filter",
+      providerType: null,
+    }),
   });
 }
 
@@ -293,59 +361,31 @@ async function logApiKeyAdmissionRejectedRequest(input: {
   routeMatchSource: RouteMatchSource | null;
   errorCode: "API_KEY_MODEL_NOT_ALLOWED" | "API_KEY_RATE_LIMITED";
   errorMessage: string;
+  isStream: boolean;
 }): Promise<void> {
-  const routingDecision: RoutingDecisionLog = {
-    original_model: input.model ?? "(path-based)",
-    resolved_model: input.model ?? "(path-based)",
-    model_redirect_applied: false,
-    provider_type: input.matchedRouteCapability
-      ? getProviderByRouteCapability(input.matchedRouteCapability)
-      : null,
-    routing_type: "none",
-    matched_route_capability: input.matchedRouteCapability,
-    route_match_source: input.routeMatchSource,
-    capability_candidates_count: 0,
-    candidates: [],
-    excluded: [],
-    candidate_count: 0,
-    final_candidate_count: 0,
-    selected_upstream_id: null,
-    candidate_upstream_id: null,
-    actual_upstream_id: null,
-    did_send_upstream: false,
-    failure_stage: "auth_filter",
-    selection_strategy: "weighted",
-  };
-
-  await logRequest({
+  await logRejectedRequest({
     apiKeyId: input.apiKeyId,
     apiKeyName: input.apiKeyName,
     apiKeyPrefix: input.apiKeyPrefix,
     userId: input.userId,
-    upstreamId: null,
-    method: input.request.method,
+    request: input.request,
     path: input.path,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     requestedServiceTier: input.requestedServiceTier,
-    effectiveServiceTier: null,
-    promptTokens: 0,
-    completionTokens: 0,
-    totalTokens: 0,
-    statusCode: getHttpStatusForError(input.errorCode),
-    durationMs: Date.now() - input.startTime,
-    routingDurationMs: null,
-    errorMessage: input.errorMessage,
-    routingType: null,
-    priorityTier: null,
-    failoverAttempts: 0,
-    failoverHistory: null,
-    routingDecision,
     thinkingConfig: input.thinkingConfig,
+    requestId: input.requestId,
+    startTime: input.startTime,
     sessionId: input.sessionId,
-    affinityHit: false,
-    affinityMigrated: false,
-    isStream: false,
+    statusCode: getHttpStatusForError(input.errorCode),
+    errorMessage: input.errorMessage,
+    isStream: input.isStream,
+    routingDecision: buildRoutingDecisionLog({
+      model: input.model,
+      matchedRouteCapability: input.matchedRouteCapability,
+      routeMatchSource: input.routeMatchSource,
+      failureStage: "auth_filter",
+    }),
   });
 }
 
@@ -361,28 +401,12 @@ async function logLocalApiKeyModelListRequest(input: {
   matchedRouteCapability: RouteCapability | null;
   routeMatchSource: RouteMatchSource | null;
 }): Promise<void> {
-  const routingDecision: RoutingDecisionLog = {
-    original_model: "(model-list)",
-    resolved_model: "(model-list)",
-    model_redirect_applied: false,
-    provider_type: input.matchedRouteCapability
-      ? getProviderByRouteCapability(input.matchedRouteCapability)
-      : null,
-    routing_type: "none",
-    matched_route_capability: input.matchedRouteCapability,
-    route_match_source: input.routeMatchSource,
-    capability_candidates_count: 0,
-    candidates: [],
-    excluded: [],
-    candidate_count: 0,
-    final_candidate_count: 0,
-    selected_upstream_id: null,
-    candidate_upstream_id: null,
-    actual_upstream_id: null,
-    did_send_upstream: false,
-    failure_stage: null,
-    selection_strategy: "weighted",
-  };
+  const routingDecision = buildRoutingDecisionLog({
+    model: "(model-list)",
+    matchedRouteCapability: input.matchedRouteCapability,
+    routeMatchSource: input.routeMatchSource,
+    failureStage: null,
+  });
 
   await logRequest({
     apiKeyId: input.apiKeyId,
@@ -993,6 +1017,7 @@ function extractReasoningEffortFromBody(
 
 async function extractRequestContext(request: NextRequest, path: string): Promise<RequestContext> {
   const modelFromPath = extractGeminiModelFromPath(path);
+  const requestUrl = new URL(request.url);
 
   try {
     const clonedRequest = request.clone();
@@ -1003,7 +1028,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
         model: modelFromPath,
         sessionId: null,
         bodyJson: null,
-        isStream: false,
+        isStream: isStreamRequest({}, path, requestUrl),
         reasoningEffort: null,
         requestedServiceTier: null,
       };
@@ -1011,7 +1036,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
 
     const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
     const modelFromBody = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
-    const isStream = bodyJson.stream === true;
+    const isStream = isStreamRequest(bodyJson, path, requestUrl);
     const reasoningEffort = extractReasoningEffortFromBody(bodyJson);
     const requestedServiceTier = normalizeRequestedServiceTier(bodyJson.service_tier);
 
@@ -1029,7 +1054,7 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
       model: modelFromPath,
       sessionId: null,
       bodyJson: null,
-      isStream: false,
+      isStream: isStreamRequest({}, path, requestUrl),
       reasoningEffort: null,
       requestedServiceTier: null,
     };
@@ -1047,12 +1072,43 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
   // Extract path
   const { path: pathSegments } = await context.params;
   const path = pathSegments.join("/");
+  const requestUrl = new URL(request.url);
+  const authRequestIsStream = isStreamRequest({}, path, requestUrl);
+  const logAuthRejected = async (input: {
+    errorMessage: string;
+    apiKeyId?: string | null;
+    apiKeyName?: string | null;
+    apiKeyPrefix?: string | null;
+    userId?: string | null;
+  }): Promise<void> => {
+    await logRejectedRequest({
+      apiKeyId: input.apiKeyId ?? null,
+      apiKeyName: input.apiKeyName,
+      apiKeyPrefix: input.apiKeyPrefix,
+      userId: input.userId,
+      request,
+      path,
+      model: null,
+      requestId,
+      startTime,
+      statusCode: 401,
+      errorMessage: input.errorMessage,
+      isStream: authRequestIsStream,
+      routingDecision: buildRoutingDecisionLog({
+        model: null,
+        matchedRouteCapability: null,
+        routeMatchSource: null,
+        failureStage: "auth_filter",
+      }),
+    });
+  };
 
   // Extract and validate API key
   const { keyValue, authSource } = extractProxyApiKey(request);
 
   if (!keyValue) {
     log.debug({ requestId, authSource }, "proxy auth: missing supported API key header");
+    await logAuthRejected({ errorMessage: "Missing API key" });
     return NextResponse.json({ error: "Missing API key" }, { status: 401 });
   }
   log.debug({ requestId, authSource }, "proxy auth: extracted API key");
@@ -1069,6 +1125,13 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     if (isValid) {
       // Check expiration
       if (candidate.expiresAt && candidate.expiresAt < new Date()) {
+        await logAuthRejected({
+          errorMessage: "API key has expired",
+          apiKeyId: candidate.id,
+          apiKeyName: candidate.name,
+          apiKeyPrefix: candidate.keyPrefix,
+          userId: candidate.userId,
+        });
         return NextResponse.json({ error: "API key has expired" }, { status: 401 });
       }
       validApiKey = candidate;
@@ -1077,6 +1140,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
   }
 
   if (!validApiKey) {
+    await logAuthRejected({ errorMessage: "Invalid API key", apiKeyPrefix: keyPrefix });
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
@@ -1093,6 +1157,13 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         { requestId, keyPrefix: validApiKey.keyPrefix, ownerId: validApiKey.userId },
         "proxy auth: rejected API key owned by an inactive user"
       );
+      await logAuthRejected({
+        errorMessage: "API key is disabled",
+        apiKeyId: validApiKey.id,
+        apiKeyName: validApiKey.name,
+        apiKeyPrefix: validApiKey.keyPrefix,
+        userId: validApiKey.userId,
+      });
       return NextResponse.json({ error: "API key is disabled" }, { status: 401 });
     }
   }
@@ -1154,6 +1225,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         requestId,
         startTime,
         sessionId: null,
+        isStream: requestedStream,
         matchedRouteCapability,
         routeMatchSource: matchedRouteMatchSource,
         errorCode,
@@ -1208,8 +1280,9 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         reasoningEffort,
         requestedServiceTier,
         thinkingConfig,
-        requestId,
         startTime,
+        requestId,
+        isStream: requestedStream,
         sessionId: null,
         matchedRouteCapability,
         routeMatchSource: matchedRouteMatchSource,
@@ -1235,77 +1308,36 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       user_hint: "当前请求路径未匹配到受支持的能力类型，请检查请求方法和路径是否在支持列表中",
     });
 
-    const unsupportedRoutingDecision: RoutingDecisionLog = {
-      original_model: model ?? "(path-based)",
-      resolved_model: model ?? "(path-based)",
-      model_redirect_applied: false,
-      provider_type: null,
-      routing_type: "none",
-      matched_route_capability: null,
-      route_match_source: null,
-      capability_candidates_count: 0,
-      candidates: [],
-      excluded: [],
-      candidate_count: 0,
-      final_candidate_count: 0,
-      selected_upstream_id: null,
-      candidate_upstream_id: null,
-      actual_upstream_id: null,
-      did_send_upstream: false,
-      failure_stage: "candidate_selection",
-      selection_strategy: "weighted",
-    };
+    const unsupportedRoutingDecision = buildRoutingDecisionLog({
+      model,
+      matchedRouteCapability: null,
+      routeMatchSource: null,
+      failureStage: "candidate_selection",
+      providerType: null,
+    });
 
     log.warn(
       { requestId, method: request.method, path, matchedRouteCapability: null },
       "path capability not matched, skipping upstream routing"
     );
-    try {
-      const createdLog = await logRequest({
-        apiKeyId: validApiKey.id,
-        ...apiKeySnapshot,
-        upstreamId: null,
-        method: request.method,
-        path,
-        model,
-        reasoningEffort,
-        requestedServiceTier,
-        effectiveServiceTier: null,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        statusCode: unsupportedResponse.status,
-        durationMs: unsupportedDurationMs,
-        routingDurationMs: unsupportedDurationMs,
-        errorMessage: "path capability not matched, skipping upstream routing",
-        routingType,
-        priorityTier: null,
-        failoverAttempts: 0,
-        failoverHistory: null,
-        routingDecision: unsupportedRoutingDecision,
-      });
-
-      if (createdLog?.id) {
-        await persistBillingSnapshotSafely({
-          requestLogId: createdLog.id,
-          apiKeyId: validApiKey.id,
-          upstreamId: null,
-          model,
-          requestedServiceTier,
-          effectiveServiceTier: null,
-          usage: {
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-          },
-          requestId,
-        });
-      }
-    } catch (error) {
-      log.error({ err: error, requestId, path }, "failed to log unsupported path request");
-    }
+    await logRejectedRequest({
+      apiKeyId: validApiKey.id,
+      ...apiKeySnapshot,
+      request,
+      path,
+      model,
+      reasoningEffort,
+      requestedServiceTier,
+      thinkingConfig,
+      requestId,
+      startTime,
+      statusCode: unsupportedResponse.status,
+      errorMessage: "path capability not matched, skipping upstream routing",
+      routingType,
+      routingDurationMs: unsupportedDurationMs,
+      isStream: requestedStream,
+      routingDecision: unsupportedRoutingDecision,
+    });
 
     return unsupportedResponse;
   }
@@ -1336,11 +1368,35 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     activeUpstreamSnapshot = await loadActiveUpstreamSnapshot();
   } catch (error) {
     log.error({ err: error, requestId }, "failed to load active upstream snapshot");
-    return createUnifiedErrorResponse("SERVICE_UNAVAILABLE", {
+    const snapshotResponse = createUnifiedErrorResponse("SERVICE_UNAVAILABLE", {
       did_send_upstream: false,
       request_id: requestId,
       user_hint: "上游状态暂时不可用，请稍后重试",
     });
+    await logRejectedRequest({
+      apiKeyId: validApiKey.id,
+      ...apiKeySnapshot,
+      request,
+      path,
+      model,
+      reasoningEffort,
+      requestedServiceTier,
+      thinkingConfig,
+      requestId,
+      startTime,
+      statusCode: snapshotResponse.status,
+      errorMessage: "failed to load active upstream snapshot",
+      routingType,
+      routingDurationMs: Date.now() - startTime,
+      isStream: requestedStream,
+      routingDecision: buildRoutingDecisionLog({
+        model,
+        matchedRouteCapability,
+        routeMatchSource,
+        failureStage: "candidate_selection",
+      }),
+    });
+    return snapshotResponse;
   }
   const activeUpstreams = activeUpstreamSnapshot.map((entry) => entry.upstream);
   const allowedUpstreamIds =
@@ -1449,7 +1505,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       },
       "no upstream supports matched route capability"
     );
-    return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+    const noCapabilityResponse = createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
       reason: "NO_HEALTHY_CANDIDATES",
       did_send_upstream: false,
       request_id: requestId,
@@ -1458,6 +1514,42 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
           ? `未找到支持路径能力 ${matchedRouteCapability} 或回退能力 ${fallbackCapability} 的上游，请先检查上游能力配置`
           : `未找到支持路径能力 ${matchedRouteCapability} 的上游，请先检查上游能力配置`,
     });
+    await logRejectedRequest({
+      apiKeyId: validApiKey.id,
+      ...apiKeySnapshot,
+      request,
+      path,
+      model,
+      reasoningEffort,
+      requestedServiceTier,
+      thinkingConfig,
+      requestId,
+      startTime,
+      statusCode: noCapabilityResponse.status,
+      errorMessage: "no upstream supports matched route capability",
+      routingType,
+      routingDurationMs: Date.now() - startTime,
+      isStream: requestedStream,
+      routingDecision: transformPathRoutingDecisionLog(
+        {
+          matchedRouteCapability,
+          routeMatchSource,
+          originalModel: model,
+          resolvedModel: model,
+          modelRedirectApplied: false,
+          capabilityCandidates,
+          finalCandidates: [],
+          excludedCandidates: [],
+          candidateCircuitStates: buildCandidateCircuitStateMap(
+            capabilityCandidates,
+            activeUpstreamSnapshot
+          ),
+        },
+        null,
+        { didSendUpstream: false, failureStage: "candidate_selection" }
+      ),
+    });
+    return noCapabilityResponse;
   }
 
   if (finalCapabilityCandidates.length === 0) {
@@ -1473,14 +1565,49 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       },
       "no authorized upstream for matched route capability"
     );
-    return createUnifiedErrorResponse("NO_AUTHORIZED_UPSTREAMS", {
+    const noAuthorizedResponse = createUnifiedErrorResponse("NO_AUTHORIZED_UPSTREAMS", {
       reason: "NO_AUTHORIZED_UPSTREAMS",
       did_send_upstream: false,
       request_id: requestId,
       user_hint: "当前密钥没有可用的路径能力授权，请在密钥配置中绑定对应上游",
     });
+    await logRejectedRequest({
+      apiKeyId: validApiKey.id,
+      ...apiKeySnapshot,
+      request,
+      path,
+      model,
+      reasoningEffort,
+      requestedServiceTier,
+      thinkingConfig,
+      requestId,
+      startTime,
+      statusCode: noAuthorizedResponse.status,
+      errorMessage: "no authorized upstream for matched route capability",
+      routingType,
+      routingDurationMs: Date.now() - startTime,
+      isStream: requestedStream,
+      routingDecision: transformPathRoutingDecisionLog(
+        {
+          matchedRouteCapability,
+          routeMatchSource,
+          originalModel: model,
+          resolvedModel: model,
+          modelRedirectApplied: false,
+          capabilityCandidates,
+          finalCandidates: [],
+          excludedCandidates: [],
+          candidateCircuitStates: buildCandidateCircuitStateMap(
+            capabilityCandidates,
+            activeUpstreamSnapshot
+          ),
+        },
+        null,
+        { didSendUpstream: false, failureStage: "candidate_selection" }
+      ),
+    });
+    return noAuthorizedResponse;
   }
-
   excludedCapabilityCandidates = [];
   candidateCircuitStates = buildCandidateCircuitStateMap(
     capabilityCandidates,
@@ -1522,37 +1649,24 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       }
     );
 
-    try {
-      await logRequest({
-        apiKeyId: validApiKey.id,
-        ...apiKeySnapshot,
-        upstreamId: null,
-        method: request.method,
-        path,
-        model,
-        reasoningEffort,
-        requestedServiceTier,
-        effectiveServiceTier: null,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        statusCode: rejectedResponse.status,
-        durationMs: rejectedDurationMs,
-        routingDurationMs: rejectedDurationMs,
-        errorMessage: "all authorized upstreams were excluded by model rules",
-        routingType,
-        priorityTier: null,
-        failoverAttempts: 0,
-        failoverHistory: null,
-        routingDecision: rejectedRoutingDecision,
-        thinkingConfig,
-      });
-    } catch (error) {
-      log.error(
-        { err: error, requestId, matchedRouteCapability, model },
-        "failed to log model rule exclusion response"
-      );
-    }
+    await logRejectedRequest({
+      apiKeyId: validApiKey.id,
+      ...apiKeySnapshot,
+      request,
+      path,
+      model,
+      reasoningEffort,
+      requestedServiceTier,
+      thinkingConfig,
+      requestId,
+      startTime,
+      statusCode: rejectedResponse.status,
+      errorMessage: "all authorized upstreams were excluded by model rules",
+      routingType,
+      routingDurationMs: rejectedDurationMs,
+      isStream: requestedStream,
+      routingDecision: rejectedRoutingDecision,
+    });
 
     return rejectedResponse;
   }
@@ -1598,6 +1712,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         sessionId: null,
         matchedRouteCapability,
         routeMatchSource: matchedRouteMatchSource,
+        isStream: requestedStream,
         errorMessage,
       });
     } catch (error) {
@@ -1645,6 +1760,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
   let failoverHistory: FailoverAttempt[] = [];
   let requestLogId: string | null = null;
   let requestLogReady: Promise<string | null> = Promise.resolve(null);
+  let queueStatePersistence: Promise<void> = Promise.resolve();
   let isAffinityHit = false;
   let isAffinityMigrated = false;
 
@@ -1704,9 +1820,13 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     return requestLogId;
   };
 
-  const persistQueueWaitingState = (queue: RoutingQueueLog) =>
-    requestLogReady
+  const persistQueueWaitingState = (queue: RoutingQueueLog) => {
+    const persistence = queueStatePersistence
+      .then(() => requestLogReady)
       .then(async (readyLogId) => {
+        if (request.signal.aborted) {
+          return;
+        }
         const currentLogId = requestLogId ?? readyLogId;
         if (!currentLogId) {
           return;
@@ -1744,6 +1864,9 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       .catch((error) => {
         log.error({ err: error, requestId }, "failed to update request log queue state");
       });
+    queueStatePersistence = persistence;
+    return persistence;
+  };
 
   // Forward request to upstream
   let compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[] = [];
@@ -1936,8 +2059,8 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     );
 
     // Complete the start log asynchronously without delaying response handling.
-    void requestLogReady
-      .then((readyLogId) => {
+    void Promise.all([requestLogReady, queueStatePersistence])
+      .then(([readyLogId]) => {
         const currentLogId = requestLogId ?? readyLogId;
         if (!currentLogId) {
           return;
@@ -2489,6 +2612,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       recordApiKeyTokenUsage(validApiKey.id, usageForBilling.totalTokens, validApiKey.tpmLimit);
 
       // Log request
+      await queueStatePersistence;
       await awaitRequestLogReady();
       let persistedLogId: string | null = requestLogId;
       if (requestLogId) {
@@ -2676,16 +2800,14 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
 
     const durationMs = Date.now() - startTime;
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
-    const lastSentFailoverAttempt = getLastSentFailoverAttempt(failoverHistory);
-    const didSendUpstream = resolveDidSendUpstream(
-      error as FailoverErrorWithHistory | null,
-      lastSentFailoverAttempt
-    );
+    const failoverError = error as FailoverErrorWithHistory | null;
+    const lastDispatchedFailoverAttempt = failoverError?.lastDispatchedFailoverAttempt;
+    const didSendUpstream = resolveDidSendUpstream(failoverError);
     if (!didSendUpstream) {
       routingDurationMs ??= durationMs;
     }
     const attributionFailoverAttempt = didSendUpstream
-      ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
+      ? (lastDispatchedFailoverAttempt ?? lastFailoverAttempt)
       : lastFailoverAttempt;
     const queueLifecycle = withQueueStreamFlag(
       (error as FailoverErrorWithHistory | null)?.queue ?? null,
@@ -2712,7 +2834,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     const failureStage = resolveFailureStage(error, didSendUpstream, attributionFailoverAttempt);
     const failureReason = resolveFailureReason(error, didSendUpstream, attributionFailoverAttempt);
     const actualUpstreamId =
-      lastSentFailoverAttempt?.upstream_id ??
+      lastDispatchedFailoverAttempt?.upstream_id ??
       (didSendUpstream ? (selectedCandidate?.id ?? null) : null);
     const candidateUpstreamId = didSendUpstream
       ? (attributionFailoverAttempt?.upstream_id ?? selectedCandidate?.id ?? null)
@@ -2818,6 +2940,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
           statusCode: 200,
           errorMessage: null,
         };
+        await queueStatePersistence;
         await awaitRequestLogReady();
         if (requestLogId) {
           await updateRequestLog(requestLogId, modelListLogFields);
@@ -2838,7 +2961,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       }
     }
 
-    if (shouldRecordFailure && inboundBody) {
+    if (shouldRecordFailure && inboundBody && didSendUpstream) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers)).filtered;
       applyCompensationHeaders(fallbackOutboundHeaders, compensationHeaders);
       const fallbackProviderType =
@@ -2962,6 +3085,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     }
 
     // Log failed request (internal logging with full details)
+    await queueStatePersistence;
     const failureLogFields = {
       ...failureLogBaseFields,
       upstreamId: actualUpstreamId,
@@ -2984,7 +3108,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       persistedLogId = createdLog.id;
     }
 
-    if (persistedLogId) {
+    if (persistedLogId && didSendUpstream) {
       await persistBillingSnapshotSafely({
         requestLogId: persistedLogId,
         apiKeyId: validApiKey.id,

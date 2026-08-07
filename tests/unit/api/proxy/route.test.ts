@@ -115,7 +115,8 @@ vi.mock("@/lib/services/route-capability-migration", () => ({
   ensureRouteCapabilityMigration: vi.fn(async () => {}),
 }));
 
-vi.mock("@/lib/services/proxy-client", () => {
+vi.mock("@/lib/services/proxy-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/services/proxy-client")>();
   class FirstByteTimeoutError extends Error {
     constructor(public readonly timeoutMs: number) {
       super(`Upstream first byte timed out after ${Math.round(timeoutMs / 1000)}s`);
@@ -150,6 +151,8 @@ vi.mock("@/lib/services/proxy-client", () => {
   }
 
   return {
+    isStreamRequest: actual.isStreamRequest,
+    getProxyRequestErrorMetadata: actual.getProxyRequestErrorMetadata,
     forwardRequest: vi.fn(),
     prepareUpstreamForProxy: vi.fn((upstream, timeoutConfig) => ({
       id: upstream.id,
@@ -554,6 +557,10 @@ describe("proxy route upstream selection", () => {
     request: NextRequest,
     context: { params: Promise<{ path: string[] }> }
   ) => Promise<Response>;
+  let handleProxy: (
+    request: NextRequest,
+    context: { params: Promise<{ path: string[] }> }
+  ) => Promise<Response>;
   let GET: (
     request: NextRequest,
     context: { params: Promise<{ path: string[] }> }
@@ -593,6 +600,8 @@ describe("proxy route upstream selection", () => {
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     const { db } = await import("@/lib/db");
     POST = routeModule.POST;
+    const lifecycleModule = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    handleProxy = lifecycleModule.handleProxy;
     GET = routeModule.GET;
     vi.mocked(db.query.upstreams.findMany).mockResolvedValue(DEFAULT_ACTIVE_UPSTREAMS);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValue([]);
@@ -803,6 +812,88 @@ describe("proxy route upstream selection", () => {
       lifecycleEvents.indexOf("billing")
     );
     expect(lifecycleEvents.indexOf("billing")).toBeLessThan(lifecycleEvents.indexOf("recording"));
+  });
+  it("logs a lifecycle rejection without billing or recording when capability is missing", async () => {
+    const { db } = await import("@/lib/db");
+    const { handleProxy } = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "all";
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-rejected",
+        keyHash: "hash-rejected",
+        keyPrefix: "sk-test",
+        expiresAt: null,
+        isActive: true,
+      },
+    ]);
+
+    const response = await handleProxy(
+      new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-rejected",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model: "gpt-5.2", input: "hello" }),
+      }),
+      { params: Promise.resolve({ path: ["custom", "not-matched"] }) }
+    );
+
+    expect(response.status).toBe(503);
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 503,
+        durationMs: expect.any(Number),
+        routingDecision: expect.objectContaining({
+          failure_stage: "candidate_selection",
+          did_send_upstream: false,
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(buildFixture).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
+  });
+  it("logs missing API key rejection without billing or recording", async () => {
+    const { handleProxy } = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "all";
+
+    const response = await handleProxy(
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions?alt=sse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "gpt-5.2", messages: [] }),
+      }),
+      { params: Promise.resolve({ path: ["chat", "completions"] }) }
+    );
+
+    expect(response.status).toBe(401);
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: null,
+        statusCode: 401,
+        errorMessage: "Missing API key",
+        isStream: true,
+        routingDecision: expect.objectContaining({
+          failure_stage: "auth_filter",
+          did_send_upstream: false,
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
   });
 
   describe("proxy auth header compatibility", () => {
@@ -3101,21 +3192,7 @@ describe("proxy route upstream selection", () => {
         }),
       })
     );
-    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requestLogId: "unsupported-log",
-        apiKeyId: "key-1",
-        upstreamId: null,
-        model: "gpt-5.2",
-        usage: {
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-        },
-      })
-    );
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
   });
 
   it("should route messages requests to anthropic upstream when available", async () => {
@@ -3204,7 +3281,8 @@ describe("proxy route upstream selection", () => {
       "v1/messages",
       expect.any(String),
       expect.any(Array),
-      undefined
+      undefined,
+      expect.any(Function)
     );
   });
 
@@ -3725,7 +3803,9 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const response = await handleProxy(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
 
     expect(response.status).toBe(200);
     expect(markUnhealthy).not.toHaveBeenCalledWith("up-anthropic-1", expect.any(String));
@@ -3825,7 +3905,9 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const response = await handleProxy(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
     const payload = (await response.json()) as { error: { reason?: string; user_hint?: string } };
 
     expect(response.status).toBe(503);
@@ -3960,7 +4042,9 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const response = await handleProxy(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
 
     expect(response.status).toBe(200);
     expect(vi.mocked(upstreamQueueAdmission.enqueueWait)).toHaveBeenCalledWith(
@@ -4003,6 +4087,478 @@ describe("proxy route upstream selection", () => {
         timeout_ms: 30000,
       })
     );
+  });
+  it("releases a handed-off queue slot when the client aborts before dispatch", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    const {
+      selectFromProviderType,
+      decideQueuedUpstreamResume,
+      AllCandidatesConcurrencyFullError,
+      releaseConnection,
+    } = await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission } = await import("@/lib/services/upstream-queue-admission");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued",
+      name: "queued-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+    const controller = new AbortController();
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany)
+      .mockResolvedValueOnce([waitableUpstream])
+      .mockResolvedValueOnce([waitableUpstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-queued" },
+    ]);
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: "up-queued",
+            upstreamName: "queued-upstream",
+            upstreamBaseUrl: "https://api.anthropic.com",
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.resolve({
+        upstreamId: "up-queued",
+        requestId: "req-queued",
+        waitDurationMs: 25,
+        activeCount: 1,
+        queueLengthRemaining: 0,
+      }),
+    });
+    vi.mocked(decideQueuedUpstreamResume).mockImplementationOnce(async () => {
+      controller.abort();
+      return {
+        action: "resume",
+        reason: "bound_available",
+        upstream: waitableUpstream,
+        excludeIds: [],
+      };
+    });
+
+    const response = await handleProxy(
+      new NextRequest("http://localhost/api/proxy/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-test",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      }),
+      { params: Promise.resolve({ path: ["v1", "messages"] }) }
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(499);
+    expect(data.error).toEqual(
+      expect.objectContaining({ code: "CLIENT_DISCONNECTED", did_send_upstream: false })
+    );
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(vi.mocked(releaseConnection)).toHaveBeenCalledWith("up-queued");
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "aborted")
+    ).toBe(true);
+    const queueAbortLog = vi
+      .mocked(updateRequestLog)
+      .mock.calls.find(([, payload]) => payload?.routingDecision?.queue?.status === "aborted")?.[1];
+    expect(queueAbortLog?.routingDecision?.failure_stage).toBe("candidate_selection");
+  });
+  it("releases a selected slot when the client aborts during pre-dispatch setup", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+
+    const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
+    const controller = new AbortController();
+    const circuitConfig = {
+      failureThreshold: 5,
+      successThreshold: 2,
+      openDuration: 300000,
+      probeInterval: 30000,
+      firstByteTimeout: 30000,
+      streamIdleTimeout: 60000,
+    };
+    let resolveCircuitConfig!: (value: typeof circuitConfig) => void;
+    const circuitConfigPromise = new Promise<typeof circuitConfig>((resolve) => {
+      resolveCircuitConfig = resolve;
+    });
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-pre-dispatch", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    mockGetEffectiveCircuitBreakerConfig.mockImplementationOnce(() => circuitConfigPromise);
+
+    const responsePromise = POST(
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      }),
+      { params: Promise.resolve({ path: ["v1", "chat", "completions"] }) }
+    );
+
+    await expect.poll(() => mockGetEffectiveCircuitBreakerConfig.mock.calls.length).toBe(1);
+    controller.abort();
+
+    const response = await responsePromise;
+    const data = await response.json();
+    resolveCircuitConfig(circuitConfig);
+
+    expect(response.status).toBe(499);
+    expect(data.error).toEqual(
+      expect.objectContaining({ code: "CLIENT_DISCONNECTED", did_send_upstream: false })
+    );
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(vi.mocked(releaseConnection)).toHaveBeenCalledWith(upstream.id);
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
+    const abortLog = vi
+      .mocked(updateRequestLog)
+      .mock.calls.find(
+        ([, payload]) => payload?.routingDecision?.failure_stage === "candidate_selection"
+      )?.[1];
+    expect(abortLog?.routingDecision).toEqual(
+      expect.objectContaining({ failure_stage: "candidate_selection", did_send_upstream: false })
+    );
+  });
+
+  it("releases a handed-off slot while queue state persistence is pending", async () => {
+    const { forwardWithFailover, ClientDisconnectedError } =
+      await import("@/app/api/proxy/v1/[...path]/proxy-execution");
+    const { AllCandidatesConcurrencyFullError, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission } = await import("@/lib/services/upstream-queue-admission");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued-pending-log",
+      name: "queued-pending-log",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+    const controller = new AbortController();
+    let resolveQueueState!: () => void;
+    const queueStatePromise = new Promise<void>((resolve) => {
+      resolveQueueState = resolve;
+    });
+    let resolveResumeDecision!: (decision: {
+      action: "resume";
+      upstream: typeof waitableUpstream;
+    }) => void;
+    const resumeDecisionPromise = new Promise<{
+      action: "resume";
+      upstream: typeof waitableUpstream;
+    }>((resolve) => {
+      resolveResumeDecision = resolve;
+    });
+
+    vi.mocked(mockSelectFromUpstreamCandidates).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: waitableUpstream.id,
+            upstreamName: waitableUpstream.name,
+            upstreamBaseUrl: waitableUpstream.baseUrl,
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.resolve({
+        upstreamId: waitableUpstream.id,
+        requestId: "req-queued-pending-log",
+        waitDurationMs: 25,
+        activeCount: 1,
+        queueLengthRemaining: 0,
+      }),
+    });
+    vi.mocked(mockDecideQueuedUpstreamResume).mockReturnValueOnce(resumeDecisionPromise);
+
+    const forwardPromise = forwardWithFailover({
+      request: new Request("http://localhost/api/proxy/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        body: JSON.stringify({ model: "claude-test", messages: [] }),
+      }),
+      routeCapability: "anthropic_messages",
+      path: "messages",
+      requestId: "req-queued-pending-log",
+      candidateUpstreamIds: [waitableUpstream.id],
+      requestModel: "claude-test",
+      affinityContext: null,
+      compensationHeaders: [],
+      onQueueStateChange: () => queueStatePromise,
+    });
+
+    await expect
+      .poll(() => vi.mocked(upstreamQueueAdmission.enqueueWait).mock.calls.length)
+      .toBe(1);
+    await expect.poll(() => vi.mocked(mockDecideQueuedUpstreamResume).mock.calls.length).toBe(1);
+    controller.abort();
+    await expect
+      .poll(() =>
+        vi
+          .mocked(releaseConnection)
+          .mock.calls.some(([upstreamId]) => upstreamId === waitableUpstream.id)
+      )
+      .toBe(true);
+
+    resolveQueueState();
+    await expect(forwardPromise).rejects.toBeInstanceOf(ClientDisconnectedError);
+    resolveResumeDecision({ action: "resume", upstream: waitableUpstream });
+    expect(vi.mocked(releaseConnection)).toHaveBeenCalledTimes(1);
+  });
+  it("stops inbound body buffering when the client aborts before routing", async () => {
+    const { forwardWithFailover } = await import("@/app/api/proxy/v1/[...path]/proxy-execution");
+    const controller = new AbortController();
+    let resolveBody!: (body: ArrayBuffer) => void;
+    const pendingBody = new Promise<ArrayBuffer>((resolve) => {
+      resolveBody = resolve;
+    });
+    const request = {
+      url: "http://localhost/api/proxy/v1/messages",
+      method: "POST",
+      headers: new Headers({ "content-type": "application/json" }),
+      signal: controller.signal,
+      clone: () => ({ arrayBuffer: () => pendingBody }),
+    } as unknown as Request;
+
+    const forwardPromise = forwardWithFailover({
+      request,
+      routeCapability: "anthropic_messages",
+      path: "messages",
+      requestId: "req-body-buffer-abort",
+      candidateUpstreamIds: ["upstream-never-selected"],
+      requestModel: "claude-test",
+      affinityContext: null,
+      compensationHeaders: [],
+    });
+
+    controller.abort();
+    await expect(forwardPromise).rejects.toMatchObject({
+      name: "ClientDisconnectedError",
+      failureStage: "candidate_selection",
+      didSendUpstream: false,
+    });
+    expect(mockSelectFromUpstreamCandidates).not.toHaveBeenCalled();
+    resolveBody(new ArrayBuffer(0));
+  });
+
+  it("marks a resumed queue as aborted when cancellation interrupts pre-dispatch setup", async () => {
+    const { forwardWithFailover } = await import("@/app/api/proxy/v1/[...path]/proxy-execution");
+    const { AllCandidatesConcurrencyFullError, decideQueuedUpstreamResume, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission } = await import("@/lib/services/upstream-queue-admission");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued-resumed-abort",
+      name: "queued-resumed-abort",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+    const controller = new AbortController();
+    let resolveCircuitConfig!: (value: {
+      failureThreshold: number;
+      successThreshold: number;
+      openDuration: number;
+      probeInterval: number;
+      firstByteTimeout: number;
+      streamIdleTimeout: number;
+    }) => void;
+    const circuitConfigPromise = new Promise<{
+      failureThreshold: number;
+      successThreshold: number;
+      openDuration: number;
+      probeInterval: number;
+      firstByteTimeout: number;
+      streamIdleTimeout: number;
+    }>((resolve) => {
+      resolveCircuitConfig = resolve;
+    });
+
+    vi.mocked(mockSelectFromUpstreamCandidates).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: waitableUpstream.id,
+            upstreamName: waitableUpstream.name,
+            upstreamBaseUrl: waitableUpstream.baseUrl,
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.resolve({
+        upstreamId: waitableUpstream.id,
+        requestId: "req-queued-resumed-abort",
+        waitDurationMs: 25,
+        activeCount: 1,
+        queueLengthRemaining: 0,
+      }),
+    });
+    vi.mocked(decideQueuedUpstreamResume).mockResolvedValueOnce({
+      action: "resume",
+      reason: "bound_available",
+      upstream: waitableUpstream,
+      excludeIds: [],
+    });
+    vi.mocked(mockGetEffectiveCircuitBreakerConfig).mockReturnValueOnce(circuitConfigPromise);
+
+    const forwardPromise = forwardWithFailover({
+      request: new Request("http://localhost/api/proxy/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        body: JSON.stringify({ model: "claude-test", messages: [] }),
+      }),
+      routeCapability: "anthropic_messages",
+      path: "messages",
+      requestId: "req-queued-resumed-abort",
+      candidateUpstreamIds: [waitableUpstream.id],
+      requestModel: "claude-test",
+      affinityContext: null,
+      compensationHeaders: [],
+    });
+
+    await expect
+      .poll(() => vi.mocked(mockGetEffectiveCircuitBreakerConfig).mock.calls.length)
+      .toBe(1);
+    controller.abort();
+    await expect
+      .poll(() =>
+        vi
+          .mocked(releaseConnection)
+          .mock.calls.some(([upstreamId]) => upstreamId === waitableUpstream.id)
+      )
+      .toBe(true);
+    resolveCircuitConfig({
+      failureThreshold: 5,
+      successThreshold: 2,
+      openDuration: 300000,
+      probeInterval: 30000,
+      firstByteTimeout: 30000,
+      streamIdleTimeout: 60000,
+    });
+
+    await expect(forwardPromise).rejects.toMatchObject({
+      name: "ClientDisconnectedError",
+      queue: expect.objectContaining({ status: "aborted" }),
+    });
+    expect(vi.mocked(forwardRequest)).not.toHaveBeenCalled();
+  });
+
+  it("classifies queue cancellation as candidate selection after a prior upstream attempt", async () => {
+    const { resolveFailureStage } = await import("@/app/api/proxy/v1/[...path]/proxy-execution");
+    const { UpstreamQueueWaitAbortedError } =
+      await import("@/lib/services/upstream-queue-admission");
+
+    const error = new UpstreamQueueWaitAbortedError("up-queued", "req-queued", 25);
+
+    expect(resolveFailureStage(error, true, undefined)).toBe("candidate_selection");
   });
 
   it("should release the resumed slot and reselect once when the queued upstream disappears", async () => {
@@ -4145,7 +4701,9 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const response = await handleProxy(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
 
     expect(response.status).toBe(200);
     expect(vi.mocked(reselectQueuedUpstreamOnce)).toHaveBeenCalledWith(
@@ -4171,6 +4729,11 @@ describe("proxy route upstream selection", () => {
       await import("@/lib/services/load-balancer");
     const { upstreamQueueAdmission, UpstreamQueueWaitTimeoutError } =
       await import("@/lib/services/upstream-queue-admission");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "all";
 
     const waitableUpstream = {
       ...DEFAULT_ACTIVE_UPSTREAMS[0],
@@ -4256,7 +4819,9 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const response = await handleProxy(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(504);
@@ -4271,6 +4836,8 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
     expect(markUnhealthy).not.toHaveBeenCalled();
     expect(recordFailure).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
     expect(
       vi
         .mocked(updateRequestLog)
@@ -4304,6 +4871,11 @@ describe("proxy route upstream selection", () => {
       await import("@/lib/services/load-balancer");
     const { upstreamQueueAdmission, UpstreamQueueWaitAbortedError } =
       await import("@/lib/services/upstream-queue-admission");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const { recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "all";
 
     const waitableUpstream = {
       ...DEFAULT_ACTIVE_UPSTREAMS[0],
@@ -4318,6 +4890,17 @@ describe("proxy route upstream selection", () => {
         max_queue_length: 4,
       },
     };
+    const controller = new AbortController();
+    let rejectQueueWait!: (reason?: unknown) => void;
+    const queueWaitPromise = new Promise<{
+      upstreamId: string;
+      requestId: string;
+      waitDurationMs: number;
+      activeCount: number;
+      queueLengthRemaining: number;
+    }>((_, reject) => {
+      rejectQueueWait = reject;
+    });
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -4372,24 +4955,32 @@ describe("proxy route upstream selection", () => {
       reason: "queued",
       position: 1,
       queueLength: 1,
-      waitPromise: Promise.reject(
-        new UpstreamQueueWaitAbortedError("up-queued", "req-queued", 1200)
-      ),
+      waitPromise: queueWaitPromise,
     });
 
-    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
-      method: "POST",
-      headers: {
-        authorization: "Bearer sk-test",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-test",
-        messages: [{ role: "user", content: "hi" }],
+    const responsePromise = handleProxy(
+      new NextRequest("http://localhost/api/proxy/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-test",
+          messages: [{ role: "user", content: "hi" }],
+        }),
       }),
-    });
+      { params: Promise.resolve({ path: ["v1", "messages"] }) }
+    );
+    await expect
+      .poll(() => vi.mocked(upstreamQueueAdmission.enqueueWait).mock.calls.length)
+      .toBe(1);
+    controller.abort();
+    rejectQueueWait(new UpstreamQueueWaitAbortedError("up-queued", "req-queued", 1200));
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const response = await responsePromise;
+
     const data = await response.json();
 
     expect(response.status).toBe(499);
@@ -4404,6 +4995,8 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
     expect(markUnhealthy).not.toHaveBeenCalled();
     expect(recordFailure).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
     expect(
       vi
         .mocked(updateRequestLog)
@@ -5651,7 +6244,7 @@ describe("proxy route upstream selection", () => {
     expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
   });
 
-  it("should not inject upstream auth headers when request was never sent upstream", async () => {
+  it("should not record or bill a request that was never sent upstream", async () => {
     process.env.RECORDER_ENABLED = "true";
 
     const { db } = await import("@/lib/db");
@@ -5660,6 +6253,8 @@ describe("proxy route upstream selection", () => {
     const { selectFromProviderType, NoAuthorizedUpstreamsError } =
       await import("@/lib/services/load-balancer");
     const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
 
     const routedUpstream = {
       id: "up-route",
@@ -5729,17 +6324,138 @@ describe("proxy route upstream selection", () => {
     expect(injectAuthHeader).not.toHaveBeenCalled();
     expect(db.query.upstreams.findFirst).not.toHaveBeenCalled();
 
-    expect(buildFixture).toHaveBeenCalledTimes(1);
-    const fixtureParams = vi.mocked(buildFixture).mock.calls[0][0];
-    expect(fixtureParams.upstream).toEqual(
-      expect.objectContaining({
-        id: "unknown",
-        name: "not-sent",
+    expect(buildFixture).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+  });
+  it("logs body preparation rejection without billing or recording", async () => {
+    process.env.RECORDER_ENABLED = "true";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-openai",
+      name: "body-failure",
+    };
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-body-failure", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockRejectedValueOnce(
+      Object.assign(new Error("fetch failed while reading request body"), {
+        proxyRequestMetadata: { fetchStarted: false },
       })
     );
-    expect(fixtureParams.outboundHeaders).toEqual({});
-    expect(fixtureParams.outboundRequestSent).toBe(false);
-    expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-body-failure",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      }),
+      { params: Promise.resolve({ path: ["v1", "chat", "completions"] }) }
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error).toEqual(
+      expect.objectContaining({
+        code: "SERVICE_UNAVAILABLE",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      })
+    );
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(releaseConnection)).toHaveBeenCalledWith(upstream.id);
+    expect(markUnhealthy).not.toHaveBeenCalled();
+    expect(recordFailure).not.toHaveBeenCalled();
+    expect(buildFixture).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+
+    const failureLog = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1] as {
+      durationMs?: number;
+      failoverAttempts?: number;
+      routingDecision?: Record<string, unknown>;
+    };
+    expect(failureLog.failoverAttempts).toBe(0);
+    expect(failureLog.durationMs).toEqual(expect.any(Number));
+    expect(failureLog.routingDecision).toEqual(
+      expect.objectContaining({
+        failure_stage: "candidate_selection",
+        did_send_upstream: false,
+        actual_upstream_id: null,
+      })
+    );
+  });
+  it("logs active upstream snapshot rejection without dispatch", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-snapshot-failure", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockRejectedValueOnce(
+      new Error("upstream snapshot unavailable")
+    );
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      }),
+      { params: Promise.resolve({ path: ["v1", "chat", "completions"] }) }
+    );
+
+    expect(response.status).toBe(503);
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 503,
+        errorMessage: "failed to load active upstream snapshot",
+        durationMs: expect.any(Number),
+        routingDecision: expect.objectContaining({
+          failure_stage: "candidate_selection",
+          did_send_upstream: false,
+        }),
+      })
+    );
   });
 
   it("should classify downstream disconnect as CLIENT_DISCONNECTED reason", async () => {
@@ -6961,12 +7677,7 @@ describe("proxy route upstream selection", () => {
     });
     expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
-    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requestedServiceTier: "fast",
-        effectiveServiceTier: null,
-      })
-    );
+    expect(calculateAndPersistRequestBillingSnapshot).not.toHaveBeenCalled();
   });
 
   it("should authorize unrestricted keys across all active upstreams", async () => {
