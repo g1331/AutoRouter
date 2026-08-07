@@ -1935,6 +1935,43 @@ describe("proxy-client", () => {
       expect(streamMetrics?.ttftMs).toBeGreaterThanOrEqual(0);
     });
 
+    it("exposes cancellation for an active streaming response", async () => {
+      let upstreamCancelled = false;
+      const encoder = new TextEncoder();
+      const upstreamBody = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode("data: hello\n\n"));
+        },
+        cancel() {
+          upstreamCancelled = true;
+        },
+      });
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response(upstreamBody, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        })
+      );
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+      expect(result.cancelStream).toEqual(expect.any(Function));
+      const reader = (result.body as ReadableStream<Uint8Array>).getReader();
+      await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: false }));
+
+      result.cancelStream?.("Client disconnected");
+      await reader.cancel("Client disconnected");
+
+      await expect.poll(() => upstreamCancelled).toBe(true);
+      await expect(result.streamMetricsPromise).resolves.toEqual(
+        expect.objectContaining({ usage: null })
+      );
+    });
     it("should time out when a stream never emits content-bearing data", async () => {
       vi.useFakeTimers();
       const encoder = new TextEncoder();

@@ -66,8 +66,6 @@ import type {
 import {
   shouldRecordFixture,
   readRequestBody,
-  readStreamChunks,
-  teeStreamForRecording,
   buildFixture,
   recordTrafficFixture,
 } from "@/lib/services/traffic-recorder";
@@ -94,7 +92,6 @@ import {
   withQueueStreamFlag,
   type FailoverErrorWithHistory,
   type ProxyResultWithStreamFailure,
-  type StreamRuntimeFailureSettlement,
 } from "./proxy-execution";
 import {
   settleNonStreamRequest,
@@ -102,6 +99,13 @@ import {
   type NonStreamLifecycleContext,
   type NonStreamProxyResult,
 } from "./proxy-non-stream-lifecycle";
+import {
+  computeAffinityTokens,
+  createStreamResponse,
+  resolveEffectiveServiceTier,
+  type StreamLifecycleContext,
+  type StreamLifecycleTerminal,
+} from "./proxy-stream-lifecycle";
 import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 import {
@@ -735,115 +739,6 @@ interface RoutingDecision {
   failoverHistory: FailoverAttempt[];
 }
 
-function wrapStreamWithDownstreamSettlement(
-  stream: ReadableStream<Uint8Array>,
-  abortSignal: AbortSignal | undefined,
-  onAbort: () => void
-): ReadableStream<Uint8Array> {
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-  let streamCompleted = false;
-  let abortHandled = false;
-
-  const handleAbortOnce = () => {
-    if (streamCompleted || abortHandled) {
-      return;
-    }
-    abortHandled = true;
-    onAbort();
-  };
-
-  return new ReadableStream({
-    async start(controller) {
-      reader = stream.getReader();
-
-      const abortHandler = () => {
-        handleAbortOnce();
-        void reader?.cancel("Client disconnected").catch(() => undefined);
-        try {
-          controller.close();
-        } catch {
-          // Controller may already be closed.
-        }
-      };
-
-      if (abortSignal) {
-        abortSignal.addEventListener("abort", abortHandler, { once: true });
-      }
-
-      try {
-        while (true) {
-          if (abortSignal?.aborted) {
-            handleAbortOnce();
-            break;
-          }
-
-          const { done, value } = await reader.read();
-          if (done) {
-            streamCompleted = true;
-            break;
-          }
-
-          controller.enqueue(value);
-        }
-
-        controller.close();
-      } catch (error) {
-        if (abortSignal?.aborted) {
-          handleAbortOnce();
-          return;
-        }
-
-        controller.error(error);
-      } finally {
-        reader?.releaseLock();
-        reader = null;
-        if (abortSignal) {
-          abortSignal.removeEventListener("abort", abortHandler);
-        }
-      }
-    },
-    async cancel(reason) {
-      handleAbortOnce();
-      await reader?.cancel(reason);
-    },
-  });
-}
-
-/**
- * Compute total input tokens for affinity tracking without double counting cached tokens.
- *
- * OpenAI already reports cached tokens inside `promptTokens`. Anthropic should add cache tokens
- * only when `input_tokens` is greater than zero; otherwise the fallback `promptTokens` value already
- * equals the cache-token total. `rawInputTokens` lets us distinguish these cases precisely.
- */
-function computeAffinityTokens(
-  routeCapability: RouteCapability,
-  usage: {
-    promptTokens: number;
-    cacheReadTokens?: number;
-    cacheCreationTokens?: number;
-    rawInputTokens?: number;
-  }
-): number {
-  const prompt = usage.promptTokens || 0;
-
-  if (routeCapability !== "anthropic_messages" && routeCapability !== "claude_code_messages") {
-    return prompt;
-  }
-
-  const rawInput = usage.rawInputTokens ?? 0;
-  const cacheRead = usage.cacheReadTokens || 0;
-  const cacheCreation = usage.cacheCreationTokens || 0;
-
-  // rawInputTokens > 0: promptTokens is the raw input_tokens (excludes cache), add cache separately
-  // rawInputTokens === 0: promptTokens was already set to cacheRead + cacheCreation by fallback
-  if (rawInput > 0) {
-    return rawInput + cacheRead + cacheCreation;
-  }
-
-  return prompt;
-}
-
 /**
  * Request context extracted from incoming request
  */
@@ -902,16 +797,6 @@ function normalizeRequestedServiceTier(value: unknown): RequestedServiceTier | n
     return "fast";
   }
   return normalized === "default" ? "standard" : null;
-}
-
-function resolveEffectiveServiceTier(
-  requestedServiceTier: RequestedServiceTier | null,
-  confirmedServiceTier: RequestedServiceTier | null | undefined
-): EffectiveServiceTier | null {
-  if (confirmedServiceTier) {
-    return confirmedServiceTier;
-  }
-  return requestedServiceTier === "fast" ? "unknown" : null;
 }
 
 function normalizeReasoningEffort(value: unknown): ReasoningEffort | null {
@@ -1905,6 +1790,32 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
     persistBillingSnapshot: persistBillingSnapshotSafely,
     settlement: { response: null },
   };
+  const streamLifecycleContext: StreamLifecycleContext = {
+    request,
+    path,
+    requestId,
+    startTime,
+    apiKeyId: validApiKey.id,
+    apiKeyTpmLimit: validApiKey.tpmLimit,
+    apiKeySnapshot,
+    reasoningEffort,
+    requestedServiceTier,
+    thinkingConfig,
+    sessionId,
+    matchedRouteCapability,
+    inboundBody,
+    trafficRecordingSettings,
+    shouldRecordSuccess,
+    getCompensationHeaders: () => compensationHeaders,
+    getQueueStatePersistence: () => queueStatePersistence,
+    awaitRequestLogReady,
+    awaitRequestLogUpdate: () => requestLogRoutingUpdate,
+    getRequestLogId: () => requestLogId,
+    setRequestLogId: (value) => {
+      requestLogId = value;
+    },
+    persistBillingSnapshot: persistBillingSnapshotSafely,
+  };
   try {
     // Prepare affinity context if session ID is available
     const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
@@ -2113,482 +2024,23 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         log.error({ err: error, requestId }, "failed to update request log upstream");
       });
 
-    // Create response headers
-    const responseHeaders = new Headers(result.headers);
-
     if (result.isStream) {
-      // Streaming response
-      const originalStream = result.body as ReadableStream<Uint8Array>;
-      let recordingStream: ReadableStream<Uint8Array> | null = null;
-      let responseStream = originalStream;
-      let streamTerminalStateSettled = false;
-
-      if (shouldRecordSuccess && inboundBody) {
-        const [clientStream, recordStream] = teeStreamForRecording(originalStream);
-        recordingStream = recordStream;
-        responseStream = clientStream;
-      }
-      const metricsPromise =
-        result.streamMetricsPromise ??
-        Promise.resolve({
-          usage: result.usage ?? null,
-          effectiveServiceTier: result.effectiveServiceTier ?? null,
-          ttftMs: result.ttftMs,
-        });
-
-      // TPM accounting must follow the upstream metrics settlement, not the
-      // downstream response lifecycle. proxy-client keeps draining its logging
-      // tee after a client disconnects, so settled usage must still constrain
-      // later requests even when stream log settlement is skipped.
-      void metricsPromise
-        .then(({ usage }) => {
-          recordApiKeyTokenUsage(validApiKey.id, usage?.totalTokens ?? 0, validApiKey.tpmLimit);
-        })
-        .catch((error) =>
-          log.error(
-            { err: error, requestId },
-            "failed to record settled stream API key token usage"
-          )
-        );
-
-      const streamOutcomePromise = result.streamFailurePromise
-        ? Promise.race([
-            metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics })),
-            result.streamFailurePromise.then((failure) => ({
-              type: "failure" as const,
-              failure,
-            })),
-          ])
-        : metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics }));
-
-      const settleStreamingDisconnect = async () => {
-        if (streamTerminalStateSettled) {
-          return;
-        }
-        streamTerminalStateSettled = true;
-
-        const disconnectRoutingDecisionLog: RoutingDecisionLog = {
-          ...finalRoutingDecisionLog,
-          failure_stage: "downstream_streaming",
-        };
-        const disconnectStatusCode = getHttpStatusForError("CLIENT_DISCONNECTED");
-        const disconnectErrorMessage = "Client disconnected during downstream streaming";
-        const disconnectDurationMs = Date.now() - startTime;
-        const disconnectUsageForBilling = {
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-        };
-
-        await awaitRequestLogReady();
-        if (requestLogId) {
-          const updatedLog = await updateRequestLog(requestLogId, {
-            ...apiKeySnapshot,
-            upstreamId: upstreamForLogging.id,
-            model: resolvedModel,
-            requestedServiceTier,
-            effectiveServiceTier: null,
-            statusCode: disconnectStatusCode,
-            durationMs: disconnectDurationMs,
-            routingDurationMs,
-            errorMessage: disconnectErrorMessage,
-            routingType: routingDecision.routingType,
-            priorityTier: routingDecision.priorityTier,
-            failoverAttempts: routingDecision.failoverAttempts,
-            failoverHistory:
-              routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-            routingDecision: disconnectRoutingDecisionLog,
-            thinkingConfig,
-            affinityHit: isAffinityHit,
-            affinityMigrated: isAffinityMigrated,
-            isStream: true,
-            sessionIdCompensated,
-            headerDiff,
-          });
-
-          await persistBillingSnapshotSafely({
-            requestLogId: updatedLog?.id ?? requestLogId,
-            apiKeyId: validApiKey.id,
-            upstreamId: upstreamForLogging.id,
-            model: resolvedModel,
-            requestedServiceTier,
-            effectiveServiceTier: null,
-            usage: disconnectUsageForBilling,
-            requestId,
-          });
-          return;
-        }
-
-        const createdLog = await logRequest({
-          apiKeyId: validApiKey.id,
-          ...apiKeySnapshot,
-          upstreamId: upstreamForLogging.id,
-          method: request.method,
-          path,
-          model: resolvedModel,
-          requestedServiceTier,
-          effectiveServiceTier: null,
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          statusCode: disconnectStatusCode,
-          durationMs: disconnectDurationMs,
-          routingDurationMs,
-          errorMessage: disconnectErrorMessage,
-          routingType: routingDecision.routingType,
-          priorityTier: routingDecision.priorityTier,
-          failoverAttempts: routingDecision.failoverAttempts,
-          failoverHistory:
-            routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-          routingDecision: disconnectRoutingDecisionLog,
-          thinkingConfig,
-          sessionId,
-          affinityHit: isAffinityHit,
-          affinityMigrated: isAffinityMigrated,
-          isStream: true,
-          sessionIdCompensated,
-          headerDiff,
-        });
-
-        await persistBillingSnapshotSafely({
-          requestLogId: createdLog.id,
-          apiKeyId: validApiKey.id,
-          upstreamId: upstreamForLogging.id,
-          model: resolvedModel,
-          requestedServiceTier,
-          effectiveServiceTier: null,
-          usage: disconnectUsageForBilling,
-          requestId,
-        });
+      const streamLifecycleTerminal: StreamLifecycleTerminal = {
+        result,
+        upstream: upstreamForLogging,
+        resolvedModel,
+        routingType: routingDecision.routingType,
+        priorityTier: routingDecision.priorityTier,
+        failoverHistory: routingDecision.failoverHistory,
+        routingDecision: finalRoutingDecisionLog,
+        finalSelectionReason,
+        affinityHit: isAffinityHit,
+        affinityMigrated: isAffinityMigrated,
+        sessionIdCompensated,
+        headerDiff,
+        routingDurationMs,
       };
-
-      const settleStreamingFailure = async (failure: StreamRuntimeFailureSettlement) => {
-        if (streamTerminalStateSettled) {
-          return;
-        }
-        streamTerminalStateSettled = true;
-
-        const failureRoutingDecisionLog: RoutingDecisionLog = {
-          ...finalRoutingDecisionLog,
-          failure_stage: "downstream_streaming",
-        };
-        const failureDurationMs = Date.now() - startTime;
-        const failureAttempt: FailoverAttempt = {
-          upstream_id: upstreamForLogging.id,
-          upstream_name: upstreamForLogging.name,
-          upstream_provider_type: resolveUpstreamProvider(
-            upstreamForLogging,
-            matchedRouteCapability
-          ),
-          upstream_base_url: upstreamForLogging.baseUrl,
-          attempted_at: failure.occurredAt,
-          error_type: failure.errorType,
-          error_message: failure.errorMessage,
-          status_code: null,
-          selection_reason: finalSelectionReason,
-          header_diff: headerDiff,
-          circuit_breaker_recorded: failure.circuitBreakerRecorded,
-          matched_failure_rule: failure.matchedFailureRule,
-        };
-        const failureHistory = [...routingDecision.failoverHistory, failureAttempt];
-        const failureUsageForBilling = {
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-        };
-
-        await awaitRequestLogReady();
-        if (requestLogId) {
-          const updatedLog = await updateRequestLog(requestLogId, {
-            ...apiKeySnapshot,
-            upstreamId: upstreamForLogging.id,
-            model: resolvedModel,
-            requestedServiceTier,
-            effectiveServiceTier: null,
-            statusCode: failure.statusCode,
-            durationMs: failureDurationMs,
-            routingDurationMs,
-            errorMessage: failure.errorMessage,
-            routingType: routingDecision.routingType,
-            priorityTier: routingDecision.priorityTier,
-            failoverAttempts: failureHistory.length,
-            failoverHistory: failureHistory,
-            routingDecision: failureRoutingDecisionLog,
-            thinkingConfig,
-            affinityHit: isAffinityHit,
-            affinityMigrated: isAffinityMigrated,
-            isStream: true,
-            sessionIdCompensated,
-            headerDiff,
-          });
-
-          await persistBillingSnapshotSafely({
-            requestLogId: updatedLog?.id ?? requestLogId,
-            apiKeyId: validApiKey.id,
-            upstreamId: upstreamForLogging.id,
-            model: resolvedModel,
-            requestedServiceTier,
-            effectiveServiceTier: null,
-            usage: failureUsageForBilling,
-            requestId,
-          });
-          return;
-        }
-
-        const createdLog = await logRequest({
-          apiKeyId: validApiKey.id,
-          ...apiKeySnapshot,
-          upstreamId: upstreamForLogging.id,
-          method: request.method,
-          path,
-          model: resolvedModel,
-          requestedServiceTier,
-          effectiveServiceTier: null,
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          statusCode: failure.statusCode,
-          durationMs: failureDurationMs,
-          routingDurationMs,
-          errorMessage: failure.errorMessage,
-          routingType: routingDecision.routingType,
-          priorityTier: routingDecision.priorityTier,
-          failoverAttempts: failureHistory.length,
-          failoverHistory: failureHistory,
-          routingDecision: failureRoutingDecisionLog,
-          thinkingConfig,
-          sessionId,
-          affinityHit: isAffinityHit,
-          affinityMigrated: isAffinityMigrated,
-          isStream: true,
-          sessionIdCompensated,
-          headerDiff,
-        });
-
-        await persistBillingSnapshotSafely({
-          requestLogId: createdLog.id,
-          apiKeyId: validApiKey.id,
-          upstreamId: upstreamForLogging.id,
-          model: resolvedModel,
-          requestedServiceTier,
-          effectiveServiceTier: null,
-          usage: failureUsageForBilling,
-          requestId,
-        });
-      };
-
-      void streamOutcomePromise
-        .then(async (outcome) => {
-          if (outcome.type === "failure") {
-            await settleStreamingFailure(outcome.failure);
-            return;
-          }
-
-          if (streamTerminalStateSettled || request.signal.aborted) {
-            return;
-          }
-          const { usage, ttftMs } = outcome.metrics;
-          const effectiveServiceTier = resolveEffectiveServiceTier(
-            requestedServiceTier,
-            outcome.metrics.effectiveServiceTier ?? result.effectiveServiceTier
-          );
-
-          // Update session affinity cumulative tokens if we have a session
-          if (affinityContext?.sessionId && usage) {
-            const affinityUsage: AffinityUsage = {
-              totalInputTokens: computeAffinityTokens(matchedRouteCapability, usage),
-            };
-            affinityStore.updateCumulativeTokens(
-              affinityContext.apiKeyId,
-              matchedRouteCapability,
-              affinityContext.sessionId,
-              affinityUsage
-            );
-            log.debug(
-              {
-                requestId,
-                sessionId: affinityContext.sessionId,
-                upstreamId: upstreamForLogging.id,
-                tokens: affinityUsage,
-              },
-              "session affinity: updated cumulative tokens"
-            );
-          }
-
-          const usageForBilling = {
-            promptTokens: usage?.promptTokens || 0,
-            completionTokens: usage?.completionTokens || 0,
-            totalTokens: usage?.totalTokens || 0,
-            cacheReadTokens: usage?.cacheReadTokens || 0,
-            cacheWriteTokens: usage?.cacheCreationTokens || 0,
-          };
-
-          await awaitRequestLogReady();
-          let persistedLogId: string | null = requestLogId;
-          if (requestLogId) {
-            const updatedLog = await updateRequestLog(requestLogId, {
-              ...apiKeySnapshot,
-              upstreamId: upstreamForLogging.id,
-              model: resolvedModel,
-              reasoningEffort,
-              requestedServiceTier,
-              effectiveServiceTier,
-              promptTokens: usageForBilling.promptTokens,
-              completionTokens: usageForBilling.completionTokens,
-              totalTokens: usageForBilling.totalTokens,
-              cachedTokens: usage?.cachedTokens || 0,
-              reasoningTokens: usage?.reasoningTokens || 0,
-              cacheCreationTokens: usage?.cacheCreationTokens || 0,
-              cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
-              cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
-              cacheReadTokens: usage?.cacheReadTokens || 0,
-              statusCode: result.statusCode,
-              durationMs: Date.now() - startTime,
-              routingDurationMs,
-              errorMessage: null,
-              routingType: routingDecision.routingType,
-              priorityTier: routingDecision.priorityTier,
-              failoverAttempts: routingDecision.failoverAttempts,
-              failoverHistory:
-                routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-              routingDecision: finalRoutingDecisionLog,
-              thinkingConfig,
-              affinityHit: isAffinityHit,
-              affinityMigrated: isAffinityMigrated,
-              ttftMs: ttftMs ?? null,
-              isStream: true,
-              sessionIdCompensated,
-              headerDiff,
-            });
-            persistedLogId = updatedLog?.id ?? requestLogId;
-          } else {
-            const createdLog = await logRequest({
-              apiKeyId: validApiKey.id,
-              ...apiKeySnapshot,
-              upstreamId: upstreamForLogging.id,
-              method: request.method,
-              path,
-              model: resolvedModel,
-              reasoningEffort,
-              requestedServiceTier,
-              effectiveServiceTier,
-              promptTokens: usageForBilling.promptTokens,
-              completionTokens: usageForBilling.completionTokens,
-              totalTokens: usageForBilling.totalTokens,
-              cachedTokens: usage?.cachedTokens || 0,
-              reasoningTokens: usage?.reasoningTokens || 0,
-              cacheCreationTokens: usage?.cacheCreationTokens || 0,
-              cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
-              cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
-              cacheReadTokens: usage?.cacheReadTokens || 0,
-              statusCode: result.statusCode,
-              durationMs: Date.now() - startTime,
-              routingDurationMs,
-              routingType: routingDecision.routingType,
-              priorityTier: routingDecision.priorityTier,
-              failoverAttempts: routingDecision.failoverAttempts,
-              failoverHistory:
-                routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-              routingDecision: finalRoutingDecisionLog,
-              thinkingConfig,
-              sessionId,
-              affinityHit: isAffinityHit,
-              affinityMigrated: isAffinityMigrated,
-              ttftMs: ttftMs ?? null,
-              isStream: true,
-              sessionIdCompensated,
-              headerDiff,
-            });
-            persistedLogId = createdLog.id;
-          }
-
-          if (persistedLogId) {
-            await persistBillingSnapshotSafely({
-              requestLogId: persistedLogId,
-              apiKeyId: validApiKey.id,
-              upstreamId: upstreamForLogging.id,
-              model: resolvedModel,
-              requestedServiceTier,
-              effectiveServiceTier,
-              usage: usageForBilling,
-              requestId,
-            });
-          }
-        })
-        .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
-
-      responseStream = wrapStreamWithDownstreamSettlement(responseStream, request.signal, () => {
-        void settleStreamingDisconnect().catch((error) =>
-          log.error({ err: error, requestId }, "failed to settle downstream streaming disconnect")
-        );
-      });
-
-      // Set streaming headers
-      responseHeaders.set("Content-Type", "text/event-stream");
-      responseHeaders.set("Cache-Control", "no-cache");
-      responseHeaders.set("Connection", "keep-alive");
-
-      if (shouldRecordSuccess && inboundBody && recordingStream) {
-        const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
-        const outboundHeadersBase = filterHeaders(new Headers(request.headers)).filtered;
-        applyCompensationHeaders(outboundHeadersBase, compensationHeaders);
-        const outboundHeaders = injectAuthHeader(outboundHeadersBase, upstreamForProxy);
-        void readStreamChunks(recordingStream)
-          .then(async (chunks) => {
-            const streamRequestLogId = await awaitRequestLogReady();
-            const fixture = buildFixture({
-              requestId,
-              startTime,
-              providerType: resolveUpstreamProvider(upstreamForLogging, matchedRouteCapability),
-              route: path,
-              model: resolvedModel,
-              inboundRequest: {
-                method: request.method,
-                path,
-                headers: request.headers,
-                bodyText: inboundBody.text,
-                bodyJson: inboundBody.json,
-              },
-              upstream: {
-                id: upstreamForLogging.id,
-                name: upstreamForLogging.name,
-                providerType: resolveUpstreamProvider(upstreamForLogging, matchedRouteCapability),
-                baseUrl: upstreamForProxy.baseUrl,
-              },
-              outboundHeaders,
-              response: {
-                statusCode: result.statusCode,
-                headers: result.headers,
-                streamChunks: chunks,
-              },
-              outboundRequestSent: true,
-              outboundResponseSource: "upstream",
-              redactSensitive: trafficRecordingSettings.redactSensitive,
-            });
-            return recordTrafficFixture(fixture, {
-              requestLogId: streamRequestLogId,
-              apiKeyId: validApiKey.id,
-              upstreamId: upstreamForLogging.id,
-              method: request.method,
-              path,
-              model: resolvedModel,
-              statusCode: result.statusCode,
-              outcome: "success",
-            });
-          })
-          .catch((error) =>
-            log.error({ err: error, requestId }, "failed to record stream fixture")
-          );
-      }
-
-      return new Response(responseStream, {
-        status: result.statusCode,
-        headers: responseHeaders,
-      });
+      return createStreamResponse(streamLifecycleContext, streamLifecycleTerminal);
     } else {
       const bodyBytes = result.body as Uint8Array;
 

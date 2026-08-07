@@ -194,6 +194,8 @@ export interface ProxyResult {
   usage?: TokenUsage;
   effectiveServiceTier?: RequestedServiceTier;
   streamMetricsPromise?: Promise<StreamMetrics>;
+  cancelStream?: (reason?: string) => void;
+  streamCancellationSignal?: AbortSignal;
   ttftMs?: number;
   headerDiff?: HeaderDiff;
 }
@@ -941,8 +943,7 @@ export function createSSETransformer(
   });
 }
 
-async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
-  const reader = stream.getReader();
+async function drainStreamReader(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
   try {
     while (true) {
       const { done } = await reader.read();
@@ -1236,7 +1237,12 @@ export async function forwardRequest(
 
   // Abort the upstream fetch when either its timeout or the downstream request ends.
   const controller = new AbortController();
-  const fetchSignal = AbortSignal.any([request.signal, controller.signal]);
+  const streamCancellationController = new AbortController();
+  const fetchSignal = AbortSignal.any([
+    request.signal,
+    controller.signal,
+    streamCancellationController.signal,
+  ]);
   let timeoutTriggered = false;
   const timeoutId = setTimeout(() => {
     timeoutTriggered = true;
@@ -1334,9 +1340,10 @@ export async function forwardRequest(
       );
 
       const [clientStream, loggingStream] = transformedStream.tee();
+      const loggingReader = loggingStream.getReader();
       const streamMetricsPromise = (async (): Promise<StreamMetrics> => {
         try {
-          await drainStream(loggingStream);
+          await drainStreamReader(loggingReader);
         } catch {
           // Ignore stream consumption errors
         } finally {
@@ -1366,6 +1373,11 @@ export async function forwardRequest(
         usage,
         effectiveServiceTier,
         streamMetricsPromise,
+        cancelStream: (reason) => {
+          streamCancellationController.abort(reason);
+          void loggingReader.cancel(reason).catch(() => undefined);
+        },
+        streamCancellationSignal: streamCancellationController.signal,
         headerDiff: requestHeaderDiff,
       };
     } else {

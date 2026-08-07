@@ -1179,6 +1179,11 @@ export async function forwardWithFailover(
         const originalStream = result.body as ReadableStream<Uint8Array>;
         const upstreamStreamFailurePromise = (result as ProxyResultWithStreamFailure)
           .streamFailurePromise;
+        const streamCancellationSignal = (result as ProxyResultWithStreamFailure)
+          .streamCancellationSignal;
+        const streamAbortSignal = streamCancellationSignal
+          ? AbortSignal.any([request.signal, streamCancellationSignal])
+          : request.signal;
         let resolveStreamFailure!: (settlement: StreamRuntimeFailureSettlement) => void;
         const trackedStreamFailurePromise = new Promise<StreamRuntimeFailureSettlement>(
           (resolve) => {
@@ -1192,7 +1197,7 @@ export async function forwardWithFailover(
           originalStream,
           selectedUpstream.id,
           releaseSelectedConnectionOnce,
-          request.signal,
+          streamAbortSignal,
           upstreamForProxy.streamIdleTimeout,
           async ({ errorType, errorMessage }) => {
             let settlement: StreamRuntimeFailureSettlement;

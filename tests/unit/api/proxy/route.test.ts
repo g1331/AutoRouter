@@ -6983,6 +6983,11 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream");
 
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    while (!(await reader!.read()).done) {
+      // Drain the downstream response to trigger normal terminal settlement.
+    }
     await Promise.resolve();
     await Promise.resolve();
 
