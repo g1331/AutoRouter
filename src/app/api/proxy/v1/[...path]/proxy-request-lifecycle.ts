@@ -8,6 +8,7 @@ import {
   filterHeaders,
   injectAuthHeader,
   applyCompensationHeaders,
+  type CompensationHeader,
 } from "@/lib/services/proxy-client";
 import {
   logRequest,
@@ -95,6 +96,12 @@ import {
   type ProxyResultWithStreamFailure,
   type StreamRuntimeFailureSettlement,
 } from "./proxy-execution";
+import {
+  settleNonStreamRequest,
+  type NonStreamFailureTerminal,
+  type NonStreamLifecycleContext,
+  type NonStreamProxyResult,
+} from "./proxy-non-stream-lifecycle";
 import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 import {
@@ -300,7 +307,7 @@ async function logApiKeyQuotaRejectedRequest(input: {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
   requestedServiceTier: RequestedServiceTier | null;
-  thinkingConfig: import("@/types/api").RequestThinkingConfig | null;
+  thinkingConfig: RequestThinkingConfig | null;
   requestId: string;
   startTime: number;
   sessionId: string | null;
@@ -353,7 +360,7 @@ async function logApiKeyAdmissionRejectedRequest(input: {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
   requestedServiceTier: RequestedServiceTier | null;
-  thinkingConfig: import("@/types/api").RequestThinkingConfig | null;
+  thinkingConfig: RequestThinkingConfig | null;
   requestId: string;
   startTime: number;
   sessionId: string | null;
@@ -1760,6 +1767,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
   let failoverHistory: FailoverAttempt[] = [];
   let requestLogId: string | null = null;
   let requestLogReady: Promise<string | null> = Promise.resolve(null);
+  let requestLogRoutingUpdate: Promise<void> = Promise.resolve();
   let queueStatePersistence: Promise<void> = Promise.resolve();
   let isAffinityHit = false;
   let isAffinityMigrated = false;
@@ -1869,7 +1877,34 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
   };
 
   // Forward request to upstream
-  let compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[] = [];
+  let compensationHeaders: CompensationHeader[] = [];
+  const nonStreamLifecycleContext: NonStreamLifecycleContext = {
+    request,
+    path,
+    requestId,
+    startTime,
+    apiKeyId: validApiKey.id,
+    apiKeySnapshot,
+    reasoningEffort,
+    requestedServiceTier,
+    thinkingConfig,
+    sessionId,
+    matchedRouteCapability,
+    inboundBody,
+    trafficRecordingSettings,
+    shouldRecordSuccess,
+    shouldRecordFailure,
+    getCompensationHeaders: () => compensationHeaders,
+    getQueueStatePersistence: () => queueStatePersistence,
+    awaitRequestLogReady,
+    awaitRequestLogUpdate: () => requestLogRoutingUpdate,
+    getRequestLogId: () => requestLogId,
+    setRequestLogId: (value) => {
+      requestLogId = value;
+    },
+    persistBillingSnapshot: persistBillingSnapshotSafely,
+    settlement: { response: null },
+  };
   try {
     // Prepare affinity context if session ID is available
     const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
@@ -2057,9 +2092,8 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         queue: withQueueStreamFlag(queueLifecycle, result.isStream),
       }
     );
-
-    // Complete the start log asynchronously without delaying response handling.
-    void Promise.all([requestLogReady, queueStatePersistence])
+    // Complete the start log before terminal settlement can overwrite it.
+    requestLogRoutingUpdate = Promise.all([requestLogReady, queueStatePersistence])
       .then(([readyLogId]) => {
         const currentLogId = requestLogId ?? readyLogId;
         if (!currentLogId) {
@@ -2074,9 +2108,10 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
           thinkingConfig,
         });
       })
-      .catch((error) =>
-        log.error({ err: error, requestId }, "failed to update request log upstream")
-      );
+      .then(() => undefined)
+      .catch((error) => {
+        log.error({ err: error, requestId }, "failed to update request log upstream");
+      });
 
     // Create response headers
     const responseHeaders = new Headers(result.headers);
@@ -2555,9 +2590,7 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
         headers: responseHeaders,
       });
     } else {
-      // Regular response
       const bodyBytes = result.body as Uint8Array;
-      const durationMs = Date.now() - startTime;
 
       // Try to extract usage from response
       let usage = result.usage;
@@ -2611,159 +2644,27 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       // TPM likewise applies to the next request rather than this response.
       recordApiKeyTokenUsage(validApiKey.id, usageForBilling.totalTokens, validApiKey.tpmLimit);
 
-      // Log request
-      await queueStatePersistence;
-      await awaitRequestLogReady();
-      let persistedLogId: string | null = requestLogId;
-      if (requestLogId) {
-        const updatedLog = await updateRequestLog(requestLogId, {
-          ...apiKeySnapshot,
-          upstreamId: upstreamForLogging.id,
-          model: resolvedModel,
-          reasoningEffort,
-          requestedServiceTier,
-          effectiveServiceTier,
-          promptTokens: usageForBilling.promptTokens,
-          completionTokens: usageForBilling.completionTokens,
-          totalTokens: usageForBilling.totalTokens,
-          cachedTokens: usage?.cachedTokens || 0,
-          reasoningTokens: usage?.reasoningTokens || 0,
-          cacheCreationTokens: usage?.cacheCreationTokens || 0,
-          cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
-          cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
-          cacheReadTokens: usage?.cacheReadTokens || 0,
-          statusCode: result.statusCode,
-          durationMs,
-          routingDurationMs,
-          errorMessage: null,
-          routingType: routingDecision.routingType,
-          priorityTier: routingDecision.priorityTier,
-          failoverAttempts: routingDecision.failoverAttempts,
-          failoverHistory:
-            routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-          routingDecision: finalRoutingDecisionLog,
-          thinkingConfig,
-          affinityHit: isAffinityHit,
-          affinityMigrated: isAffinityMigrated,
-          isStream: false,
-          sessionIdCompensated,
-          headerDiff,
-        });
-        persistedLogId = updatedLog?.id ?? requestLogId;
-      } else {
-        const createdLog = await logRequest({
-          apiKeyId: validApiKey.id,
-          ...apiKeySnapshot,
-          upstreamId: upstreamForLogging.id,
-          method: request.method,
-          path,
-          model: resolvedModel,
-          reasoningEffort,
-          requestedServiceTier,
-          effectiveServiceTier,
-          promptTokens: usageForBilling.promptTokens,
-          completionTokens: usageForBilling.completionTokens,
-          totalTokens: usageForBilling.totalTokens,
-          cachedTokens: usage?.cachedTokens || 0,
-          reasoningTokens: usage?.reasoningTokens || 0,
-          cacheCreationTokens: usage?.cacheCreationTokens || 0,
-          cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
-          cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
-          cacheReadTokens: usage?.cacheReadTokens || 0,
-          statusCode: result.statusCode,
-          durationMs,
-          routingDurationMs,
-          routingType: routingDecision.routingType,
-          priorityTier: routingDecision.priorityTier,
-          failoverAttempts: routingDecision.failoverAttempts,
-          failoverHistory:
-            routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-          routingDecision: finalRoutingDecisionLog,
-          thinkingConfig,
-          sessionId,
-          affinityHit: isAffinityHit,
-          affinityMigrated: isAffinityMigrated,
-          isStream: false,
-          sessionIdCompensated,
-          headerDiff,
-        });
-        persistedLogId = createdLog.id;
-      }
-
-      if (persistedLogId) {
-        await persistBillingSnapshotSafely({
-          requestLogId: persistedLogId,
-          apiKeyId: validApiKey.id,
-          upstreamId: upstreamForLogging.id,
-          model: resolvedModel,
-          requestedServiceTier,
-          effectiveServiceTier,
-          usage: usageForBilling,
-          requestId,
-        });
-      }
-
-      if (shouldRecordSuccess && inboundBody) {
-        const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
-        const outboundHeadersBase = filterHeaders(new Headers(request.headers)).filtered;
-        applyCompensationHeaders(outboundHeadersBase, compensationHeaders);
-        const outboundHeaders = injectAuthHeader(outboundHeadersBase, upstreamForProxy);
-        const responseText = bodyBytes.length > 0 ? new TextDecoder().decode(bodyBytes) : null;
-        let responseJson: unknown | null = null;
-        if (responseText) {
-          try {
-            responseJson = JSON.parse(responseText);
-          } catch {
-            responseJson = null;
-          }
-        }
-
-        const fixture = buildFixture({
-          requestId,
-          startTime,
-          providerType: resolveUpstreamProvider(upstreamForLogging, matchedRouteCapability),
-          route: path,
-          model: resolvedModel,
-          inboundRequest: {
-            method: request.method,
-            path,
-            headers: request.headers,
-            bodyText: inboundBody.text,
-            bodyJson: inboundBody.json,
-          },
-          upstream: {
-            id: upstreamForLogging.id,
-            name: upstreamForLogging.name,
-            providerType: resolveUpstreamProvider(upstreamForLogging, matchedRouteCapability),
-            baseUrl: upstreamForProxy.baseUrl,
-          },
-          outboundHeaders,
-          response: {
-            statusCode: result.statusCode,
-            headers: result.headers,
-            bodyText: responseText,
-            bodyJson: responseJson,
-          },
-          outboundRequestSent: true,
-          outboundResponseSource: "upstream",
-          redactSensitive: trafficRecordingSettings.redactSensitive,
-        });
-
-        void recordTrafficFixture(fixture, {
-          requestLogId: persistedLogId,
-          apiKeyId: validApiKey.id,
-          upstreamId: upstreamForLogging.id,
-          method: request.method,
-          path,
-          model: resolvedModel,
-          statusCode: result.statusCode,
-          outcome: "success",
-        }).catch((error) => log.error({ err: error, requestId }, "failed to record fixture"));
-      }
-
-      return new Response(Buffer.from(bodyBytes), {
-        status: result.statusCode,
-        headers: responseHeaders,
+      const nonStreamResult: NonStreamProxyResult = {
+        ...result,
+        body: bodyBytes,
+        isStream: false,
+      };
+      return settleNonStreamRequest(nonStreamLifecycleContext, {
+        outcome: "success",
+        result: nonStreamResult,
+        upstream: upstreamForLogging,
+        resolvedModel,
+        effectiveServiceTier,
+        usage: usage ?? null,
+        routingType: routingDecision.routingType,
+        priorityTier: routingDecision.priorityTier,
+        failoverHistory: routingDecision.failoverHistory,
+        routingDecision: finalRoutingDecisionLog,
+        affinityHit: isAffinityHit,
+        affinityMigrated: isAffinityMigrated,
+        sessionIdCompensated,
+        headerDiff,
+        routingDurationMs,
       });
     }
   } catch (error) {
@@ -2841,7 +2742,9 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
       : null;
 
     const errorStatusCode = getHttpStatusForError(errorCode);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      attributionFailoverAttempt?.error_message ??
+      (error instanceof Error ? error.message : "Unknown error");
     const failureHeaderDiff =
       attributionFailoverAttempt?.header_diff ??
       (error as FailoverErrorWithHistory | null)?.headerDiff ??
@@ -2959,6 +2862,127 @@ export async function handleProxy(request: NextRequest, context: RouteContext): 
           },
         });
       }
+    }
+
+    if (!requestedStream) {
+      const failureResponse = createUnifiedErrorResponse(errorCode, errorDetails);
+      let failureFixture: NonStreamFailureTerminal["fixture"];
+      if (shouldRecordFailure && inboundBody && didSendUpstream) {
+        const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers)).filtered;
+        applyCompensationHeaders(fallbackOutboundHeaders, compensationHeaders);
+        const fallbackProviderType =
+          selectedCandidate != null
+            ? resolveUpstreamProvider(selectedCandidate, matchedRouteCapability)
+            : getProviderByRouteCapability(matchedRouteCapability);
+        const fallbackUpstream = {
+          id: selectedCandidate?.id ?? "unknown",
+          name: selectedCandidate?.name ?? "unknown",
+          providerType: fallbackProviderType,
+          baseUrl: selectedCandidate?.baseUrl ?? "unknown",
+        };
+        let outboundHeaders: Headers | Record<string, string> = fallbackOutboundHeaders;
+        let upstreamForFixture = fallbackUpstream;
+
+        if (attributionFailoverAttempt?.upstream_id) {
+          const attemptProvider =
+            attributionFailoverAttempt.upstream_provider_type === "openai" ||
+            attributionFailoverAttempt.upstream_provider_type === "anthropic" ||
+            attributionFailoverAttempt.upstream_provider_type === "google"
+              ? attributionFailoverAttempt.upstream_provider_type
+              : fallbackProviderType;
+          upstreamForFixture = {
+            id: attributionFailoverAttempt.upstream_id,
+            name: attributionFailoverAttempt.upstream_name,
+            providerType: attemptProvider,
+            baseUrl:
+              attributionFailoverAttempt.upstream_base_url ??
+              selectedCandidate?.baseUrl ??
+              "unknown",
+          };
+
+          try {
+            const attemptedUpstream = await db.query.upstreams.findFirst({
+              where: eq(upstreams.id, attributionFailoverAttempt.upstream_id),
+            });
+            if (attemptedUpstream) {
+              const attemptedUpstreamForProxy = prepareUpstreamForProxy(attemptedUpstream);
+              outboundHeaders = injectAuthHeader(
+                fallbackOutboundHeaders,
+                attemptedUpstreamForProxy
+              );
+              upstreamForFixture = {
+                id: attemptedUpstream.id,
+                name: attemptedUpstream.name,
+                providerType: resolveUpstreamProvider(attemptedUpstream, matchedRouteCapability),
+                baseUrl: attemptedUpstreamForProxy.baseUrl,
+              };
+            }
+          } catch (recorderBuildError) {
+            log.warn(
+              { err: recorderBuildError, requestId },
+              "failed to resolve attempted upstream for non-stream failure fixture"
+            );
+          }
+        } else if (selectedCandidate) {
+          try {
+            const upstreamForProxy = prepareUpstreamForProxy(selectedCandidate);
+            outboundHeaders = injectAuthHeader(fallbackOutboundHeaders, upstreamForProxy);
+            upstreamForFixture = {
+              id: selectedCandidate.id,
+              name: selectedCandidate.name,
+              providerType: resolveUpstreamProvider(selectedCandidate, matchedRouteCapability),
+              baseUrl: upstreamForProxy.baseUrl,
+            };
+          } catch (recorderBuildError) {
+            log.warn(
+              { err: recorderBuildError, requestId },
+              "failed to build upstream auth headers for non-stream failure fixture"
+            );
+          }
+        }
+
+        failureFixture = {
+          providerType: fallbackProviderType,
+          responseSource: attributionFailoverAttempt?.status_code != null ? "upstream" : "gateway",
+          upstream: upstreamForFixture,
+          outboundHeaders,
+          response: {
+            statusCode: attributionFailoverAttempt?.status_code ?? errorStatusCode,
+            headers: attributionFailoverAttempt?.response_headers ?? {},
+            bodyJson: attributionFailoverAttempt?.response_body_json ?? null,
+            bodyText:
+              attributionFailoverAttempt?.response_body_json == null
+                ? (attributionFailoverAttempt?.response_body_text ?? null)
+                : null,
+          },
+          downstreamBody: downstreamErrorBody,
+        };
+      }
+
+      if (error instanceof ClientDisconnectedError) {
+        log.warn({ requestId }, "client disconnected, no response sent");
+      }
+      if (errorCode === "SERVICE_UNAVAILABLE") {
+        log.error({ err: error, requestId }, "proxy error");
+      }
+
+      return settleNonStreamRequest(nonStreamLifecycleContext, {
+        outcome: "failure",
+        response: failureResponse,
+        errorStatusCode,
+        errorMessage,
+        actualUpstreamId,
+        resolvedModel,
+        didSendUpstream,
+        failoverHistory,
+        routingDecision: failureRoutingDecisionLog,
+        routingType,
+        priorityTier,
+        routingDurationMs,
+        sessionIdCompensated,
+        headerDiff: failureHeaderDiff,
+        ...(failureFixture ? { fixture: failureFixture } : {}),
+      });
     }
 
     if (shouldRecordFailure && inboundBody && didSendUpstream) {
