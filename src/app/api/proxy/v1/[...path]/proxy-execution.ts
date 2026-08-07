@@ -139,6 +139,7 @@ function attachFailoverContext<T extends Error>(
   return enrichedError;
 }
 
+/** Add the streaming flag to a queued request log entry. */
 export function withQueueStreamFlag(
   queue: RoutingQueueLog | null | undefined,
   isStream: boolean
@@ -220,6 +221,7 @@ function isFailoverableError(error: unknown): boolean {
   return false;
 }
 
+/** Determine whether an error means no authorized upstreams are available. */
 export function isNoAuthorizedUpstreamsError(error: unknown): boolean {
   if (error instanceof NoAuthorizedUpstreamsError) {
     return true;
@@ -240,10 +242,12 @@ function isAllCandidatesConcurrencyFullError(error: unknown): boolean {
   return error.message.toLowerCase().includes("max concurrency");
 }
 
+/** Check whether an error represents a queue wait timeout. */
 export function isQueueWaitTimeoutError(error: unknown): error is UpstreamQueueWaitTimeoutError {
   return error instanceof UpstreamQueueWaitTimeoutError;
 }
 
+/** Check whether an error represents an aborted queue wait. */
 export function isQueueWaitAbortedError(error: unknown): error is UpstreamQueueWaitAbortedError {
   return error instanceof UpstreamQueueWaitAbortedError;
 }
@@ -259,6 +263,7 @@ function isDownstreamStreamingError(error: unknown): boolean {
   return hasStreamToken && hasDownstreamContext;
 }
 
+/** Classify the stage where a proxy request failure occurred. */
 export function resolveFailureStage(
   error: unknown,
   didSendUpstream: boolean,
@@ -293,6 +298,7 @@ export function resolveFailureStage(
   return "upstream_request";
 }
 
+/** Map a proxy request failure to its unified error reason. */
 export function resolveFailureReason(
   error: unknown,
   didSendUpstream: boolean,
@@ -328,6 +334,7 @@ export function resolveFailureReason(
   return "UPSTREAM_NETWORK_ERROR";
 }
 
+/** Extract candidates excluded because their circuit breakers are open. */
 export function getCircuitBlockedCandidates(error: unknown): CircuitBlockedCandidate[] {
   if (error instanceof NoHealthyUpstreamsError && error.circuitBlockedCandidates) {
     return error.circuitBlockedCandidates;
@@ -335,12 +342,14 @@ export function getCircuitBlockedCandidates(error: unknown): CircuitBlockedCandi
   return [];
 }
 
+/** Read whether a failover error dispatched a request upstream. */
 export function resolveDidSendUpstream(
   error: FailoverErrorWithHistory | null | undefined
 ): boolean {
   return error?.didSendUpstream === true;
 }
 
+/** Build a user-facing hint for a unified proxy error. */
 export function getUserHint(
   errorCode: UnifiedErrorCode,
   reason: UnifiedErrorReason,
@@ -401,6 +410,7 @@ export function getUserHint(
   return "请稍后重试，或联系管理员检查上游配置与健康状态";
 }
 
+/** Resolve the upstream provider for a route capability. */
 export function resolveUpstreamProvider(
   upstream: Pick<Upstream, "routeCapabilities"> | null | undefined,
   routeCapability: RouteCapability
@@ -743,6 +753,7 @@ export interface ProxyExecutionResult {
   queue: RoutingQueueLog | null;
 }
 
+/** Forward a request through the selected upstreams with failover handling. */
 export async function forwardWithFailover(
   input: ProxyExecutionInput
 ): Promise<ProxyExecutionResult> {
@@ -1179,6 +1190,11 @@ export async function forwardWithFailover(
         const originalStream = result.body as ReadableStream<Uint8Array>;
         const upstreamStreamFailurePromise = (result as ProxyResultWithStreamFailure)
           .streamFailurePromise;
+        const streamCancellationSignal = (result as ProxyResultWithStreamFailure)
+          .streamCancellationSignal;
+        const streamAbortSignal = streamCancellationSignal
+          ? AbortSignal.any([request.signal, streamCancellationSignal])
+          : request.signal;
         let resolveStreamFailure!: (settlement: StreamRuntimeFailureSettlement) => void;
         const trackedStreamFailurePromise = new Promise<StreamRuntimeFailureSettlement>(
           (resolve) => {
@@ -1192,7 +1208,7 @@ export async function forwardWithFailover(
           originalStream,
           selectedUpstream.id,
           releaseSelectedConnectionOnce,
-          request.signal,
+          streamAbortSignal,
           upstreamForProxy.streamIdleTimeout,
           async ({ errorType, errorMessage }) => {
             let settlement: StreamRuntimeFailureSettlement;

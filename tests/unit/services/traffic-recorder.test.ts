@@ -648,5 +648,23 @@ describe("traffic recorder", () => {
       expect(chunks[chunks.length - 1]).toBe("[RECORDING_TRUNCATED]");
       expect(cancelled).toBe(true);
     });
+    it("cancels the recording reader when the abort signal fires", async () => {
+      const abortController = new AbortController();
+      let cancelled = false;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("data: partial\n\n"));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+
+      const chunksPromise = readStreamChunks(stream, abortController.signal);
+      abortController.abort();
+
+      await expect(chunksPromise).resolves.toEqual(["data: partial\n\n"]);
+      expect(cancelled).toBe(true);
+    });
   });
 });

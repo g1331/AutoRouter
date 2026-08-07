@@ -277,14 +277,29 @@ export async function readRequestBody(request: Request): Promise<InboundBody> {
  * instead of raw TCP frame boundaries. Each returned string is a complete SSE event.
  * Stops recording, without throwing, if total bytes exceed `MAX_RECORDING_BYTES`.
  */
-export async function readStreamChunks(stream: ReadableStream<Uint8Array>): Promise<string[]> {
+export async function readStreamChunks(
+  stream: ReadableStream<Uint8Array>,
+  abortSignal?: AbortSignal
+): Promise<string[]> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   const events: string[] = [];
   let totalBytes = 0;
   let buffer = "";
+  const abortHandler = () => {
+    void reader.cancel("Stream recording cancelled").catch(() => undefined);
+  };
+
+  if (abortSignal) {
+    abortSignal.addEventListener("abort", abortHandler, { once: true });
+  }
 
   try {
+    if (abortSignal?.aborted) {
+      await reader.cancel("Stream recording cancelled");
+      return events;
+    }
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -316,6 +331,7 @@ export async function readStreamChunks(stream: ReadableStream<Uint8Array>): Prom
     }
   } finally {
     reader.releaseLock();
+    abortSignal?.removeEventListener("abort", abortHandler);
   }
   return events;
 }
