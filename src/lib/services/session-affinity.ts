@@ -5,7 +5,7 @@
  * and automatic cleanup for AI API Gateway prompt cache optimization.
  */
 
-import { createHash } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import type { RouteCapability } from "@/lib/route-capabilities";
 import type { AffinityBindingState } from "@/types/api";
 
@@ -52,6 +52,7 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
 const MAX_CACHE_ENTRIES = 10_000;
+const SESSION_AFFINITY_KEY = randomBytes(32);
 
 // ============================================================================
 // Session Affinity Store
@@ -78,7 +79,8 @@ export class SessionAffinityStore {
    */
   private generateKey(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): string {
     const data = `${apiKeyId}:${affinityScope}:${sessionId}`;
-    return createHash("sha256").update(data).digest("hex");
+    // lgtm[js/insufficient-password-hash] - HMAC derives an ephemeral cache key, not a password hash.
+    return createHmac("sha256", SESSION_AFFINITY_KEY).update(data).digest("hex");
   }
   private getValidEntry(key: string, now: number): AffinityEntry | null {
     const entry = this.cache.get(key);
