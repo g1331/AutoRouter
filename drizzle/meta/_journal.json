@@ -302,6 +302,13 @@
       "when": 1785740776688,
       "tag": "0042_unique_dust",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786193282980,
+      "tag": "0043_thin_silver_samurai",
+      "breakpoints": true
     }
   ]
 }

@@ -22,8 +22,16 @@ import {
   type InboundBody,
 } from "@/lib/services/traffic-recorder";
 import type { TrafficRecordingSettingsValue } from "@/lib/services/traffic-recording-service";
+import {
+  affinityStore,
+  commitAffinityBindingAfterSuccess,
+  computeAffinityTokens,
+  resolveAffinityFailureBindingState,
+  type AffinityBindingExpectation,
+} from "@/lib/services/session-affinity";
 import { resolveUpstreamProvider } from "./proxy-execution";
 import type {
+  AffinityBindingState,
   EffectiveServiceTier,
   ReasoningEffort,
   RequestedServiceTier,
@@ -61,6 +69,8 @@ export interface NonStreamLifecycleContext {
   thinkingConfig: RequestThinkingConfig | null;
   sessionId: string | null;
   matchedRouteCapability: RouteCapability;
+  contentLength: number;
+  affinityBindingExpectation: AffinityBindingExpectation | null;
   inboundBody: InboundBody | null;
   trafficRecordingSettings: Pick<TrafficRecordingSettingsValue, "redactSensitive">;
   shouldRecordSuccess: boolean;
@@ -163,7 +173,8 @@ function buildSuccessLogFields(
   context: NonStreamLifecycleContext,
   terminal: NonStreamSuccessTerminal,
   usageForBilling: NonStreamBillingUsage,
-  durationMs: number
+  durationMs: number,
+  affinityBindingState: AffinityBindingState | null
 ): NonStreamLogFields {
   const { result } = terminal;
   return {
@@ -196,6 +207,7 @@ function buildSuccessLogFields(
     sessionId: context.sessionId,
     affinityHit: terminal.affinityHit,
     affinityMigrated: terminal.affinityMigrated,
+    affinityBindingState,
     isStream: false,
     routingDurationMs: terminal.routingDurationMs,
     sessionIdCompensated: terminal.sessionIdCompensated,
@@ -231,6 +243,7 @@ function buildFailureLogFields(
     thinkingConfig: context.thinkingConfig,
     sessionId: context.sessionId,
     affinityHit: false,
+    affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
     affinityMigrated: false,
     isStream: false,
     statusCode: terminal.errorStatusCode,
@@ -330,7 +343,34 @@ async function settleNonStreamSuccess(
   const bodyBytes = terminal.result.body;
   const durationMs = Date.now() - context.startTime;
   const usageForBilling = toBillingUsage(terminal.usage);
-  const logFields = buildSuccessLogFields(context, terminal, usageForBilling, durationMs);
+  const affinityBindingState = commitAffinityBindingAfterSuccess({
+    apiKeyId: context.apiKeyId,
+    affinityScope: context.matchedRouteCapability,
+    sessionId: context.sessionId,
+    contentLength: context.contentLength,
+    expectation: context.affinityBindingExpectation,
+    selectedUpstreamId: terminal.upstream.id,
+    affinityMigrated: terminal.affinityMigrated,
+  });
+
+  if (context.sessionId && terminal.usage) {
+    affinityStore.updateCumulativeTokens(
+      context.apiKeyId,
+      context.matchedRouteCapability,
+      context.sessionId,
+      { totalInputTokens: computeAffinityTokens(context.matchedRouteCapability, terminal.usage) }
+    );
+  } else if (context.sessionId) {
+    affinityStore.touch(context.apiKeyId, context.matchedRouteCapability, context.sessionId);
+  }
+
+  const logFields = buildSuccessLogFields(
+    context,
+    terminal,
+    usageForBilling,
+    durationMs,
+    affinityBindingState
+  );
   const persistedLogId = await persistTerminalRequestLog(context, logFields);
 
   if (persistedLogId) {

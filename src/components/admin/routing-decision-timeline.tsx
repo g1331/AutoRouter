@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type {
+  AffinityBindingState,
   RoutingDecisionLog,
   RoutingCircuitState,
   FailoverAttempt,
@@ -39,6 +40,7 @@ interface RoutingDecisionTimelineProps {
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
+  affinityBindingState?: AffinityBindingState | null;
   sessionIdCompensated?: boolean;
   compact?: boolean;
   showStageConnector?: boolean;
@@ -119,6 +121,7 @@ export function RoutingDecisionTimeline({
   sessionId,
   affinityHit,
   affinityMigrated,
+  affinityBindingState,
   sessionIdCompensated,
   compact = true,
   showStageConnector = true,
@@ -266,6 +269,14 @@ export function RoutingDecisionTimeline({
                 <ArrowUpRight className="w-3 h-3 text-status-warning" />
               </span>
             )}
+            {affinityBindingState ? (
+              <span
+                className="max-w-[8rem] truncate rounded-cf-sm border border-status-info/30 bg-status-info/10 px-1 text-[10px] text-status-info"
+                title={`${t("timelineAffinityBindingState")}: ${t("affinityBindingState." + affinityBindingState)}`}
+              >
+                {t("affinityBindingState." + affinityBindingState)}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -330,6 +341,14 @@ export function RoutingDecisionTimeline({
                 </span>
               )}
             </div>
+            {affinityBindingState || statusCode == null ? (
+              <span className="flex items-center gap-1 text-status-info">
+                {t("timelineAffinityBindingState")}:{" "}
+                {affinityBindingState
+                  ? t("affinityBindingState." + affinityBindingState)
+                  : t("timelineAffinityPending")}
+              </span>
+            ) : null}
             <div className="flex items-center gap-2">
               {affinityHit && !affinityMigrated && (
                 <span className="text-status-success flex items-center gap-1">

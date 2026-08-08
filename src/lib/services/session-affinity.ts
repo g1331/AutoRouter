@@ -7,6 +7,7 @@
 
 import { createHash } from "crypto";
 import type { RouteCapability } from "@/lib/route-capabilities";
+import type { AffinityBindingState } from "@/types/api";
 
 // ============================================================================
 // Types
@@ -18,6 +19,7 @@ export interface AffinityEntry {
   createdAt: number; // For max TTL calculation (absolute lifetime)
   contentLength: number;
   cumulativeTokens: number;
+  bindingVersion: number;
 }
 
 export interface AffinityUsage {
@@ -31,6 +33,16 @@ export interface AffinityMigrationConfig {
 }
 
 export type AffinityScope = RouteCapability;
+
+export interface AffinityBindingExpectation {
+  initialUpstreamId: string | null;
+  initialBindingVersion: number | null;
+}
+
+export interface AffinityCommitResult {
+  committed: boolean;
+  current: AffinityEntry | null;
+}
 
 // ============================================================================
 // Configuration
@@ -50,6 +62,7 @@ const MAX_CACHE_ENTRIES = 10_000;
  */
 export class SessionAffinityStore {
   private cache = new Map<string, AffinityEntry>();
+  private nextBindingVersion = 0;
   private cleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(
@@ -64,41 +77,59 @@ export class SessionAffinityStore {
    * Generate cache key from API key ID, affinity scope, and session ID
    */
   private generateKey(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): string {
-    const data = `${apiKeyId}:${affinityScope}:${sessionId}`;
-    return createHash("sha256").update(data).digest("hex");
+    const sessionData = `${affinityScope}:${sessionId}`;
+    // Hash only session data; apiKeyId is an internal namespace, not password material.
+    const hashedSessionData = createHash("sha256").update(sessionData).digest("hex");
+    return `${apiKeyId}:${hashedSessionData}`;
+  }
+  private getValidEntry(key: string, now: number): AffinityEntry | null {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      return null;
+    }
+
+    const age = now - entry.lastAccessedAt;
+    const lifetime = now - entry.createdAt;
+    if (age > this.defaultTtlMs || lifetime > this.maxTtlMs) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry;
   }
 
   /**
    * Get affinity entry for a session
    */
   get(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): AffinityEntry | null {
-    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
-    const entry = this.cache.get(key);
-
+    const entry = this.peek(apiKeyId, affinityScope, sessionId);
     if (!entry) {
       return null;
     }
 
-    const now = Date.now();
-    const age = now - entry.lastAccessedAt;
-    const lifetime = now - entry.createdAt;
-
-    // Check if entry has expired (sliding window TTL)
-    if (age > this.defaultTtlMs) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    // Check max TTL limit (absolute lifetime, regardless of activity)
-    if (lifetime > this.maxTtlMs) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    // Refresh last accessed time (sliding window)
-    entry.lastAccessedAt = now;
-
+    entry.lastAccessedAt = Date.now();
     return entry;
+  }
+
+  /**
+   * Read an affinity entry without refreshing its sliding TTL.
+   */
+  peek(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): AffinityEntry | null {
+    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
+    return this.getValidEntry(key, Date.now());
+  }
+
+  /**
+   * Refresh an existing affinity entry after a successful terminal response.
+   */
+  touch(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): boolean {
+    const entry = this.peek(apiKeyId, affinityScope, sessionId);
+    if (!entry) {
+      return false;
+    }
+
+    entry.lastAccessedAt = Date.now();
+    return true;
   }
 
   /**
@@ -113,23 +144,46 @@ export class SessionAffinityStore {
   ): void {
     const key = this.generateKey(apiKeyId, affinityScope, sessionId);
     const now = Date.now();
-
-    // Check if entry exists to preserve cumulative tokens
-    const existing = this.cache.get(key);
-    const cumulativeTokens = existing ? existing.cumulativeTokens : 0;
+    const existing = this.getValidEntry(key, now);
 
     this.cache.set(key, {
       upstreamId,
       lastAccessedAt: now,
       createdAt: existing ? existing.createdAt : now,
       contentLength,
-      cumulativeTokens,
+      cumulativeTokens: existing?.cumulativeTokens ?? 0,
+      bindingVersion: ++this.nextBindingVersion,
     });
 
-    // Evict oldest entry when capacity exceeded
     if (this.cache.size > this.maxEntries) {
       this.evictOldest();
     }
+  }
+
+  /**
+   * Commit a binding only if the selection observed the same binding state.
+   */
+  commitIfCurrent(
+    apiKeyId: string,
+    affinityScope: AffinityScope,
+    sessionId: string,
+    expectedBindingVersion: number | null,
+    upstreamId: string,
+    contentLength: number
+  ): AffinityCommitResult {
+    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
+    const current = this.getValidEntry(key, Date.now());
+    const canCommit =
+      expectedBindingVersion === null ||
+      current === null ||
+      current.bindingVersion === expectedBindingVersion;
+
+    if (!canCommit) {
+      return { committed: false, current };
+    }
+
+    this.set(apiKeyId, affinityScope, sessionId, upstreamId, contentLength);
+    return { committed: true, current: this.cache.get(key) ?? null };
   }
 
   /**
@@ -142,7 +196,7 @@ export class SessionAffinityStore {
     usage: AffinityUsage
   ): void {
     const key = this.generateKey(apiKeyId, affinityScope, sessionId);
-    const entry = this.cache.get(key);
+    const entry = this.getValidEntry(key, Date.now());
 
     if (!entry) {
       return;
@@ -152,7 +206,7 @@ export class SessionAffinityStore {
       entry.cumulativeTokens += usage.totalInputTokens;
     }
 
-    // Refresh TTL so entry doesn't expire during long-running requests
+    // Refresh TTL only from a successful terminal settlement.
     entry.lastAccessedAt = Date.now();
   }
 
@@ -168,7 +222,7 @@ export class SessionAffinityStore {
    * Check if affinity exists and is valid
    */
   has(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): boolean {
-    return this.get(apiKeyId, affinityScope, sessionId) !== null;
+    return this.peek(apiKeyId, affinityScope, sessionId) !== null;
   }
 
   /**
@@ -262,6 +316,86 @@ export class SessionAffinityStore {
     this.stopCleanupTimer();
     this.clear();
   }
+}
+
+/** Calculate the input-token contribution used by affinity migration. */
+export function computeAffinityTokens(
+  routeCapability: RouteCapability,
+  usage: {
+    promptTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    rawInputTokens?: number;
+  }
+): number {
+  const prompt = usage.promptTokens || 0;
+
+  if (routeCapability !== "anthropic_messages" && routeCapability !== "claude_code_messages") {
+    return prompt;
+  }
+
+  const rawInput = usage.rawInputTokens ?? 0;
+  const cacheRead = usage.cacheReadTokens || 0;
+  const cacheCreation = usage.cacheCreationTokens || 0;
+
+  return rawInput > 0 ? rawInput + cacheRead + cacheCreation : prompt;
+}
+
+/**
+ * Commit the selected binding only after a successful terminal response.
+ */
+export function commitAffinityBindingAfterSuccess(input: {
+  apiKeyId: string;
+  affinityScope: AffinityScope;
+  sessionId: string | null;
+  contentLength: number;
+  expectation: AffinityBindingExpectation | null;
+  selectedUpstreamId: string;
+  affinityMigrated: boolean;
+}): AffinityBindingState | null {
+  if (!input.sessionId || !input.expectation) {
+    return null;
+  }
+
+  const { initialUpstreamId, initialBindingVersion } = input.expectation;
+  const intendedState: AffinityBindingState =
+    initialUpstreamId === null
+      ? "created"
+      : input.selectedUpstreamId === initialUpstreamId
+        ? "unchanged"
+        : input.affinityMigrated
+          ? "migrated"
+          : "reselected";
+  const commit = affinityStore.commitIfCurrent(
+    input.apiKeyId,
+    input.affinityScope,
+    input.sessionId,
+    initialBindingVersion,
+    input.selectedUpstreamId,
+    input.contentLength
+  );
+
+  if (commit.committed) {
+    return intendedState;
+  }
+
+  if (commit.current) {
+    affinityStore.touch(input.apiKeyId, input.affinityScope, input.sessionId);
+    return "unchanged";
+  }
+
+  return intendedState;
+}
+
+/** Resolve the terminal binding state when no binding commit occurred. */
+export function resolveAffinityFailureBindingState(
+  expectation: AffinityBindingExpectation | null
+): AffinityBindingState | null {
+  if (!expectation) {
+    return null;
+  }
+
+  return expectation.initialUpstreamId === null ? "none" : "unchanged";
 }
 
 // ============================================================================

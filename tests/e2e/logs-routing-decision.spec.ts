@@ -57,6 +57,7 @@ async function mockLogsApi(page: Page): Promise<void> {
         priority_tier: null,
         session_id: "019c4fce-9a11-7ba0-a1af-a3587bfc10d2",
         affinity_hit: false,
+        affinity_binding_state: null,
         affinity_migrated: false,
         created_at: now,
       },

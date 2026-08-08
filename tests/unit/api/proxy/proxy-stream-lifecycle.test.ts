@@ -53,6 +53,9 @@ vi.mock("@/lib/services/session-affinity", () => ({
   affinityStore: {
     updateCumulativeTokens: mocks.updateCumulativeTokens,
   },
+  commitAffinityBindingAfterSuccess: vi.fn(() => null),
+  computeAffinityTokens: vi.fn(() => 0),
+  resolveAffinityFailureBindingState: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/services/unified-error", () => ({
@@ -134,6 +137,8 @@ function makeContext(signal: AbortSignal): StreamLifecycleContext {
     reasoningEffort: null,
     requestedServiceTier: "fast",
     thinkingConfig: null,
+    contentLength: 0,
+    affinityBindingExpectation: null,
     sessionId: null,
     matchedRouteCapability: "openai_chat_compatible",
     inboundBody: {

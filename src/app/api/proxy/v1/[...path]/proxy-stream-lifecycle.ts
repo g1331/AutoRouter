@@ -23,7 +23,14 @@ import {
   type InboundBody,
 } from "@/lib/services/traffic-recorder";
 import type { TrafficRecordingSettingsValue } from "@/lib/services/traffic-recording-service";
-import { affinityStore, type AffinityUsage } from "@/lib/services/session-affinity";
+import {
+  affinityStore,
+  commitAffinityBindingAfterSuccess,
+  computeAffinityTokens,
+  resolveAffinityFailureBindingState,
+  type AffinityBindingExpectation,
+  type AffinityUsage,
+} from "@/lib/services/session-affinity";
 import { getHttpStatusForError } from "@/lib/services/unified-error";
 import type { RouteCapability } from "@/lib/route-capabilities";
 import { createLogger } from "@/lib/utils/logger";
@@ -40,6 +47,7 @@ import type {
   RequestThinkingConfig,
   RoutingDecisionLog,
   RoutingSelectionReason,
+  AffinityBindingState,
 } from "@/types/api";
 import { recordApiKeyTokenUsage } from "@/lib/services/api-key-rate-limiter";
 
@@ -72,6 +80,8 @@ export interface StreamLifecycleContext {
   thinkingConfig: RequestThinkingConfig | null;
   sessionId: string | null;
   matchedRouteCapability: RouteCapability;
+  contentLength: number;
+  affinityBindingExpectation: AffinityBindingExpectation | null;
   inboundBody: InboundBody | null;
   trafficRecordingSettings: Pick<TrafficRecordingSettingsValue, "redactSensitive">;
   shouldRecordSuccess: boolean;
@@ -174,39 +184,13 @@ export function resolveEffectiveServiceTier(
   return requestedServiceTier === "fast" ? "unknown" : null;
 }
 
-/** Calculate the token count used to update session affinity. */
-export function computeAffinityTokens(
-  routeCapability: RouteCapability,
-  usage: {
-    promptTokens: number;
-    cacheReadTokens?: number;
-    cacheCreationTokens?: number;
-    rawInputTokens?: number;
-  }
-): number {
-  const prompt = usage.promptTokens || 0;
-
-  if (routeCapability !== "anthropic_messages" && routeCapability !== "claude_code_messages") {
-    return prompt;
-  }
-
-  const rawInput = usage.rawInputTokens ?? 0;
-  const cacheRead = usage.cacheReadTokens || 0;
-  const cacheCreation = usage.cacheCreationTokens || 0;
-
-  if (rawInput > 0) {
-    return rawInput + cacheRead + cacheCreation;
-  }
-
-  return prompt;
-}
-
 function buildSuccessLogFields(
   context: StreamLifecycleContext,
   terminal: StreamLifecycleTerminal,
   metrics: StreamMetrics,
   usageForBilling: StreamBillingUsage,
-  durationMs: number
+  durationMs: number,
+  affinityBindingState: AffinityBindingState | null
 ): StreamLogFields {
   const usage = metrics.usage;
   return {
@@ -242,6 +226,7 @@ function buildSuccessLogFields(
     sessionId: context.sessionId,
     affinityHit: terminal.affinityHit,
     affinityMigrated: terminal.affinityMigrated,
+    affinityBindingState,
     ttftMs: metrics.ttftMs ?? null,
     isStream: true,
     routingDurationMs: terminal.routingDurationMs,
@@ -283,6 +268,7 @@ function buildDisconnectLogFields(
     sessionId: context.sessionId,
     affinityHit: terminal.affinityHit,
     affinityMigrated: terminal.affinityMigrated,
+    affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
     isStream: true,
     sessionIdCompensated: terminal.sessionIdCompensated,
     headerDiff: terminal.headerDiff,
@@ -344,6 +330,7 @@ function buildFailureLogFields(
       sessionId: context.sessionId,
       affinityHit: terminal.affinityHit,
       affinityMigrated: terminal.affinityMigrated,
+      affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
       isStream: true,
       sessionIdCompensated: terminal.sessionIdCompensated,
       headerDiff: terminal.headerDiff,
@@ -440,6 +427,7 @@ function buildRequestFailureLogFields(
     routingDecision: terminal.routingDecision,
     thinkingConfig: context.thinkingConfig,
     sessionId: context.sessionId,
+    affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
     isStream: true,
     routingDurationMs: terminal.routingDurationMs,
     sessionIdCompensated: terminal.sessionIdCompensated,
@@ -824,6 +812,15 @@ export function createStreamResponse(
         context.requestedServiceTier,
         metrics.effectiveServiceTier ?? terminal.result.effectiveServiceTier
       );
+      const affinityBindingState = commitAffinityBindingAfterSuccess({
+        apiKeyId: context.apiKeyId,
+        affinityScope: context.matchedRouteCapability,
+        sessionId: context.sessionId,
+        contentLength: context.contentLength,
+        expectation: context.affinityBindingExpectation,
+        selectedUpstreamId: terminal.upstream.id,
+        affinityMigrated: terminal.affinityMigrated,
+      });
 
       if (context.sessionId && metrics.usage) {
         const affinityUsage: AffinityUsage = {
@@ -844,6 +841,8 @@ export function createStreamResponse(
           },
           "session affinity: updated cumulative tokens"
         );
+      } else if (context.sessionId) {
+        affinityStore.touch(context.apiKeyId, context.matchedRouteCapability, context.sessionId);
       }
 
       const logFields = buildSuccessLogFields(
@@ -851,12 +850,13 @@ export function createStreamResponse(
         terminal,
         metrics,
         usageForBilling,
-        Date.now() - context.startTime
+        Date.now() - context.startTime,
+        affinityBindingState
       );
-      const requestLogId = await persistTerminalRequestLog(context, logFields);
-      if (requestLogId) {
+      const persistedLogId = await persistTerminalRequestLog(context, logFields);
+      if (persistedLogId) {
         await context.persistBillingSnapshot({
-          requestLogId,
+          requestLogId: persistedLogId,
           apiKeyId: context.apiKeyId,
           upstreamId: terminal.upstream.id,
           model: terminal.resolvedModel,

@@ -369,6 +369,7 @@ export const requestLogs = pgTable(
     sessionId: text("session_id"),
     affinityHit: boolean("affinity_hit").notNull().default(false),
     affinityMigrated: boolean("affinity_migrated").notNull().default(false),
+    affinityBindingState: varchar("affinity_binding_state", { length: 16 }), // Terminal binding result
     // Performance metrics fields
     ttftMs: integer("ttft_ms"),
     isStream: boolean("is_stream").notNull().default(false),
