@@ -141,7 +141,7 @@ CPA 调整对外约定时，路径后缀与默认路由能力的改动集中在�
 
 ## 转发路径中的 CPA 分支
 
-CPA 上游在请求生命周期里只有一处特殊处理，即单账号映射上游的模型前缀注入，发生在 `src/app/api/proxy/v1/[...path]/route.ts:1519-1532`：
+CPA 上游在请求生命周期里只有一处特殊处理，即单账号映射上游的模型前缀注入，发生在 `src/app/api/proxy/v1/[...path]/proxy-execution.ts` 的 `forwardWithFailover` 上游调用前：
 
 ```ts
 let cliproxyModelOverride: string | undefined;

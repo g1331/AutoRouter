@@ -87,7 +87,7 @@ AutoRouter 选择上游的决策依据并非「模型名前缀映射」这类预
 
 ### 规则匹配出口：resolvePathRoutingModelForUpstream
 
-`resolvePathRoutingModelForUpstream(originalModel, upstream)`（`src/app/api/proxy/v1/[...path]/route.ts:558`）是路由层使用的统一出口。内部调用 `matchUpstreamModelRules`（`upstream-model-rules.ts:326`），返回四个字段：
+`resolvePathRoutingModelForUpstream(originalModel, upstream)`（`src/app/api/proxy/v1/[...path]/proxy-request-lifecycle.ts`）是路由层使用的统一出口。内部调用 `matchUpstreamModelRules`（`upstream-model-rules.ts:326`），返回四个字段：
 
 | 字段               | 含义                                                         |
 | ------------------ | ------------------------------------------------------------ |
@@ -98,10 +98,10 @@ AutoRouter 选择上游的决策依据并非「模型名前缀映射」这类预
 
 ### 「未显式拒绝即默认放行」语义
 
-整体过滤逻辑在 `filterCandidatesByModelRules`（`route.ts:592-625`）：
+整体过滤逻辑在 `filterCandidatesByModelRules`（`proxy-request-lifecycle.ts`）中：
 
 ```ts
-// 摘自 route.ts:592-625
+// 摘自 proxy-request-lifecycle.ts
 if (!originalModel) return { allowed: candidates, excluded: [] }; // 模型缺失 → 全部放行
 for (const candidate of candidates) {
   const modelResolution = resolvePathRoutingModelForUpstream(originalModel, candidate);
@@ -135,7 +135,7 @@ for (const candidate of candidates) {
 "gemini-" → "google"
 ```
 
-但这个函数**不再被主代理路由 `src/app/api/proxy/v1/[...path]/route.ts` 调用**（全仓 grep 无 `routeByModel` 在主路由中的引用）。它现在只在两处出现：
+但这个函数**不再被主代理生命周期 `src/app/api/proxy/v1/[...path]/proxy-request-lifecycle.ts` 调用**（全仓 grep 无 `routeByModel` 在主路由中的引用）。它现在只在两处出现：
 
 - `model-router.ts:310` 的旧版 `routeByModel`——已不在主路由路径上。
 - `src/lib/services/billing-cost-service.ts:445`——计费时用来区分输入 token 计算口径。
@@ -151,9 +151,9 @@ for (const candidate of candidates) {
 
 客户端 Key 的 `allowed_models` 字段（`schema-pg.ts:55`）是另一层白名单，在候选筛选**之前**生效：
 
-`isModelAllowedByApiKey(requestedModel, allowedModels)`（`src/lib/api-key-models.ts:16`）：`allowedModels` 为空或 null 直接放行；否则做精确字符串 `includes` 检查，命中失败的请求直接返回错误码 `API_KEY_MODEL_NOT_ALLOWED`（`route.ts:2513`）。
+`isModelAllowedByApiKey(requestedModel, allowedModels)`（`src/lib/api-key-models.ts:16`）：`allowedModels` 为空或 null 直接放行；否则做精确字符串 `includes` 检查，命中失败的请求直接返回错误码 `API_KEY_MODEL_NOT_ALLOWED`（`proxy-request-lifecycle.ts`）。
 
-`getApiKeyVisibleModelList`（`route.ts:627`）仅在 `GET /v1/models` 这种返回模型列表的请求里触发：对 Key 的 `allowedModels` 做过滤，保留其中**能被至少一个候选上游接受**的模型名（用 `resolvePathRoutingModelForUpstream(model, candidate).matched` 判断），返回交集。
+`getApiKeyVisibleModelList`（`proxy-request-lifecycle.ts`）仅在 `GET /v1/models` 这种返回模型列表的请求里触发：对 Key 的 `allowedModels` 做过滤，保留其中**能被至少一个候选上游接受**的模型名（用 `resolvePathRoutingModelForUpstream(model, candidate).matched` 判断），返回交集。
 
 叠加规则三条：
 

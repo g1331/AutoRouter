@@ -259,5 +259,5 @@ handle /api/* {
 
 - `docker-compose.yml`：端口映射默认值 `${PORT:-3331}:3000`
 - `src/lib/utils/config.ts`：`corsOrigins` 解析逻辑，确认当前没有运行期 CORS 注入
-- `src/app/api/proxy/v1/[...path]/route.ts`：`/api/proxy/v1/*` 在 `stream: true` 下走 SSE 路径
+- `src/app/api/proxy/v1/[...path]/route.ts` 与 `proxy-request-lifecycle.ts`：`/api/proxy/v1/*` 的 HTTP 方法由 adapter 统一委托，`stream: true` 由生命周期进入 SSE 路径
 - `src/app/api/admin/*` 与 `src/lib/utils/api-auth.ts`：管理 API 用 Bearer Token 鉴权而非 cookie

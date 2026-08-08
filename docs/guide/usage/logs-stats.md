@@ -87,7 +87,7 @@ Token 数据由 `extractNormalizedUsage`（`src/lib/services/proxy-client.ts:468
 ```
 client request
   ↓
-proxy route 决策完毕（route.ts:2965）
+统一代理生命周期完成路由与准入决策（`proxy-request-lifecycle.ts` 的 `executeProxyRequest`）
   ↓
 logRequestStart() — INSERT 一行，status_code=NULL，duration_ms=NULL
   ↓
@@ -100,7 +100,7 @@ calculateAndPersistRequestBillingSnapshot() — 在 request_billing_snapshots �
 publishRequestLogLiveUpdate() — 广播 SSE 事件给 /api/admin/logs/live 订阅者
 ```
 
-部分非流式入口直接调 `logRequest()`（`request-logger.ts:504-557`）一次性 INSERT，跳过 in-progress 中间态。
+部分非流式终态由 `proxy-non-stream-lifecycle.ts` 的 `settleNonStreamRequest` 统一落日志；鉴权、准入拒绝和流式终态也由同一生命周期模块按对应失败阶段写入。
 
 ### duration_ms 与 routing_duration_ms 的 clamp
 

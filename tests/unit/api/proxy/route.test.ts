@@ -557,10 +557,7 @@ describe("proxy route upstream selection", () => {
     request: NextRequest,
     context: { params: Promise<{ path: string[] }> }
   ) => Promise<Response>;
-  let handleProxy: (
-    request: NextRequest,
-    context: { params: Promise<{ path: string[] }> }
-  ) => Promise<Response>;
+  let executeProxyRequest: (request: Request, path: string) => Promise<Response>;
   let GET: (
     request: NextRequest,
     context: { params: Promise<{ path: string[] }> }
@@ -601,7 +598,7 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     POST = routeModule.POST;
     const lifecycleModule = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
-    handleProxy = lifecycleModule.handleProxy;
+    executeProxyRequest = lifecycleModule.executeProxyRequest;
     GET = routeModule.GET;
     vi.mocked(db.query.upstreams.findMany).mockResolvedValue(DEFAULT_ACTIVE_UPSTREAMS);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValue([]);
@@ -695,7 +692,8 @@ describe("proxy route upstream selection", () => {
     const { calculateAndPersistRequestBillingSnapshot } =
       await import("@/lib/services/billing-cost-service");
     const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
-    const { handleProxy } = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    const { executeProxyRequest } =
+      await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
     const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
     const responseBody = { id: "lifecycle-success", object: "chat.completion" };
     const lifecycleEvents: string[] = [];
@@ -768,7 +766,7 @@ describe("proxy route upstream selection", () => {
     process.env.RECORDER_ENABLED = "true";
     process.env.RECORDER_MODE = "success";
 
-    const response = await handleProxy(
+    const response = await executeProxyRequest(
       new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -780,7 +778,7 @@ describe("proxy route upstream selection", () => {
           messages: [{ role: "user", content: "hello" }],
         }),
       }),
-      { params: Promise.resolve({ path: ["chat", "completions"] }) }
+      "chat/completions"
     );
 
     expect(response.status).toBe(200);
@@ -815,7 +813,8 @@ describe("proxy route upstream selection", () => {
   });
   it("logs a lifecycle rejection without billing or recording when capability is missing", async () => {
     const { db } = await import("@/lib/db");
-    const { handleProxy } = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    const { executeProxyRequest } =
+      await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
     const { logRequest } = await import("@/lib/services/request-logger");
     const { calculateAndPersistRequestBillingSnapshot } =
       await import("@/lib/services/billing-cost-service");
@@ -832,8 +831,7 @@ describe("proxy route upstream selection", () => {
         isActive: true,
       },
     ]);
-
-    const response = await handleProxy(
+    const response = await executeProxyRequest(
       new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
         method: "POST",
         headers: {
@@ -842,7 +840,7 @@ describe("proxy route upstream selection", () => {
         },
         body: JSON.stringify({ model: "gpt-5.2", input: "hello" }),
       }),
-      { params: Promise.resolve({ path: ["custom", "not-matched"] }) }
+      "custom/not-matched"
     );
 
     expect(response.status).toBe(503);
@@ -861,7 +859,8 @@ describe("proxy route upstream selection", () => {
     expect(recordTrafficFixture).not.toHaveBeenCalled();
   });
   it("logs missing API key rejection without billing or recording", async () => {
-    const { handleProxy } = await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
+    const { executeProxyRequest } =
+      await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
     const { logRequest } = await import("@/lib/services/request-logger");
     const { calculateAndPersistRequestBillingSnapshot } =
       await import("@/lib/services/billing-cost-service");
@@ -870,13 +869,13 @@ describe("proxy route upstream selection", () => {
     process.env.RECORDER_ENABLED = "true";
     process.env.RECORDER_MODE = "all";
 
-    const response = await handleProxy(
+    const response = await executeProxyRequest(
       new NextRequest("http://localhost/api/proxy/v1/chat/completions?alt=sse", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ model: "gpt-5.2", messages: [] }),
       }),
-      { params: Promise.resolve({ path: ["chat", "completions"] }) }
+      "chat/completions"
     );
 
     expect(response.status).toBe(401);
@@ -3803,9 +3802,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await handleProxy(request, {
-      params: Promise.resolve({ path: ["v1", "messages"] }),
-    });
+    const response = await executeProxyRequest(request, "v1/messages");
 
     expect(response.status).toBe(200);
     expect(markUnhealthy).not.toHaveBeenCalledWith("up-anthropic-1", expect.any(String));
@@ -3905,11 +3902,8 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await handleProxy(request, {
-      params: Promise.resolve({ path: ["v1", "messages"] }),
-    });
+    const response = await executeProxyRequest(request, "v1/messages");
     const payload = (await response.json()) as { error: { reason?: string; user_hint?: string } };
-
     expect(response.status).toBe(503);
     expect(payload.error.reason).toBe("CONCURRENCY_FULL");
     expect(payload.error.user_hint).toContain("并发上限");
@@ -4042,9 +4036,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await handleProxy(request, {
-      params: Promise.resolve({ path: ["v1", "messages"] }),
-    });
+    const response = await executeProxyRequest(request, "v1/messages");
 
     expect(response.status).toBe(200);
     expect(vi.mocked(upstreamQueueAdmission.enqueueWait)).toHaveBeenCalledWith(
@@ -4171,7 +4163,7 @@ describe("proxy route upstream selection", () => {
       };
     });
 
-    const response = await handleProxy(
+    const response = await executeProxyRequest(
       new NextRequest("http://localhost/api/proxy/v1/messages", {
         method: "POST",
         signal: controller.signal,
@@ -4184,7 +4176,7 @@ describe("proxy route upstream selection", () => {
           messages: [{ role: "user", content: "hi" }],
         }),
       }),
-      { params: Promise.resolve({ path: ["v1", "messages"] }) }
+      "v1/messages"
     );
     const data = await response.json();
 
@@ -4701,9 +4693,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await handleProxy(request, {
-      params: Promise.resolve({ path: ["v1", "messages"] }),
-    });
+    const response = await executeProxyRequest(request, "v1/messages");
 
     expect(response.status).toBe(200);
     expect(vi.mocked(reselectQueuedUpstreamOnce)).toHaveBeenCalledWith(
@@ -4819,11 +4809,8 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await handleProxy(request, {
-      params: Promise.resolve({ path: ["v1", "messages"] }),
-    });
+    const response = await executeProxyRequest(request, "v1/messages");
     const data = await response.json();
-
     expect(response.status).toBe(504);
     expect(data).toEqual({
       error: expect.objectContaining({
@@ -4958,7 +4945,7 @@ describe("proxy route upstream selection", () => {
       waitPromise: queueWaitPromise,
     });
 
-    const responsePromise = handleProxy(
+    const responsePromise = executeProxyRequest(
       new NextRequest("http://localhost/api/proxy/v1/messages", {
         method: "POST",
         signal: controller.signal,
@@ -4971,7 +4958,7 @@ describe("proxy route upstream selection", () => {
           messages: [{ role: "user", content: "hi" }],
         }),
       }),
-      { params: Promise.resolve({ path: ["v1", "messages"] }) }
+      "v1/messages"
     );
     await expect
       .poll(() => vi.mocked(upstreamQueueAdmission.enqueueWait).mock.calls.length)

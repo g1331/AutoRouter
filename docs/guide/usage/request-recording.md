@@ -26,7 +26,7 @@ outline: deep
 shouldRecordTraffic(outcome) === enabled && (mode === "all" || mode === outcome);
 ```
 
-每次代理请求单独调一次 `getTrafficRecordingSettings()`（`route.ts:2487`，每请求新查 DB，无 in-memory 缓存），所以**改设置立即生效，不需要重启**。
+每次代理请求由 `proxy-request-lifecycle.ts` 的 `executeProxyRequest` 调用 `getTrafficRecordingSettings()`，每请求新查 DB，无 in-memory 缓存，所以**改设置立即生效，不需要重启**。
 
 入口：管理后台 **系统 → 流量录制**（`/system/traffic-recording`，页面文件 `src/app/[locale]/(dashboard)/system/traffic-recording/page.tsx`）。
 
@@ -90,19 +90,15 @@ shouldRecordTraffic(outcome) === enabled && (mode === "all" || mode === outcome)
 
 ### 入口与执行时机
 
-`src/app/api/proxy/v1/[...path]/route.ts`：
+录制由以下生命周期边界协作完成：
 
-| 行        | 行为                                                                                                |
-| --------- | --------------------------------------------------------------------------------------------------- |
-| 2487      | `await getTrafficRecordingSettings()` —— 每请求一次 DB 查询                                         |
-| 2488-2490 | 计算 `shouldRecordSuccess` / `shouldRecordFailure` / `recorderEnabled`                              |
-| 2491      | `recorderEnabled === true` 时才 `await readRequestBody(request)` 把请求体读进内存                   |
-| 3208      | `teeStreamForRecording(originalStream)` —— `ReadableStream.tee()` 分叉流，一路给 client，一路给录制 |
-| 3603      | 流式成功路径：`return recordTrafficFixture(...)`，落盘在后台 `.then()` 里，client 响应已先行返回    |
-| 3802      | 非流式成功路径：`void recordTrafficFixture(...).catch(...)` 显式 fire-and-forget                    |
-| 4040      | 失败路径：`void recordTrafficFixture(...).catch(...)` 同上                                          |
+| 模块 / 函数                                                                        | 行为                                                                                |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `proxy-request-lifecycle.ts` / `executeProxyRequest`                               | 读取录制设置；仅在成功或失败录制启用时读取 inbound body，并把录制上下文传给终态模块 |
+| `proxy-non-stream-lifecycle.ts` / `settleNonStreamRequest`                         | 统一处理非流式成功与失败的请求日志、计费快照和 fixture                              |
+| `proxy-stream-lifecycle.ts` / `settleStreamFailureRequest`、`createStreamResponse` | 统一处理流开始前失败、流式成功、下游取消和流中错误的日志、计费快照与 fixture        |
 
-**所有落盘均为 fire-and-forget**，client 端不阻塞等磁盘写入。读取请求体只在 `recorderEnabled === true` 时才发生，关闭录制时**不会**多产生 body 读取开销。
+所有 fixture 写入都通过 `recordTrafficFixture` 异步执行，client 响应不等待磁盘写入。读取请求体只在 `recorderEnabled === true` 时发生，关闭录制时**不会**多产生 body 读取开销。
 
 ### 脱敏规则
 
