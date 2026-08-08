@@ -509,6 +509,7 @@ describe("api-transformers", () => {
           source_paths: ["reasoning_effort"],
         },
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
+        affinityBindingState: "created",
       };
 
       const result = transformRequestLogToApi(log as never);
@@ -567,6 +568,7 @@ describe("api-transformers", () => {
         ttft_ms: undefined,
         session_id: undefined,
         affinity_hit: undefined,
+        affinity_binding_state: "created",
         affinity_migrated: undefined,
         is_stream: undefined,
         priority_tier: undefined,

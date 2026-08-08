@@ -407,6 +407,11 @@ describe("lib/db/schema", () => {
       expect(requestLogs.thinkingConfig.name).toBe("thinking_config");
     });
 
+    it("has affinityBindingState column", () => {
+      expect(requestLogs.affinityBindingState).toBeDefined();
+      expect(requestLogs.affinityBindingState.name).toBe("affinity_binding_state");
+    });
+
     it("has createdAt timestamp", () => {
       expect(requestLogs.createdAt).toBeDefined();
       expect(requestLogs.createdAt.name).toBe("created_at");

@@ -708,6 +708,15 @@
     "timelineAffinityHit": "Affinity hit",
     "timelineAffinityMissed": "No affinity binding",
     "timelineAffinityMigrated": "Migrated",
+    "timelineAffinityBindingState": "Binding state",
+    "timelineAffinityPending": "Pending terminal settlement",
+    "affinityBindingState": {
+      "created": "Created",
+      "unchanged": "Unchanged",
+      "migrated": "Migrated",
+      "reselected": "Reselected",
+      "none": "None"
+    },
     "timelineNoSession": "No session",
     "timelineSelected": "Selected",
     "timelineDirectSuccess": "No failover triggered",

@@ -708,6 +708,15 @@
     "timelineAffinityHit": "命中绑定",
     "timelineAffinityMissed": "无亲和性绑定",
     "timelineAffinityMigrated": "已迁移",
+    "timelineAffinityBindingState": "绑定状态",
+    "timelineAffinityPending": "等待终态结算",
+    "affinityBindingState": {
+      "created": "已创建",
+      "unchanged": "未变化",
+      "migrated": "已迁移",
+      "reselected": "已重新选择",
+      "none": "无绑定变更"
+    },
     "timelineNoSession": "无会话",
     "timelineSelected": "选中",
     "timelineDirectSuccess": "未触发故障转移",

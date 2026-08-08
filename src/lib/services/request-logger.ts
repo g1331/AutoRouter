@@ -16,6 +16,7 @@ import {
 import { db, requestLogs, requestBillingSnapshots, type RequestLog } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import type {
+  AffinityBindingState,
   FailoverErrorType,
   RequestThinkingConfig,
   ReasoningEffort,
@@ -82,6 +83,7 @@ export interface LogRequestInput {
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
+  affinityBindingState?: AffinityBindingState | null;
   // Performance metrics fields
   ttftMs?: number | null;
   isStream?: boolean;
@@ -154,6 +156,7 @@ export interface UpdateRequestLogInput {
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
+  affinityBindingState?: AffinityBindingState | null;
   // Performance metrics fields
   ttftMs?: number | null;
   isStream?: boolean;
@@ -226,6 +229,7 @@ export interface RequestLogResponse {
   sessionId: string | null;
   affinityHit: boolean;
   affinityMigrated: boolean;
+  affinityBindingState: AffinityBindingState | null;
   // Performance metrics fields
   ttftMs: number | null;
   isStream: boolean;
@@ -413,6 +417,19 @@ function normalizeEffectiveServiceTier(value: string | null): EffectiveServiceTi
   return normalizeRequestedServiceTier(value);
 }
 
+function normalizeAffinityBindingState(value: string | null): AffinityBindingState | null {
+  if (
+    value === "created" ||
+    value === "unchanged" ||
+    value === "migrated" ||
+    value === "reselected" ||
+    value === "none"
+  ) {
+    return value;
+  }
+  return null;
+}
+
 /**
  * Create a request log entry at request start (in-progress).
  * The entry should be completed via updateRequestLog(...).
@@ -535,6 +552,8 @@ export async function updateRequestLog(
   if (input.sessionId !== undefined) updateValues.sessionId = input.sessionId;
   if (input.affinityHit !== undefined) updateValues.affinityHit = input.affinityHit;
   if (input.affinityMigrated !== undefined) updateValues.affinityMigrated = input.affinityMigrated;
+  if (input.affinityBindingState !== undefined)
+    updateValues.affinityBindingState = input.affinityBindingState;
   if (input.ttftMs !== undefined) updateValues.ttftMs = input.ttftMs;
   if (input.isStream !== undefined) updateValues.isStream = input.isStream;
   if (input.sessionIdCompensated !== undefined)
@@ -607,6 +626,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       sessionId: input.sessionId ?? null,
       affinityHit: input.affinityHit ?? false,
       affinityMigrated: input.affinityMigrated ?? false,
+      affinityBindingState: input.affinityBindingState ?? null,
       ttftMs: input.ttftMs ?? null,
       isStream: input.isStream ?? false,
       sessionIdCompensated: input.sessionIdCompensated ?? false,
@@ -1101,6 +1121,7 @@ export async function listRequestLogs(
     sessionId: log.sessionId ?? null,
     affinityHit: log.affinityHit,
     affinityMigrated: log.affinityMigrated,
+    affinityBindingState: normalizeAffinityBindingState(log.affinityBindingState),
     ttftMs: log.ttftMs ?? null,
     isStream: log.isStream,
     sessionIdCompensated: log.sessionIdCompensated,

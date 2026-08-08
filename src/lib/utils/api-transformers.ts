@@ -27,6 +27,7 @@ import type {
   UpstreamQueuePolicy,
   UpstreamFailureRuleConfig,
   CircuitBreakerConfig,
+  AffinityBindingState,
 } from "@/types/api";
 import type {
   StatsOverview,
@@ -503,6 +504,7 @@ export interface RequestLogApiResponse {
   session_id: string | null;
   affinity_hit: boolean;
   affinity_migrated: boolean;
+  affinity_binding_state: AffinityBindingState | null;
   // Performance metrics fields
   ttft_ms: number | null;
   is_stream: boolean;
@@ -894,6 +896,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     session_id: log.sessionId,
     affinity_hit: log.affinityHit,
     affinity_migrated: log.affinityMigrated,
+    affinity_binding_state: log.affinityBindingState,
     ttft_ms: log.ttftMs,
     is_stream: log.isStream,
     session_id_compensated: log.sessionIdCompensated,
