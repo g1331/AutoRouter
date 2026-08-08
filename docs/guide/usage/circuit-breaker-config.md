@@ -88,7 +88,7 @@ API 字段（管理 API 层接收以秒为单位的输入并转换为毫秒存�
 `matchFailureRule`（`upstream-failure-rules.ts:342`）按 `priority` 升序找第一条命中规则，返回 `MatchedFailureRule | null`。返回非 null 时：
 
 - **failover 仍发生**：请求会换下一条上游继续重试。
-- **熔断不计数**：`route.ts:1549-1557` 显式判断 `matchedFailureRule === null`，命中规则时跳过 `recordFailure(upstream, errorType)`。
+- **熔断不计数**：`proxy-execution.ts` 显式判断 `matchedFailureRule === null`，命中规则时跳过 `recordFailure(upstream, errorType)`。
 
 也就是说失败规则的语义是「这次失败已经被规则解释了，不再算作上游故障」，而不是「这次失败不算失败」。
 
@@ -153,11 +153,11 @@ POST body 字段对应 `match` 结构（`upstream-failure-rules.ts:16-22`、`fai
 熔断与 failover 共用同一次 HTTP 失败事件，但处于两个独立的代码路径：
 
 - **failover**：「换一个上游重试」。触发条件由 `src/lib/services/failover-config.ts:57-73` 决定，默认任何非 2xx 都触发，可通过 `excludeStatusCodes` 排除；策略可选 `exhaust_all`（默认）或 `max_attempts`（默认 10 次，`failover-config.ts:44-48`）。
-- **熔断计数**：「这条上游不健康」。由 `recordFailure` 写入，受 `shouldRecordCircuitBreakerFailure(path)`（`route.ts:800-803`）与 `matchedFailureRule === null`（`route.ts:1549-1557`）两个条件共同控制。
+- **熔断计数**：「这条上游不健康」。由 `recordFailure` 写入，受 `shouldRecordCircuitBreakerFailure(path)`（`proxy-execution.ts`）与 `matchedFailureRule === null`（`proxy-execution.ts`）两个条件共同控制。
 
-`shouldRecordCircuitBreakerFailure` 维护一个路径白名单 `CIRCUIT_BREAKER_NEUTRAL_PATHS = {"messages/count_tokens"}`（`route.ts:793`）。命中白名单的路径即使失败也不计入熔断（这种 token 计数类请求不代表上游真实健康度）。
+`shouldRecordCircuitBreakerFailure` 维护一个路径白名单 `CIRCUIT_BREAKER_NEUTRAL_PATHS = {"messages/count_tokens"}`（`proxy-execution.ts`）。命中白名单的路径即使失败也不计入熔断（这种 token 计数类请求不代表上游真实健康度）。
 
-`matchedFailureRule` 在三处出现：HTTP 错误分支（`route.ts:1549-1556`）、流式错误 settlement 分支（`:1708-1712`）、网络 / 超时 settlement 分支（`:1948-1951`）。**例外**：流式 runtime 错误分支（`:1632-1635`）不检查 failure rule，直接按白名单决定。
+`matchedFailureRule` 在 HTTP 错误、流式错误和网络 / 超时 settlement 中参与判断，均位于 `proxy-execution.ts` 的故障转移循环；流式 runtime 错误则由 `proxy-stream-lifecycle.ts` 负责终态收口，并按路径白名单决定是否计入熔断。
 
 ## 排查清单
 

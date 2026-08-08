@@ -45,21 +45,21 @@ AutoRouter 是一个 Next.js 全栈应用：同一个进程同时承担「管理
 
 代码组织遵循 Next.js App Router 的常规分层，运行期逻辑集中在 `src/lib/services/`：
 
-| 路径                                      | 职责                                                                        |
-| ----------------------------------------- | --------------------------------------------------------------------------- |
-| `src/app/api/proxy/v1/[...path]/route.ts` | 唯一的代理入口，GET/POST/PUT/DELETE/PATCH 都委托给同一个 `handleProxy` 函数 |
-| `src/app/api/admin/`                      | 管理 API：上游、密钥、熔断、日志、统计、计费、流量录制、CLIProxy 等         |
-| `src/app/api/health/route.ts`             | 公开健康探针，不需要鉴权                                                    |
-| `src/app/[locale]/(dashboard)/`           | 管理后台页面集合（需要登录）                                                |
-| `src/app/[locale]/(auth)/login/`          | 登录页（独立布局，不挂 dashboard 框架）                                     |
-| `src/lib/services/`                       | 全部运行期业务逻辑模块                                                      |
-| `src/lib/db/`                             | Drizzle ORM schema 与数据库 client                                          |
-| `src/lib/utils/`                          | 通用工具：配置加载、鉴权 helper、加密、CORS 等                              |
-| `src/components/`                         | 管理后台 React 组件（shadcn/ui 基础）                                       |
-| `src/hooks/`                              | TanStack Query 包装的数据获取 hooks                                         |
-| `src/i18n/`、`src/messages/`              | next-intl 配置与中英文翻译                                                  |
+| 路径                                      | 职责                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| `src/app/api/proxy/v1/[...path]/route.ts` | 唯一的代理入口，GET/POST/PUT/DELETE/PATCH 都委托给 `executeProxyRequest` 生命周期入口 |
+| `src/app/api/admin/`                      | 管理 API：上游、密钥、熔断、日志、统计、计费、流量录制、CLIProxy 等                   |
+| `src/app/api/health/route.ts`             | 公开健康探针，不需要鉴权                                                              |
+| `src/app/[locale]/(dashboard)/`           | 管理后台页面集合（需要登录）                                                          |
+| `src/app/[locale]/(auth)/login/`          | 登录页（独立布局，不挂 dashboard 框架）                                               |
+| `src/lib/services/`                       | 全部运行期业务逻辑模块                                                                |
+| `src/lib/db/`                             | Drizzle ORM schema 与数据库 client                                                    |
+| `src/lib/utils/`                          | 通用工具：配置加载、鉴权 helper、加密、CORS 等                                        |
+| `src/components/`                         | 管理后台 React 组件（shadcn/ui 基础）                                                 |
+| `src/hooks/`                              | TanStack Query 包装的数据获取 hooks                                                   |
+| `src/i18n/`、`src/messages/`              | next-intl 配置与中英文翻译                                                            |
 
-`src/app/api/proxy/v1/[...path]/route.ts` 在文件末尾把所有 HTTP 方法都导向同一个内部函数（`POST` 位于第 4147 行、`handleProxy` 位于第 2440 行），后文「请求生命周期」会逐步展开它的内部流程。
+`src/app/api/proxy/v1/[...path]/route.ts` 在文件末尾把所有 HTTP 方法都导向同一个生命周期入口（`executeProxyRequest` 位于 `proxy-request-lifecycle.ts`），后文「请求生命周期」会逐步展开它的内部流程。
 
 ## 服务模块清单
 
@@ -171,7 +171,7 @@ AutoRouter 是一个 Next.js 全栈应用：同一个进程同时承担「管理
 | `/api/health`        | 无                             | 健康探针           |
 | `/[locale]/...` 页面 | 浏览器侧 sessionStorage Token  | 管理后台 UI        |
 
-代理入口的全部 HTTP 方法都委托给 `handleProxy`；管理 API 的每个路由独立鉴权；健康探针完全公开。next-intl 中间件位于 `src/proxy.ts`（注意：是 `src/proxy.ts`，不是 Next.js 默认惯用的 `src/middleware.ts`），其 matcher 显式排除 `/_next`、`/api`、带扩展名的资源路径，因此中间件**不会**拦截任何 API 请求，所有 API 鉴权都发生在 route handler 自身内部。
+代理入口的全部 HTTP 方法都委托给 `executeProxyRequest`；管理 API 的每个路由独立鉴权；健康探针完全公开。next-intl 中间件位于 `src/proxy.ts`（注意：是 `src/proxy.ts`，不是 Next.js 默认惯用的 `src/middleware.ts`），其 matcher 显式排除 `/_next`、`/api`、带扩展名的资源路径，因此中间件**不会**拦截任何 API 请求，所有 API 鉴权都发生在 route handler 自身内部。
 
 ## 国际化与路由分组
 

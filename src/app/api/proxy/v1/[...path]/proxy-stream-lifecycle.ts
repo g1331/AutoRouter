@@ -75,6 +75,7 @@ export interface StreamLifecycleContext {
   inboundBody: InboundBody | null;
   trafficRecordingSettings: Pick<TrafficRecordingSettingsValue, "redactSensitive">;
   shouldRecordSuccess: boolean;
+  shouldRecordFailure: boolean;
   getCompensationHeaders: () => CompensationHeader[];
   getQueueStatePersistence: () => Promise<void>;
   awaitRequestLogReady: () => Promise<string | null>;
@@ -91,6 +92,9 @@ export interface StreamLifecycleContext {
     usage: StreamBillingUsage;
     requestId: string;
   }) => Promise<void>;
+  settlement: {
+    response: Response | null;
+  };
 }
 
 export interface StreamLifecycleTerminal {
@@ -107,6 +111,40 @@ export interface StreamLifecycleTerminal {
   sessionIdCompensated: boolean;
   headerDiff: HeaderDiff | null;
   routingDurationMs: number | null;
+}
+
+interface StreamFailureLifecycleTerminal {
+  response: Response;
+  errorStatusCode: number;
+  errorMessage: string;
+  actualUpstreamId: string | null;
+  resolvedModel: string | null;
+  didSendUpstream: boolean;
+  failoverHistory: FailoverAttempt[];
+  routingDecision: RoutingDecisionLog;
+  routingType: "tiered" | "direct" | "provider_type" | null;
+  priorityTier: number | null;
+  routingDurationMs: number | null;
+  sessionIdCompensated: boolean;
+  headerDiff: HeaderDiff | null;
+  fixture?: {
+    providerType: string;
+    responseSource: "upstream" | "gateway";
+    upstream: {
+      id: string;
+      name: string;
+      providerType: string;
+      baseUrl: string;
+    };
+    outboundHeaders: Headers | Record<string, string>;
+    response: {
+      statusCode: number;
+      headers: Headers | Record<string, string>;
+      bodyText?: string | null;
+      bodyJson?: unknown | null;
+    };
+    downstreamBody: unknown;
+  };
 }
 
 type StreamLogFields = Omit<LogRequestInput, "apiKeyId">;
@@ -353,14 +391,15 @@ async function persistTerminalRequestLog(
 
 async function persistZeroUsageBilling(
   context: StreamLifecycleContext,
-  terminal: StreamLifecycleTerminal,
-  requestLogId: string
+  requestLogId: string,
+  upstreamId: string | null,
+  model: string | null
 ): Promise<void> {
   await context.persistBillingSnapshot({
     requestLogId,
     apiKeyId: context.apiKeyId,
-    upstreamId: terminal.upstream.id,
-    model: terminal.resolvedModel,
+    upstreamId,
+    model,
     requestedServiceTier: context.requestedServiceTier,
     effectiveServiceTier: null,
     usage: {
@@ -372,6 +411,101 @@ async function persistZeroUsageBilling(
     },
     requestId: context.requestId,
   });
+}
+
+function buildRequestFailureLogFields(
+  context: StreamLifecycleContext,
+  terminal: StreamFailureLifecycleTerminal,
+  durationMs: number
+): StreamLogFields {
+  return {
+    ...context.apiKeySnapshot,
+    upstreamId: terminal.actualUpstreamId,
+    method: context.request.method,
+    path: context.path,
+    model: terminal.resolvedModel,
+    reasoningEffort: context.reasoningEffort,
+    requestedServiceTier: context.requestedServiceTier,
+    effectiveServiceTier: null,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    statusCode: terminal.errorStatusCode,
+    durationMs,
+    errorMessage: terminal.errorMessage,
+    routingType: terminal.routingType,
+    priorityTier: terminal.priorityTier,
+    failoverAttempts: terminal.failoverHistory.length,
+    failoverHistory: terminal.failoverHistory.length > 0 ? terminal.failoverHistory : null,
+    routingDecision: terminal.routingDecision,
+    thinkingConfig: context.thinkingConfig,
+    sessionId: context.sessionId,
+    isStream: true,
+    routingDurationMs: terminal.routingDurationMs,
+    sessionIdCompensated: terminal.sessionIdCompensated,
+    headerDiff: terminal.headerDiff,
+  };
+}
+
+function buildAndRecordFailureFixture(
+  context: StreamLifecycleContext,
+  terminal: StreamFailureLifecycleTerminal,
+  inboundBody: InboundBody,
+  requestLogId: string | null
+): void {
+  if (!context.shouldRecordFailure || !terminal.fixture || !terminal.didSendUpstream) {
+    return;
+  }
+
+  try {
+    const fixture = buildFixture({
+      requestId: context.requestId,
+      startTime: context.startTime,
+      providerType: terminal.fixture.providerType,
+      route: context.path,
+      model: terminal.resolvedModel,
+      inboundRequest: {
+        method: context.request.method,
+        path: context.path,
+        headers: context.request.headers,
+        bodyText: inboundBody.text,
+        bodyJson: inboundBody.json,
+      },
+      upstream: terminal.fixture.upstream,
+      outboundHeaders: terminal.fixture.outboundHeaders,
+      response: terminal.fixture.response,
+      outboundRequestSent: true,
+      outboundResponseSource: terminal.fixture.responseSource,
+      downstreamResponse: {
+        statusCode: terminal.errorStatusCode,
+        headers: { "content-type": "application/json" },
+        bodyJson: terminal.fixture.downstreamBody,
+      },
+      failoverHistory: terminal.failoverHistory.length > 0 ? terminal.failoverHistory : null,
+      redactSensitive: context.trafficRecordingSettings.redactSensitive,
+    });
+
+    void recordTrafficFixture(fixture, {
+      requestLogId,
+      apiKeyId: context.apiKeyId,
+      upstreamId: terminal.actualUpstreamId,
+      method: context.request.method,
+      path: context.path,
+      model: terminal.resolvedModel,
+      statusCode: terminal.errorStatusCode,
+      outcome: "failure",
+    }).catch((error) =>
+      log.error(
+        { err: error, requestId: context.requestId },
+        "failed to record stream failure fixture"
+      )
+    );
+  } catch (error) {
+    log.error(
+      { err: error, requestId: context.requestId },
+      "failed to build stream failure fixture"
+    );
+  }
 }
 
 function buildAndRecordSuccessFixture(
@@ -432,6 +566,40 @@ function buildAndRecordSuccessFixture(
   } catch (error) {
     log.error({ err: error, requestId: context.requestId }, "failed to build stream fixture");
   }
+}
+
+/**
+ * Settle a stream request failure discovered before an SSE response is returned.
+ * The lifecycle owns the terminal response, request log, zero-usage billing and failure recording.
+ */
+export async function settleStreamFailureRequest(
+  context: StreamLifecycleContext,
+  terminal: StreamFailureLifecycleTerminal
+): Promise<Response> {
+  if (context.settlement.response) {
+    return context.settlement.response;
+  }
+
+  const persistedLogId = await persistTerminalRequestLog(
+    context,
+    buildRequestFailureLogFields(context, terminal, Date.now() - context.startTime)
+  );
+
+  if (persistedLogId && terminal.didSendUpstream) {
+    await persistZeroUsageBilling(
+      context,
+      persistedLogId,
+      terminal.actualUpstreamId,
+      terminal.resolvedModel
+    );
+  }
+
+  if (context.inboundBody) {
+    buildAndRecordFailureFixture(context, terminal, context.inboundBody, persistedLogId);
+  }
+
+  context.settlement.response = terminal.response;
+  return terminal.response;
 }
 
 function wrapStreamWithDownstreamSettlement(
@@ -616,7 +784,12 @@ export function createStreamResponse(
         buildDisconnectLogFields(context, terminal, Date.now() - context.startTime)
       );
       if (requestLogId) {
-        await persistZeroUsageBilling(context, terminal, requestLogId);
+        await persistZeroUsageBilling(
+          context,
+          requestLogId,
+          terminal.upstream.id,
+          terminal.resolvedModel
+        );
       }
     });
   };
@@ -634,7 +807,12 @@ export function createStreamResponse(
       );
       const requestLogId = await persistTerminalRequestLog(context, failureFields.fields);
       if (requestLogId) {
-        await persistZeroUsageBilling(context, terminal, requestLogId);
+        await persistZeroUsageBilling(
+          context,
+          requestLogId,
+          terminal.upstream.id,
+          terminal.resolvedModel
+        );
       }
     });
   };

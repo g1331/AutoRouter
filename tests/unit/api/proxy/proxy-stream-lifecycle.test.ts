@@ -79,11 +79,12 @@ vi.mock("@/app/api/proxy/v1/[...path]/proxy-execution", () => ({
   resolveUpstreamProvider: vi.fn(() => "openai"),
 }));
 
-const { createStreamResponse } =
+const { createStreamResponse, settleStreamFailureRequest } =
   await import("@/app/api/proxy/v1/[...path]/proxy-stream-lifecycle");
 
 type StreamLifecycleContext = Parameters<typeof createStreamResponse>[0];
 type StreamLifecycleTerminal = Parameters<typeof createStreamResponse>[1];
+type StreamFailureLifecycleTerminal = Parameters<typeof settleStreamFailureRequest>[1];
 
 const ROUTING_DECISION: RoutingDecisionLog = {
   original_model: "gpt-4.1",
@@ -142,6 +143,7 @@ function makeContext(signal: AbortSignal): StreamLifecycleContext {
     },
     trafficRecordingSettings: { redactSensitive: true },
     shouldRecordSuccess: true,
+    shouldRecordFailure: false,
     getCompensationHeaders: () => [],
     getQueueStatePersistence: vi.fn(async () => undefined),
     awaitRequestLogReady: vi.fn(async () => requestLogId),
@@ -151,6 +153,7 @@ function makeContext(signal: AbortSignal): StreamLifecycleContext {
       requestLogId = value;
     },
     persistBillingSnapshot: mocks.persistBillingSnapshot,
+    settlement: { response: null },
   };
 }
 
@@ -413,5 +416,60 @@ describe("createStreamResponse", () => {
     expect(mocks.recordTrafficFixture).not.toHaveBeenCalled();
     expect(terminal.result.cancelStream).toHaveBeenCalledWith("Client disconnected");
     expect(upstreamCancelled).toBe(true);
+  });
+});
+describe("settleStreamFailureRequest", () => {
+  it("settles request failure side effects once before returning the response", async () => {
+    const context = makeContext(new AbortController().signal);
+    context.shouldRecordFailure = true;
+    const response = Response.json({ error: { code: "SERVICE_UNAVAILABLE" } }, { status: 503 });
+    const terminal: StreamFailureLifecycleTerminal = {
+      response,
+      errorStatusCode: 503,
+      errorMessage: "upstream failed",
+      actualUpstreamId: UPSTREAM.id,
+      resolvedModel: "gpt-4.1",
+      didSendUpstream: true,
+      failoverHistory: [],
+      routingDecision: ROUTING_DECISION,
+      routingType: "tiered",
+      priorityTier: 0,
+      routingDurationMs: 4,
+      sessionIdCompensated: false,
+      headerDiff: null,
+      fixture: {
+        providerType: "openai",
+        responseSource: "upstream",
+        upstream: {
+          id: UPSTREAM.id,
+          name: UPSTREAM.name,
+          providerType: "openai",
+          baseUrl: UPSTREAM.baseUrl,
+        },
+        outboundHeaders: {},
+        response: {
+          statusCode: 500,
+          headers: {},
+          bodyJson: { error: { message: "upstream failed" } },
+        },
+        downstreamBody: { error: { code: "SERVICE_UNAVAILABLE" } },
+      },
+    };
+
+    await expect(settleStreamFailureRequest(context, terminal)).resolves.toBe(response);
+    await expect(settleStreamFailureRequest(context, terminal)).resolves.toBe(response);
+
+    expect(mocks.updateRequestLog).toHaveBeenCalledTimes(1);
+    expect(mocks.persistBillingSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.buildFixture).toHaveBeenCalledTimes(1);
+    expect(mocks.recordTrafficFixture).toHaveBeenCalledTimes(1);
+    expect(mocks.updateRequestLog).toHaveBeenCalledWith(
+      "log-1",
+      expect.objectContaining({
+        statusCode: 503,
+        isStream: true,
+        errorMessage: "upstream failed",
+      })
+    );
   });
 });

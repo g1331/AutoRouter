@@ -5,7 +5,7 @@ outline: deep
 
 # 请求生命周期
 
-这一页跟踪一次客户端请求从进入 AutoRouter、完成鉴权与上游准入、发送到上游，再到响应、日志、计费和流量录制落地的完整流程。代理请求现在由三个边界清晰的模块协作：`src/app/api/proxy/v1/[...path]/route.ts` 只负责 HTTP 方法与参数适配，`proxy-request-lifecycle.ts` 的 `handleProxy` 负责生命周期编排，`proxy-execution.ts` 的 `forwardWithFailover` 负责候选选择、队列准入、上游调用、失败转移和资源释放。
+这一页跟踪一次客户端请求从进入 AutoRouter、完成鉴权与上游准入、发送到上游，再到响应、日志、计费和流量录制落地的完整流程。代理请求由多个边界清晰的模块协作：`route.ts` 只负责 HTTP 方法与参数适配，`proxy-request-lifecycle.ts` 的 `executeProxyRequest` 负责生命周期编排，`proxy-execution.ts` 的 `forwardWithFailover` 负责候选选择、队列准入、上游调用与失败转移，`proxy-non-stream-lifecycle.ts` / `proxy-stream-lifecycle.ts` 负责终态响应和日志、计费、录制收口。
 
 示例以最常见的 `POST /api/proxy/v1/chat/completions` 为基准，其他协议（Anthropic `/v1/messages`、Gemini `/v1beta/models/<model>:generateContent`、OpenAI `/v1/responses` 等）的差异在相应阶段标出。
 
@@ -17,11 +17,12 @@ outline: deep
 
 ```ts
 export async function POST(request: NextRequest, context: RouteContext) {
-  return handleProxy(request, context);
+  const { path } = await context.params;
+  return executeProxyRequest(request, path.join("/"));
 }
 ```
 
-`route.ts` 不再直接编排鉴权、路由、上游调用、日志、计费或 recording。阅读代理行为时，以 `proxy-request-lifecycle.ts` 的 `handleProxy` 为主时序，以 `proxy-execution.ts` 的 `forwardWithFailover` 为上游执行子流程。
+`route.ts` 不再直接编排鉴权、路由、上游调用、日志、计费或 recording。阅读代理行为时，以 `proxy-request-lifecycle.ts` 的 `executeProxyRequest` 为主时序，以 `proxy-execution.ts` 的 `forwardWithFailover` 为上游执行子流程，并在 `proxy-non-stream-lifecycle.ts` 与 `proxy-stream-lifecycle.ts` 查看终态副作用。
 
 ## 阶段二：CORS 与 OPTIONS
 
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 2. `x-api-key`：Anthropic SDK 的默认 header。
 3. `x-goog-api-key`：Gemini SDK 的默认 header。
 
-提取后，`handleProxy` 按 key prefix 找候选记录并用 `verifyApiKey` 做 bcrypt 比对，再检查过期与用户状态。
+提取后，`executeProxyRequest` 按 key prefix 找候选记录并用 `verifyApiKey` 做 bcrypt 比对，再检查过期与用户状态。
 
 | 场景                     | HTTP 响应                                | 说明                         |
 | ------------------------ | ---------------------------------------- | ---------------------------- |
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 ## 阶段五：候选过滤与上游选路
 
-`handleProxy` 先读取活跃上游快照，再根据 Key 的 `accessMode` 构建候选集合：
+`executeProxyRequest` 先读取活跃上游快照，再根据 Key 的 `accessMode` 构建候选集合：
 
 - `restricted`：只允许 `apiKeyUpstreams` 关联表中的上游。
 - `unrestricted`：允许所有活跃上游，但仍受 capability、model rule、健康和熔断状态限制。
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   ▼
 [2] CORS / OPTIONS（当前没有自定义 preflight handler）
   ▼
-[3] handleProxy 鉴权
+[3] executeProxyRequest 鉴权
       ├ 缺失 / 无效 / 过期 / disabled key → 401
       └ 记录拒绝日志，不访问上游
   ▼

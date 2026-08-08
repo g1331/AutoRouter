@@ -83,7 +83,7 @@ const keyValueEncrypted = encrypt(keyValue); // Fernet
 
 ### 转发时的验证
 
-代理路由 `src/app/api/proxy/v1/[...path]/route.ts:2452-2473` 用前缀查候选行，再对候选逐条 bcrypt 比对：
+代理请求生命周期 `src/app/api/proxy/v1/[...path]/proxy-request-lifecycle.ts` 的 `executeProxyRequest` 用前缀查候选行，再对候选逐条 bcrypt 比对：
 
 ```ts
 const keyPrefix = getKeyPrefix(keyValue);

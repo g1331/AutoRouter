@@ -54,7 +54,7 @@ outline: deep
 | `rpm_limit`      | null | 每分钟请求数（RPM）上限。正整数；null 表示不限制请求数                    |
 | `tpm_limit`      | null | 每分钟 Token 数（TPM）上限。正整数；null 表示不限制已计量的响应 Token 数  |
 
-过期判定（`src/app/api/proxy/v1/[...path]/route.ts:2469`）发生在每次代理请求鉴权时：`expiresAt && expiresAt < new Date()` 即返回 401。无需周期任务介入。
+过期判定（`src/app/api/proxy/v1/[...path]/proxy-request-lifecycle.ts` 的 `executeProxyRequest`）发生在每次代理请求鉴权时：`expiresAt && expiresAt < new Date()` 即返回 401。无需周期任务介入。
 
 `spending_rules` 与上游的 `spending_rules` 含义类似，但作用对象是「该 Key 的累计消费」而非「该上游的累计消费」。
 
@@ -178,7 +178,7 @@ curl -X POST http://<your-host>:3331/api/proxy/v1/chat/completions \
   }'
 ```
 
-AutoRouter 也支持额外两种 header 名称（`src/app/api/proxy/v1/[...path]/route.ts:2255`）：
+AutoRouter 也支持额外两种 header 名称（由 `proxy-request-lifecycle.ts` 的 `extractProxyApiKey` 解析）：
 
 ```
 Authorization: Bearer <key>
