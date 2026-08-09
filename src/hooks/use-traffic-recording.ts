@@ -221,6 +221,16 @@ export function useCleanupTrafficRecordings() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["traffic-recording"] });
       queryClient.invalidateQueries({ queryKey: ["background-sync", "tasks"] });
+      if (result.failure_count > 0) {
+        toast.warning(
+          t("cleanupPartial", {
+            deleted: result.deleted_count,
+            failed: result.failure_count,
+            message: result.error_summary ?? "",
+          })
+        );
+        return;
+      }
       toast.success(t("cleanupComplete", { count: result.deleted_count }));
     },
     onError: (error: Error) => {

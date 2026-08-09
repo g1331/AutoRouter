@@ -330,12 +330,275 @@ describe("traffic-recording-service", () => {
     findFirstMock.mockResolvedValueOnce(recordingRow());
     unlinkMock.mockResolvedValueOnce(undefined);
     dbDeleteMock.mockReturnValueOnce({
-      where: vi.fn().mockResolvedValue(undefined),
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: "recording-1" }]),
+      }),
     });
 
     await expect(deleteTrafficRecording("recording-1")).resolves.toBe(true);
     expect(unlinkMock).toHaveBeenCalledTimes(1);
+
     expect(dbDeleteMock).toHaveBeenCalledTimes(1);
+  });
+  it("does not remove a fixture when another cleanup already claimed the row", async () => {
+    const { deleteTrafficRecording } = await import("@/lib/services/traffic-recording-service");
+
+    findFirstMock.mockResolvedValueOnce(recordingRow());
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([]),
+      }),
+    });
+
+    await expect(deleteTrafficRecording("recording-1")).resolves.toBe(false);
+    expect(unlinkMock).not.toHaveBeenCalled();
+  });
+  it("preserves expired indexes when a fixture file is missing", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    dbInsertMock.mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockRejectedValueOnce(Object.assign(new Error("fixture missing"), { code: "ENOENT" }));
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+    expect(result.errorSummary).toContain("recording-1");
+    expect(unlinkMock).not.toHaveBeenCalled();
+    expect(dbDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves expired indexes whose fixture path is outside the configured root", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    process.env.RECORDER_FIXTURES_DIR = "custom-fixtures";
+    dbInsertMock.mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+    expect(result.errorSummary).toContain("recording-1");
+    expect(unlinkMock).not.toHaveBeenCalled();
+    expect(dbDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("deletes expired fixtures and indexes after a successful preflight", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    dbInsertMock.mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockResolvedValueOnce({});
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: "recording-1" }]),
+      }),
+    });
+    unlinkMock.mockResolvedValueOnce(undefined);
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(1);
+    expect(result.failureCount).toBe(0);
+    expect(dbDeleteMock).toHaveBeenCalledTimes(1);
+    expect(unlinkMock).toHaveBeenCalledTimes(1);
+    expect(dbDeleteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      unlinkMock.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("preserves the index when database deletion fails before fixture removal", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    dbInsertMock.mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockResolvedValueOnce({});
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockRejectedValueOnce(new Error("database unavailable")),
+      }),
+    });
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+
+    expect(result.errorSummary).toContain("database unavailable");
+    expect(unlinkMock).not.toHaveBeenCalled();
+    expect(dbDeleteMock).toHaveBeenCalledTimes(1);
+  });
+  it("does not restore or remove a fixture when another cleanup wins", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    dbInsertMock.mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockResolvedValueOnce({});
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([]),
+      }),
+    });
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(0);
+    expect(result.failureCount).toBe(0);
+    expect(unlinkMock).not.toHaveBeenCalled();
+    expect(dbInsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the index when fixture removal fails after database deletion", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    const insertSettings = {
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+    const restoreIndex = {
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+    dbInsertMock.mockReturnValueOnce(insertSettings).mockReturnValueOnce(restoreIndex);
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockResolvedValueOnce({});
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: "recording-1" }]),
+      }),
+    });
+    unlinkMock.mockRejectedValueOnce(new Error("fixture is read-only"));
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+    expect(result.errorSummary).toContain("fixture is read-only");
+    expect(dbInsertMock).toHaveBeenCalledTimes(2);
+    expect(unlinkMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("detaches deleted foreign keys when restoring the index", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    const insertSettings = {
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+    const restoreWithRelations = {
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockRejectedValueOnce(new Error("foreign key violation")),
+      }),
+    };
+    const restoreDetached = {
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    };
+    dbInsertMock
+      .mockReturnValueOnce(insertSettings)
+      .mockReturnValueOnce(restoreWithRelations)
+      .mockReturnValueOnce(restoreDetached);
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockResolvedValueOnce({});
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: "recording-1" }]),
+      }),
+    });
+    unlinkMock.mockRejectedValueOnce(new Error("fixture is read-only"));
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.failureCount).toBe(1);
+    expect(restoreDetached.values).toHaveBeenCalledWith(
+      expect.objectContaining({ requestLogId: null, apiKeyId: null, upstreamId: null })
+    );
+  });
+
+  it("does not restore an index when the fixture vanishes after deletion", async () => {
+    const { cleanupExpiredTrafficRecordings } =
+      await import("@/lib/services/traffic-recording-service");
+
+    dbInsertMock.mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    findFirstMock.mockResolvedValueOnce(settingsRow());
+    findManyMock.mockResolvedValueOnce([
+      recordingRow({ createdAt: new Date("2025-12-01T00:00:00.000Z") }),
+    ]);
+    statMock.mockResolvedValueOnce({});
+    dbDeleteMock.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: "recording-1" }]),
+      }),
+    });
+    unlinkMock.mockRejectedValueOnce(
+      Object.assign(new Error("fixture disappeared"), { code: "ENOENT" })
+    );
+
+    const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(result.deletedCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+    expect(result.errorSummary).toContain("fixture disappeared");
+    expect(dbInsertMock).toHaveBeenCalledTimes(1);
+    expect(unlinkMock).toHaveBeenCalledTimes(1);
   });
 
   it("uses runtime settings when deciding whether to record traffic", async () => {

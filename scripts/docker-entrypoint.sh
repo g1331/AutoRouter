@@ -1,10 +1,14 @@
 #!/bin/sh
 set -e
 
+DATA_DIR=/app/data
+mkdir -p "$DATA_DIR"
+chown -R nextjs:nodejs "$DATA_DIR"
+
 echo "[AutoRouter] Running database migrations..."
 
 # Run migrations using Node.js with postgres package
-node -e "
+su-exec nextjs node -e "
 const postgres = require('postgres');
 const fs = require('fs');
 const path = require('path');
@@ -80,4 +84,4 @@ runMigrations();
 "
 
 echo "[AutoRouter] Starting application..."
-exec "$@"
+exec su-exec nextjs "$@"

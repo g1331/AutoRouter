@@ -159,6 +159,32 @@ function assertPathInsideRecordingRoot(filePath: string): string {
   return resolved;
 }
 
+async function deleteRecordingFixtureFile(fixturePath: string): Promise<void> {
+  await unlink(assertPathInsideRecordingRoot(fixturePath));
+}
+
+async function getExistingRecordingFixtureFile(fixturePath: string): Promise<string> {
+  const filePath = assertPathInsideRecordingRoot(fixturePath);
+  await stat(filePath);
+  return filePath;
+}
+
+async function restoreTrafficRecordingIndex(recording: TrafficRecording): Promise<void> {
+  try {
+    await db.insert(trafficRecordings).values(recording).onConflictDoNothing();
+  } catch {
+    await db
+      .insert(trafficRecordings)
+      .values({
+        ...recording,
+        requestLogId: null,
+        apiKeyId: null,
+        upstreamId: null,
+      })
+      .onConflictDoNothing();
+  }
+}
+
 /** Return the configured fixture root for recorded traffic files. */
 export function getTrafficRecordingRoot(): string {
   return process.env.RECORDER_FIXTURES_DIR || DEFAULT_TRAFFIC_RECORDING_ROOT;
@@ -382,9 +408,14 @@ export async function deleteTrafficRecording(id: string): Promise<boolean> {
   });
   if (!row) return false;
 
+  const deletedRows = await db
+    .delete(trafficRecordings)
+    .where(eq(trafficRecordings.id, id))
+    .returning({ id: trafficRecordings.id });
+  if (deletedRows.length === 0) return false;
+
   try {
-    const filePath = assertPathInsideRecordingRoot(row.fixturePath);
-    await unlink(filePath);
+    await deleteRecordingFixtureFile(row.fixturePath);
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? error.code : null;
     if (code !== "ENOENT") {
@@ -392,7 +423,6 @@ export async function deleteTrafficRecording(id: string): Promise<boolean> {
     }
   }
 
-  await db.delete(trafficRecordings).where(eq(trafficRecordings.id, id));
   return true;
 }
 
@@ -412,12 +442,36 @@ export async function cleanupExpiredTrafficRecordings(
   const failures: string[] = [];
 
   for (const recording of expired) {
-    const deleted = await deleteTrafficRecording(recording.id);
-    if (deleted) {
+    let deletedFromDatabase = false;
+    try {
+      const filePath = await getExistingRecordingFixtureFile(recording.fixturePath);
+      const deletedRows = await db
+        .delete(trafficRecordings)
+        .where(eq(trafficRecordings.id, recording.id))
+        .returning({ id: trafficRecordings.id });
+      if (deletedRows.length === 0) continue;
+      deletedFromDatabase = true;
+      await unlink(filePath);
       deletedCount += 1;
-    } else {
+    } catch (error) {
+      const errorCode = error && typeof error === "object" && "code" in error ? error.code : null;
+      if (deletedFromDatabase && errorCode !== "ENOENT") {
+        try {
+          await restoreTrafficRecordingIndex(recording);
+        } catch (restoreError) {
+          log.error(
+            { err: restoreError, recordingId: recording.id },
+            "failed to restore traffic recording index after fixture cleanup failure"
+          );
+        }
+      }
       failureCount += 1;
-      failures.push(recording.id);
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${recording.id}: ${message}`);
+      log.warn(
+        { err: error, recordingId: recording.id },
+        "failed to clean up expired traffic recording"
+      );
     }
   }
 

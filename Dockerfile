@@ -39,6 +39,7 @@ RUN pnpm build
 
 # Production stage
 FROM base AS runner
+RUN apk add --no-cache su-exec
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -54,6 +55,7 @@ COPY --from=builder /app/public ./public
 # Set correct permissions for prerender cache
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 # Copy standalone build
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -69,7 +71,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-USER nextjs
+USER root
 
 EXPOSE 3000
 

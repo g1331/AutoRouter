@@ -1631,6 +1631,7 @@
     "filters": "Filters",
     "cleanupExpired": "Clean expired",
     "cleanupComplete": "Cleaned {count} expired recordings",
+    "cleanupPartial": "Cleaned {deleted} expired recordings; {failed} failed. {message}",
     "cleanupFailed": "Cleanup failed: {message}",
     "statusFilter": "Status filter",
     "statusAll": "All statuses",

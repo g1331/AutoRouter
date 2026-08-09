@@ -106,9 +106,9 @@ openssl rand -hex 32
 
 唯一仍生效的录制相关 env var 是文件目录：
 
-| 变量                    | 必填 | 默认值                                                                         | 重启 | 说明                                                                                                                |
-| ----------------------- | ---- | ------------------------------------------------------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------- |
-| `RECORDER_FIXTURES_DIR` | 否   | 代码默认 `data/traffic-recordings`；docker-compose.yml 中默认 `tests/fixtures` | 重启 | 录制文件落盘目录。由 `resolveRecordingRoot()` / `getTrafficRecordingRoot()` 直接读取 env var，未走 Runtime Settings |
+| 变量                    | 必填 | 默认值                                                                                                                      | 重启 | 说明                                                                                                                |
+| ----------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------- |
+| `RECORDER_FIXTURES_DIR` | 否   | 代码默认 `data/traffic-recordings`；docker-compose.yml 生产默认 `/app/data/traffic-recordings`（位于 `autorouter-data` 卷） | 重启 | 录制文件落盘目录。由 `resolveRecordingRoot()` / `getTrafficRecordingRoot()` 直接读取 env var，未走 Runtime Settings |
 
 ## CLIProxyAPI Sidecar（可选）
 
