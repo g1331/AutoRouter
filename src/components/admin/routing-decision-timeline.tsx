@@ -127,6 +127,8 @@ export function RoutingDecisionTimeline({
   showStageConnector = true,
 }: RoutingDecisionTimelineProps) {
   const t = useTranslations("logs");
+  const displayedAffinityBindingState =
+    affinityBindingState === "unchanged" ? null : affinityBindingState;
 
   const indicators = useMemo(() => {
     if (!routingDecision)
@@ -269,12 +271,12 @@ export function RoutingDecisionTimeline({
                 <ArrowUpRight className="w-3 h-3 text-status-warning" />
               </span>
             )}
-            {affinityBindingState ? (
+            {displayedAffinityBindingState ? (
               <span
                 className="max-w-[8rem] truncate rounded-cf-sm border border-status-info/30 bg-status-info/10 px-1 text-[10px] text-status-info"
-                title={`${t("timelineAffinityBindingState")}: ${t("affinityBindingState." + affinityBindingState)}`}
+                title={`${t("timelineAffinityBindingState")}: ${t("affinityBindingState." + displayedAffinityBindingState)}`}
               >
-                {t("affinityBindingState." + affinityBindingState)}
+                {t("affinityBindingState." + displayedAffinityBindingState)}
               </span>
             ) : null}
           </div>
@@ -341,11 +343,11 @@ export function RoutingDecisionTimeline({
                 </span>
               )}
             </div>
-            {affinityBindingState || statusCode == null ? (
+            {displayedAffinityBindingState || statusCode == null ? (
               <span className="flex items-center gap-1 text-status-info">
                 {t("timelineAffinityBindingState")}:{" "}
-                {affinityBindingState
-                  ? t("affinityBindingState." + affinityBindingState)
+                {displayedAffinityBindingState
+                  ? t("affinityBindingState." + displayedAffinityBindingState)
                   : t("timelineAffinityPending")}
               </span>
             ) : null}

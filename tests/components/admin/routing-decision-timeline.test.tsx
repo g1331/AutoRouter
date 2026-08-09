@@ -184,4 +184,55 @@ describe("RoutingDecisionTimeline", () => {
     expect(screen.queryByTitle("indicatorLowCandidates")).not.toBeInTheDocument();
     expect(screen.queryByText("0/0")).not.toBeInTheDocument();
   });
+  it("keeps the affinity icon without a duplicate unchanged label in compact view", () => {
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          did_send_upstream: true,
+          candidate_upstream_id: "up-2",
+          actual_upstream_id: "up-2",
+          failure_stage: null,
+        }}
+        upstreamName="rc"
+        routingType="provider_type"
+        groupName={null}
+        failoverAttempts={0}
+        sessionId="session-1"
+        affinityHit={true}
+        affinityMigrated={false}
+        affinityBindingState="unchanged"
+      />
+    );
+
+    expect(screen.getByTitle("timelineAffinityHit")).toBeInTheDocument();
+    expect(screen.queryByText("affinityBindingState.unchanged")).not.toBeInTheDocument();
+  });
+
+  it("keeps the affinity icon without a duplicate unchanged label in expanded view", () => {
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          did_send_upstream: true,
+          candidate_upstream_id: "up-2",
+          actual_upstream_id: "up-2",
+          failure_stage: null,
+        }}
+        upstreamName="rc"
+        routingType="provider_type"
+        groupName={null}
+        failoverAttempts={0}
+        statusCode={200}
+        sessionId="session-1"
+        affinityHit={true}
+        affinityMigrated={false}
+        affinityBindingState="unchanged"
+        compact={false}
+      />
+    );
+
+    expect(screen.getByText("timelineAffinityHit")).toBeInTheDocument();
+    expect(screen.queryByText("affinityBindingState.unchanged")).not.toBeInTheDocument();
+  });
 });
