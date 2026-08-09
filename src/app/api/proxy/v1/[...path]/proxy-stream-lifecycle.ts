@@ -599,6 +599,7 @@ function wrapStreamWithDownstreamSettlement(
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
   let abortHandled = false;
+  let abortHandler: (() => void) | null = null;
 
   const handleAbortOnce = () => {
     if (streamCompleted || abortHandled) {
@@ -608,13 +609,27 @@ function wrapStreamWithDownstreamSettlement(
     onAbort();
   };
 
+  const cleanup = () => {
+    if (abortSignal && abortHandler) {
+      abortSignal.removeEventListener("abort", abortHandler);
+      abortHandler = null;
+    }
+    reader?.releaseLock();
+    reader = null;
+  };
+
   return new ReadableStream({
-    async start(controller) {
+    start(controller) {
       reader = stream.getReader();
 
-      const abortHandler = () => {
+      abortHandler = () => {
         handleAbortOnce();
-        void reader?.cancel("Client disconnected").catch(() => undefined);
+        const cancellation = reader?.cancel("Client disconnected");
+        if (cancellation) {
+          void cancellation.catch(() => undefined).finally(cleanup);
+        } else {
+          cleanup();
+        }
         try {
           controller.close();
         } catch {
@@ -624,44 +639,49 @@ function wrapStreamWithDownstreamSettlement(
 
       if (abortSignal) {
         abortSignal.addEventListener("abort", abortHandler, { once: true });
+        if (abortSignal.aborted) {
+          abortHandler();
+        }
+      }
+    },
+    async pull(controller) {
+      if (streamCompleted || !reader) {
+        return;
+      }
+      if (abortSignal?.aborted) {
+        abortHandler?.();
+        return;
       }
 
       try {
-        while (true) {
-          if (abortSignal?.aborted) {
-            handleAbortOnce();
-            break;
-          }
-
-          const { done, value } = await reader.read();
-          if (done) {
-            streamCompleted = true;
-            onComplete();
-            break;
-          }
-
-          controller.enqueue(value);
+        const { done, value } = await reader.read();
+        if (done) {
+          streamCompleted = true;
+          controller.close();
+          queueMicrotask(onComplete);
+          cleanup();
+          return;
         }
 
-        controller.close();
+        controller.enqueue(value);
       } catch (error) {
         if (abortSignal?.aborted) {
           handleAbortOnce();
+          cleanup();
           return;
         }
 
         controller.error(error);
-      } finally {
-        reader?.releaseLock();
-        reader = null;
-        if (abortSignal) {
-          abortSignal.removeEventListener("abort", abortHandler);
-        }
+        cleanup();
       }
     },
     async cancel(reason) {
       handleAbortOnce();
-      await reader?.cancel(reason);
+      try {
+        await reader?.cancel(reason);
+      } finally {
+        cleanup();
+      }
     },
   });
 }
@@ -812,7 +832,7 @@ export function createStreamResponse(
         context.requestedServiceTier,
         metrics.effectiveServiceTier ?? terminal.result.effectiveServiceTier
       );
-      const affinityBindingState = commitAffinityBindingAfterSuccess({
+      const affinityBindingResult = commitAffinityBindingAfterSuccess({
         apiKeyId: context.apiKeyId,
         affinityScope: context.matchedRouteCapability,
         sessionId: context.sessionId,
@@ -821,8 +841,9 @@ export function createStreamResponse(
         selectedUpstreamId: terminal.upstream.id,
         affinityMigrated: terminal.affinityMigrated,
       });
+      const affinityBindingState = affinityBindingResult.state;
 
-      if (context.sessionId && metrics.usage) {
+      if (context.sessionId && affinityBindingResult.bindingMatchesSelection && metrics.usage) {
         const affinityUsage: AffinityUsage = {
           totalInputTokens: computeAffinityTokens(context.matchedRouteCapability, metrics.usage),
         };
@@ -841,8 +862,6 @@ export function createStreamResponse(
           },
           "session affinity: updated cumulative tokens"
         );
-      } else if (context.sessionId) {
-        affinityStore.touch(context.apiKeyId, context.matchedRouteCapability, context.sessionId);
       }
 
       const logFields = buildSuccessLogFields(

@@ -343,7 +343,7 @@ async function settleNonStreamSuccess(
   const bodyBytes = terminal.result.body;
   const durationMs = Date.now() - context.startTime;
   const usageForBilling = toBillingUsage(terminal.usage);
-  const affinityBindingState = commitAffinityBindingAfterSuccess({
+  const affinityBindingResult = commitAffinityBindingAfterSuccess({
     apiKeyId: context.apiKeyId,
     affinityScope: context.matchedRouteCapability,
     sessionId: context.sessionId,
@@ -352,16 +352,15 @@ async function settleNonStreamSuccess(
     selectedUpstreamId: terminal.upstream.id,
     affinityMigrated: terminal.affinityMigrated,
   });
+  const affinityBindingState = affinityBindingResult.state;
 
-  if (context.sessionId && terminal.usage) {
+  if (context.sessionId && affinityBindingResult.bindingMatchesSelection && terminal.usage) {
     affinityStore.updateCumulativeTokens(
       context.apiKeyId,
       context.matchedRouteCapability,
       context.sessionId,
       { totalInputTokens: computeAffinityTokens(context.matchedRouteCapability, terminal.usage) }
     );
-  } else if (context.sessionId) {
-    affinityStore.touch(context.apiKeyId, context.matchedRouteCapability, context.sessionId);
   }
 
   const logFields = buildSuccessLogFields(

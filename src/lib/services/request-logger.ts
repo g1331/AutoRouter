@@ -114,6 +114,7 @@ export interface StartRequestLogInput {
   routingDecision?: RoutingDecisionLog | null;
   thinkingConfig?: RequestThinkingConfig | null;
   sessionId?: string | null;
+  affinityHit?: boolean;
 }
 
 /**
@@ -472,6 +473,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
       thinkingConfig: input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null,
       sessionId: input.sessionId ?? null,
+      affinityHit: input.affinityHit ?? false,
       createdAt: new Date(),
     })
     .returning();
@@ -662,6 +664,8 @@ export async function reconcileStaleInProgressRequestLogs(options?: {
       id: true,
       createdAt: true,
       isStream: true,
+      sessionId: true,
+      affinityHit: true,
     },
   });
 
@@ -678,10 +682,16 @@ export async function reconcileStaleInProgressRequestLogs(options?: {
     }
 
     const durationMs = Math.min(Math.max(0, now.getTime() - createdAt.getTime()), INT4_MAX);
+    const affinityBindingState = candidate.sessionId
+      ? candidate.affinityHit
+        ? "unchanged"
+        : "none"
+      : null;
     const updated = await updateRequestLog(candidate.id, {
       statusCode: STALE_REQUEST_LOG_STATUS_CODE,
       durationMs,
       errorMessage: STALE_REQUEST_LOG_ERROR_MESSAGE,
+      affinityBindingState,
     });
 
     if (updated) {

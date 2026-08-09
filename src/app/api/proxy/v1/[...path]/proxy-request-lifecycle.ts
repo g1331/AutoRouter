@@ -1745,6 +1745,17 @@ export async function executeProxyRequest(request: Request, path: string): Promi
       );
     }
   }
+  // Snapshot the binding observed at request start without refreshing its TTL.
+  const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
+  const affinityBindingExpectation: AffinityBindingExpectation | null = sessionId
+    ? (() => {
+        const entry = affinityStore.peek(validApiKey.id, matchedRouteCapability, sessionId);
+        return {
+          initialUpstreamId: entry?.upstreamId ?? null,
+          initialBindingVersion: entry?.bindingVersion ?? null,
+        };
+      })()
+    : null;
 
   // Track failover history outside try block for error logging
   let failoverHistory: FailoverAttempt[] = [];
@@ -1794,6 +1805,8 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     routingDecision: initialRoutingDecisionLog,
     thinkingConfig,
     sessionId,
+    affinityHit:
+      affinityBindingExpectation !== null && affinityBindingExpectation.initialUpstreamId !== null,
   })
     .then((startLog) => {
       requestLogId ??= startLog.id;
@@ -1858,18 +1871,6 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     queueStatePersistence = persistence;
     return persistence;
   };
-
-  // Forward request to upstream
-  const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
-  const affinityBindingExpectation: AffinityBindingExpectation | null = sessionId
-    ? (() => {
-        const entry = affinityStore.peek(validApiKey.id, matchedRouteCapability, sessionId);
-        return {
-          initialUpstreamId: entry?.upstreamId ?? null,
-          initialBindingVersion: entry?.bindingVersion ?? null,
-        };
-      })()
-    : null;
 
   let compensationHeaders: CompensationHeader[] = [];
   const nonStreamLifecycleContext: NonStreamLifecycleContext = {

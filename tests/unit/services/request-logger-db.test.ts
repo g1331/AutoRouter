@@ -29,8 +29,11 @@ vi.mock("@/lib/db", () => ({
     ttftMs: "ttft_ms",
     totalTokens: "total_tokens",
     completionTokens: "completion_tokens",
+    sessionId: "session_id",
     isStream: "is_stream",
+    affinityHit: "affinity_hit",
   },
+
   requestBillingSnapshots: {
     requestLogId: "request_log_id",
     finalCost: "final_cost",
@@ -204,6 +207,7 @@ describe("request-logger (db flows)", () => {
       reasoningEffort: "enabled",
       routingType: "tiered",
       sessionId: "sid-1",
+      affinityHit: true,
     });
 
     expect(valuesMock).toHaveBeenCalledWith(
@@ -219,6 +223,8 @@ describe("request-logger (db flows)", () => {
         reasoningEffort: "enabled",
         statusCode: null,
         durationMs: null,
+        sessionId: "sid-1",
+        affinityHit: true,
       })
     );
   });
@@ -855,6 +861,8 @@ describe("request-logger (db flows)", () => {
         id: "log-stale",
         createdAt: new Date("2026-03-07T11:40:00.000Z"),
         isStream: false,
+        sessionId: "session-first",
+        affinityHit: false,
       },
       {
         id: "log-active-stream",
@@ -897,6 +905,7 @@ describe("request-logger (db flows)", () => {
       expect.objectContaining({
         statusCode: 520,
         errorMessage: expect.stringContaining("stale reconciliation timeout window"),
+        affinityBindingState: "none",
       })
     );
     expect(whereMock).toHaveBeenCalledTimes(1);
@@ -916,6 +925,44 @@ describe("request-logger (db flows)", () => {
         cacheWriteTokens: 0,
       },
     });
+  });
+  it("marks a stale request with an existing binding as unchanged", async () => {
+    const { reconcileStaleInProgressRequestLogs } = await import("@/lib/services/request-logger");
+
+    const now = new Date("2026-03-07T12:00:00.000Z");
+    requestLogsFindManyMock.mockResolvedValueOnce([
+      {
+        id: "log-bound-stale",
+        createdAt: new Date("2026-03-07T11:40:00.000Z"),
+        isStream: false,
+        sessionId: "session-existing",
+        affinityHit: true,
+      },
+    ]);
+
+    const returningMock = vi.fn().mockResolvedValueOnce([
+      {
+        id: "log-bound-stale",
+        statusCode: 520,
+        apiKeyId: null,
+        upstreamId: null,
+        model: null,
+      },
+    ]);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockReturnValue({ where: whereMock });
+    dbUpdateMock.mockReturnValueOnce({ set: setMock });
+    calculateAndPersistRequestBillingSnapshotMock.mockResolvedValueOnce({
+      status: "unbilled",
+      unbillableReason: "usage_missing",
+      finalCost: null,
+      source: null,
+    });
+
+    await expect(reconcileStaleInProgressRequestLogs({ now })).resolves.toBe(1);
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ affinityBindingState: "unchanged" })
+    );
   });
 
   it("reconcileStaleInProgressRequestLogs clamps overflow durationMs before updating", async () => {

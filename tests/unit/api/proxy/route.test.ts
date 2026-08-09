@@ -5014,6 +5014,8 @@ describe("proxy route upstream selection", () => {
       await import("@/lib/services/load-balancer");
     const { markHealthy } = await import("@/lib/services/health-checker");
     const { recordSuccess } = await import("@/lib/services/circuit-breaker");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+    const { affinityStore } = await import("@/lib/services/session-affinity");
 
     const upstream = {
       ...DEFAULT_ACTIVE_UPSTREAMS[0],
@@ -5073,6 +5075,7 @@ describe("proxy route upstream selection", () => {
       headers: {
         authorization: "Bearer sk-test",
         "content-type": "application/json",
+        session_id: "session-release-success",
       },
       body: JSON.stringify({
         model: "gpt-5.2",
@@ -5085,6 +5088,12 @@ describe("proxy route upstream selection", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-release-success",
+        affinityHit: false,
+      })
+    );
     expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
       "up-release-success",
     ]);
@@ -5092,6 +5101,11 @@ describe("proxy route upstream selection", () => {
     expect(markHealthy).toHaveBeenCalledWith("up-release-success", 100);
     expect(recordSuccess).toHaveBeenCalledTimes(1);
     expect(recordSuccess).toHaveBeenCalledWith("up-release-success");
+    const updatePayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updatePayload).toEqual(expect.objectContaining({ affinityBindingState: "created" }));
+    expect(
+      affinityStore.get("key-1", "openai_chat_compatible", "session-release-success")?.upstreamId
+    ).toBe("up-release-success");
   });
 
   it("should release a reserved slot exactly once when forwarding throws before a response is returned", async () => {
@@ -5102,6 +5116,8 @@ describe("proxy route upstream selection", () => {
       await import("@/lib/services/load-balancer");
     const { markUnhealthy } = await import("@/lib/services/health-checker");
     const { recordFailure } = await import("@/lib/services/circuit-breaker");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { affinityStore } = await import("@/lib/services/session-affinity");
 
     const upstream = {
       ...DEFAULT_ACTIVE_UPSTREAMS[0],
@@ -5154,6 +5170,7 @@ describe("proxy route upstream selection", () => {
       headers: {
         authorization: "Bearer sk-test",
         "content-type": "application/json",
+        session_id: "session-release-error",
       },
       body: JSON.stringify({
         model: "gpt-5.2",
@@ -5172,6 +5189,11 @@ describe("proxy route upstream selection", () => {
     expect(markUnhealthy).toHaveBeenCalledTimes(1);
     expect(markUnhealthy).toHaveBeenCalledWith("up-release-error", "fetch failed");
     expect(recordFailure).toHaveBeenCalledTimes(1);
+    const updatePayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updatePayload).toEqual(expect.objectContaining({ affinityBindingState: "none" }));
+    expect(
+      affinityStore.get("key-1", "openai_chat_compatible", "session-release-error")
+    ).toBeNull();
   });
 
   it("should fail over when an upstream returns an empty successful response", async () => {

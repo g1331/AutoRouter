@@ -43,6 +43,10 @@ export interface AffinityCommitResult {
   committed: boolean;
   current: AffinityEntry | null;
 }
+export interface AffinityBindingCommitOutcome {
+  state: AffinityBindingState | null;
+  bindingMatchesSelection: boolean;
+}
 
 // ============================================================================
 // Configuration
@@ -173,11 +177,7 @@ export class SessionAffinityStore {
   ): AffinityCommitResult {
     const key = this.generateKey(apiKeyId, affinityScope, sessionId);
     const current = this.getValidEntry(key, Date.now());
-    const canCommit =
-      expectedBindingVersion === null ||
-      current === null ||
-      current.bindingVersion === expectedBindingVersion;
-
+    const canCommit = current === null || current.bindingVersion === expectedBindingVersion;
     if (!canCommit) {
       return { committed: false, current };
     }
@@ -352,9 +352,9 @@ export function commitAffinityBindingAfterSuccess(input: {
   expectation: AffinityBindingExpectation | null;
   selectedUpstreamId: string;
   affinityMigrated: boolean;
-}): AffinityBindingState | null {
+}): AffinityBindingCommitOutcome {
   if (!input.sessionId || !input.expectation) {
-    return null;
+    return { state: null, bindingMatchesSelection: false };
   }
 
   const { initialUpstreamId, initialBindingVersion } = input.expectation;
@@ -376,15 +376,18 @@ export function commitAffinityBindingAfterSuccess(input: {
   );
 
   if (commit.committed) {
-    return intendedState;
+    return { state: intendedState, bindingMatchesSelection: true };
   }
 
   if (commit.current) {
-    affinityStore.touch(input.apiKeyId, input.affinityScope, input.sessionId);
-    return "unchanged";
+    const bindingMatchesSelection = commit.current.upstreamId === input.selectedUpstreamId;
+    if (bindingMatchesSelection) {
+      affinityStore.touch(input.apiKeyId, input.affinityScope, input.sessionId);
+    }
+    return { state: "unchanged", bindingMatchesSelection };
   }
 
-  return intendedState;
+  return { state: intendedState, bindingMatchesSelection: false };
 }
 
 /** Resolve the terminal binding state when no binding commit occurred. */
