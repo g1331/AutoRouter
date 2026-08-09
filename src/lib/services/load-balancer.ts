@@ -882,7 +882,7 @@ async function selectFromUpstreamPool(
       };
     }
 
-    const affinityEntry = affinityStore.get(apiKeyId, affinityScope, sessionId);
+    const affinityEntry = affinityStore.peek(apiKeyId, affinityScope, sessionId);
 
     if (affinityEntry) {
       // Check if bound upstream is still available and not excluded
@@ -1005,7 +1005,7 @@ async function selectFromUpstreamPool(
       }
 
       // Bound upstream unavailable, reselect for this request only.
-      // Do not overwrite affinity cache here; successful requests bind in proxy route.
+      // Do not overwrite affinity cache here; successful terminal settlement commits it.
       const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
 
       return {

@@ -69,7 +69,6 @@ import type {
   RoutingQueueLog,
   RoutingSelectionReason,
 } from "@/types/api";
-import { affinityStore } from "@/lib/services/session-affinity";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("proxy-execution");
@@ -1167,16 +1166,6 @@ export async function forwardWithFailover(
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
         continue;
-      }
-
-      if (affinityContext?.sessionId) {
-        affinityStore.set(
-          affinityContext.apiKeyId,
-          routeCapability,
-          affinityContext.sessionId,
-          selectedUpstream.id,
-          affinityContext.contentLength
-        );
       }
 
       // For streaming responses, we track the connection until the stream ends

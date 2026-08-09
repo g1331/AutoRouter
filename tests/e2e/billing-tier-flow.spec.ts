@@ -247,6 +247,7 @@ async function mockLogsApi(page: Page) {
           session_id: null,
           affinity_hit: false,
           affinity_migrated: false,
+          affinity_binding_state: null,
           ttft_ms: null,
           is_stream: false,
           created_at: now,

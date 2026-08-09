@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   SessionAffinityStore,
+  affinityStore,
+  commitAffinityBindingAfterSuccess,
   extractSessionId,
+  resolveAffinityFailureBindingState,
   shouldMigrate,
   type AffinityMigrationConfig,
   type UpstreamCandidate,
 } from "@/lib/services/session-affinity";
-
 describe("SessionAffinityStore", () => {
   let store: SessionAffinityStore;
 
@@ -240,6 +242,140 @@ describe("SessionAffinityStore", () => {
       expect(store.get("key1", "anthropic_messages", "session-abc")?.upstreamId).toBe("upstream-1");
       expect(store.get("key1", "anthropic_messages", "session-def")?.upstreamId).toBe("upstream-2");
     });
+  });
+});
+
+describe("terminal binding state", () => {
+  beforeEach(() => {
+    affinityStore.clear();
+  });
+
+  afterEach(() => {
+    affinityStore.clear();
+  });
+
+  it("marks a first successful response as created and commits the binding", () => {
+    const result = commitAffinityBindingAfterSuccess({
+      apiKeyId: "key-1",
+      affinityScope: "openai_chat_compatible",
+      sessionId: "session-1",
+      contentLength: 1024,
+      expectation: { initialUpstreamId: null, initialBindingVersion: null },
+      selectedUpstreamId: "upstream-1",
+      affinityMigrated: false,
+    });
+
+    expect(result.state).toBe("created");
+    expect(result.bindingMatchesSelection).toBe(true);
+    expect(affinityStore.get("key-1", "openai_chat_compatible", "session-1")?.upstreamId).toBe(
+      "upstream-1"
+    );
+  });
+
+  it("distinguishes unchanged, migrated, and reselected terminal bindings", () => {
+    affinityStore.set("key-1", "openai_chat_compatible", "session-1", "upstream-1", 1024);
+    const expectation = affinityStore.peek("key-1", "openai_chat_compatible", "session-1");
+
+    expect(
+      commitAffinityBindingAfterSuccess({
+        apiKeyId: "key-1",
+        affinityScope: "openai_chat_compatible",
+        sessionId: "session-1",
+        contentLength: 1024,
+        expectation: {
+          initialUpstreamId: "upstream-1",
+          initialBindingVersion: expectation?.bindingVersion ?? null,
+        },
+        selectedUpstreamId: "upstream-1",
+        affinityMigrated: false,
+      }).state
+    ).toBe("unchanged");
+
+    const migratedExpectation = affinityStore.peek("key-1", "openai_chat_compatible", "session-1");
+    expect(
+      commitAffinityBindingAfterSuccess({
+        apiKeyId: "key-1",
+        affinityScope: "openai_chat_compatible",
+        sessionId: "session-1",
+        contentLength: 1024,
+        expectation: {
+          initialUpstreamId: "upstream-1",
+          initialBindingVersion: migratedExpectation?.bindingVersion ?? null,
+        },
+        selectedUpstreamId: "upstream-2",
+        affinityMigrated: true,
+      }).state
+    ).toBe("migrated");
+
+    const reselectedExpectation = affinityStore.peek(
+      "key-1",
+      "openai_chat_compatible",
+      "session-1"
+    );
+    expect(
+      commitAffinityBindingAfterSuccess({
+        apiKeyId: "key-1",
+        affinityScope: "openai_chat_compatible",
+        sessionId: "session-1",
+        contentLength: 1024,
+        expectation: {
+          initialUpstreamId: "upstream-2",
+          initialBindingVersion: reselectedExpectation?.bindingVersion ?? null,
+        },
+        selectedUpstreamId: "upstream-3",
+        affinityMigrated: false,
+      }).state
+    ).toBe("reselected");
+  });
+
+  it("does not overwrite a binding created after selection", () => {
+    affinityStore.set("key-1", "openai_chat_compatible", "session-1", "upstream-existing", 1024);
+
+    const result = commitAffinityBindingAfterSuccess({
+      apiKeyId: "key-1",
+      affinityScope: "openai_chat_compatible",
+      sessionId: "session-1",
+      contentLength: 1024,
+      expectation: { initialUpstreamId: null, initialBindingVersion: null },
+      selectedUpstreamId: "upstream-selected",
+      affinityMigrated: false,
+    });
+
+    expect(result.state).toBe("unchanged");
+    expect(result.bindingMatchesSelection).toBe(false);
+    expect(affinityStore.get("key-1", "openai_chat_compatible", "session-1")?.upstreamId).toBe(
+      "upstream-existing"
+    );
+  });
+  it("allows a concurrent success when the current binding matches the selection", () => {
+    affinityStore.set("key-1", "openai_chat_compatible", "session-1", "upstream-existing", 1024);
+
+    const result = commitAffinityBindingAfterSuccess({
+      apiKeyId: "key-1",
+      affinityScope: "openai_chat_compatible",
+      sessionId: "session-1",
+      contentLength: 1024,
+      expectation: { initialUpstreamId: null, initialBindingVersion: null },
+      selectedUpstreamId: "upstream-existing",
+      affinityMigrated: false,
+    });
+
+    expect(result).toEqual({ state: "unchanged", bindingMatchesSelection: true });
+  });
+
+  it("reports no binding on first-request failure and keeps an existing binding unchanged", () => {
+    expect(
+      resolveAffinityFailureBindingState({
+        initialUpstreamId: null,
+        initialBindingVersion: null,
+      })
+    ).toBe("none");
+    expect(
+      resolveAffinityFailureBindingState({
+        initialUpstreamId: "upstream-1",
+        initialBindingVersion: 1,
+      })
+    ).toBe("unchanged");
   });
 });
 

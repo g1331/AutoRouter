@@ -770,6 +770,8 @@ export interface RequestThinkingConfig {
   source_paths: string[];
 }
 
+export type AffinityBindingState = "created" | "unchanged" | "migrated" | "reselected" | "none";
+
 export interface RequestLogResponse {
   id: string; // UUID
   api_key_id: string | null; // UUID
@@ -809,6 +811,7 @@ export interface RequestLogResponse {
   session_id: string | null;
   affinity_hit: boolean;
   affinity_migrated: boolean;
+  affinity_binding_state: AffinityBindingState | null;
   // Performance metrics fields
   ttft_ms: number | null;
   is_stream: boolean;

@@ -67,7 +67,8 @@ import { getTrafficRecordingSettings } from "@/lib/services/traffic-recording-se
 import {
   extractSessionId,
   affinityStore,
-  type AffinityUsage,
+  resolveAffinityFailureBindingState,
+  type AffinityBindingExpectation,
 } from "@/lib/services/session-affinity";
 import { buildCompensations } from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
@@ -94,7 +95,6 @@ import {
   type NonStreamProxyResult,
 } from "./proxy-non-stream-lifecycle";
 import {
-  computeAffinityTokens,
   createStreamResponse,
   resolveEffectiveServiceTier,
   settleStreamFailureRequest,
@@ -1745,6 +1745,17 @@ export async function executeProxyRequest(request: Request, path: string): Promi
       );
     }
   }
+  // Snapshot the binding observed at request start without refreshing its TTL.
+  const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
+  const affinityBindingExpectation: AffinityBindingExpectation | null = sessionId
+    ? (() => {
+        const entry = affinityStore.peek(validApiKey.id, matchedRouteCapability, sessionId);
+        return {
+          initialUpstreamId: entry?.upstreamId ?? null,
+          initialBindingVersion: entry?.bindingVersion ?? null,
+        };
+      })()
+    : null;
 
   // Track failover history outside try block for error logging
   let failoverHistory: FailoverAttempt[] = [];
@@ -1794,6 +1805,8 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     routingDecision: initialRoutingDecisionLog,
     thinkingConfig,
     sessionId,
+    affinityHit:
+      affinityBindingExpectation !== null && affinityBindingExpectation.initialUpstreamId !== null,
   })
     .then((startLog) => {
       requestLogId ??= startLog.id;
@@ -1859,7 +1872,6 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     return persistence;
   };
 
-  // Forward request to upstream
   let compensationHeaders: CompensationHeader[] = [];
   const nonStreamLifecycleContext: NonStreamLifecycleContext = {
     request,
@@ -1873,6 +1885,8 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     thinkingConfig,
     sessionId,
     matchedRouteCapability,
+    contentLength,
+    affinityBindingExpectation,
     inboundBody,
     trafficRecordingSettings,
     shouldRecordSuccess,
@@ -1901,6 +1915,8 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     thinkingConfig,
     sessionId,
     matchedRouteCapability,
+    contentLength,
+    affinityBindingExpectation,
     inboundBody,
     trafficRecordingSettings,
     shouldRecordSuccess,
@@ -1918,7 +1934,6 @@ export async function executeProxyRequest(request: Request, path: string): Promi
   };
   try {
     // Prepare affinity context if session ID is available
-    const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
     const affinityContext = sessionId
       ? {
           apiKeyId: validApiKey.id,
@@ -2158,28 +2173,6 @@ export async function executeProxyRequest(request: Request, path: string): Promi
         }
       }
 
-      // Update session affinity cumulative tokens if we have a session
-      if (affinityContext?.sessionId && usage) {
-        const affinityUsage: AffinityUsage = {
-          totalInputTokens: computeAffinityTokens(matchedRouteCapability, usage),
-        };
-        affinityStore.updateCumulativeTokens(
-          affinityContext.apiKeyId,
-          matchedRouteCapability,
-          affinityContext.sessionId,
-          affinityUsage
-        );
-        log.debug(
-          {
-            requestId,
-            sessionId: affinityContext.sessionId,
-            upstreamId: upstreamForLogging.id,
-            tokens: affinityUsage,
-          },
-          "session affinity: updated cumulative tokens"
-        );
-      }
-
       const effectiveServiceTier = resolveEffectiveServiceTier(
         requestedServiceTier,
         result.effectiveServiceTier
@@ -2370,6 +2363,7 @@ export async function executeProxyRequest(request: Request, path: string): Promi
       thinkingConfig,
       sessionIdCompensated,
       headerDiff: failureHeaderDiff,
+      affinityBindingState: resolveAffinityFailureBindingState(affinityBindingExpectation),
     };
 
     // Model listing is a read-only discovery endpoint: when every candidate was

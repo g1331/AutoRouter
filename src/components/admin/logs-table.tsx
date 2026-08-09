@@ -1334,6 +1334,23 @@ export function LogsTable({
                   {hasSession ? (
                     <>
                       <div className="flex flex-wrap items-center gap-1.5">
+                        {log.affinity_binding_state
+                          ? renderMetricPill(
+                              t("timelineAffinityBindingState"),
+                              t("affinityBindingState." + log.affinity_binding_state),
+                              log.affinity_binding_state === "created"
+                                ? "success"
+                                : log.affinity_binding_state === "none"
+                                  ? "neutral"
+                                  : "info"
+                            )
+                          : log.status_code == null
+                            ? renderMetricPill(
+                                t("timelineAffinityBindingState"),
+                                t("timelineAffinityPending"),
+                                "info"
+                              )
+                            : null}
                         {log.affinity_hit && !log.affinity_migrated
                           ? renderMetricPill(t("timelineAffinityHit"), "", "success")
                           : null}
@@ -3081,6 +3098,7 @@ export function LogsTable({
                                   sessionId={log.session_id}
                                   affinityHit={log.affinity_hit}
                                   affinityMigrated={log.affinity_migrated}
+                                  affinityBindingState={log.affinity_binding_state}
                                   compact={true}
                                 />
                               </TableCell>

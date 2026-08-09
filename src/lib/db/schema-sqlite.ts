@@ -385,6 +385,7 @@ export const requestLogs = sqliteTable(
     sessionId: text("session_id"),
     affinityHit: integer("affinity_hit", { mode: "boolean" }).notNull().default(false),
     affinityMigrated: integer("affinity_migrated", { mode: "boolean" }).notNull().default(false),
+    affinityBindingState: text("affinity_binding_state"), // Terminal binding result
     // Performance metrics fields
     ttftMs: integer("ttft_ms"),
     isStream: integer("is_stream", { mode: "boolean" }).notNull().default(false),

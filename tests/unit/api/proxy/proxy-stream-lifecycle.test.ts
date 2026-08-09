@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   persistBillingSnapshot: vi.fn(async () => undefined),
   recordApiKeyTokenUsage: vi.fn(),
   updateCumulativeTokens: vi.fn(),
+  commitAffinityBindingAfterSuccess: vi.fn(() => ({ state: null, bindingMatchesSelection: false })),
 }));
 
 vi.mock("@/lib/services/proxy-client", () => ({
@@ -53,6 +54,9 @@ vi.mock("@/lib/services/session-affinity", () => ({
   affinityStore: {
     updateCumulativeTokens: mocks.updateCumulativeTokens,
   },
+  commitAffinityBindingAfterSuccess: mocks.commitAffinityBindingAfterSuccess,
+  computeAffinityTokens: vi.fn(() => 0),
+  resolveAffinityFailureBindingState: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/services/unified-error", () => ({
@@ -107,7 +111,10 @@ const UPSTREAM = {
   baseUrl: "https://upstream.example/v1",
 } as StreamLifecycleTerminal["upstream"];
 
-function makeContext(signal: AbortSignal): StreamLifecycleContext {
+function makeContext(
+  signal: AbortSignal,
+  overrides: Partial<StreamLifecycleContext> = {}
+): StreamLifecycleContext {
   let requestLogId: string | null = "log-1";
   const request = new Request("http://localhost/api/proxy/v1/chat/completions", {
     method: "POST",
@@ -134,6 +141,8 @@ function makeContext(signal: AbortSignal): StreamLifecycleContext {
     reasoningEffort: null,
     requestedServiceTier: "fast",
     thinkingConfig: null,
+    contentLength: 0,
+    affinityBindingExpectation: null,
     sessionId: null,
     matchedRouteCapability: "openai_chat_compatible",
     inboundBody: {
@@ -154,6 +163,7 @@ function makeContext(signal: AbortSignal): StreamLifecycleContext {
     },
     persistBillingSnapshot: mocks.persistBillingSnapshot,
     settlement: { response: null },
+    ...overrides,
   };
 }
 
@@ -220,6 +230,10 @@ beforeEach(() => {
   });
   mocks.recordTrafficFixture.mockResolvedValue("/tmp/fixture.json");
   mocks.persistBillingSnapshot.mockResolvedValue(undefined);
+  mocks.commitAffinityBindingAfterSuccess.mockReturnValue({
+    state: null,
+    bindingMatchesSelection: false,
+  });
 });
 
 describe("createStreamResponse", () => {
@@ -369,6 +383,30 @@ describe("createStreamResponse", () => {
     await expect.poll(() => mocks.persistBillingSnapshot.mock.calls.length).toBe(1);
   });
 
+  it("commits a first session binding only after downstream completion", async () => {
+    const context = makeContext(new AbortController().signal, {
+      sessionId: "session-1",
+      affinityBindingExpectation: {
+        initialUpstreamId: null,
+        initialBindingVersion: null,
+      },
+    });
+    const response = createStreamResponse(
+      context,
+      makeTerminal(makeFiniteStream(["data: first\n\n", "data: [DONE]\n\n"]))
+    );
+    const reader = response.body!.getReader();
+
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: false }));
+    expect(mocks.commitAffinityBindingAfterSuccess).not.toHaveBeenCalled();
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: false }));
+    expect(mocks.commitAffinityBindingAfterSuccess).not.toHaveBeenCalled();
+
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: true }));
+    await expect.poll(() => mocks.commitAffinityBindingAfterSuccess.mock.calls.length).toBe(1);
+    expect(mocks.updateCumulativeTokens).not.toHaveBeenCalled();
+  });
+
   it("settles downstream cancellation as non-success and skips success recording", async () => {
     const controller = new AbortController();
     const context = makeContext(controller.signal);
@@ -414,8 +452,63 @@ describe("createStreamResponse", () => {
     );
     expect(mocks.buildFixture).not.toHaveBeenCalled();
     expect(mocks.recordTrafficFixture).not.toHaveBeenCalled();
+    expect(mocks.commitAffinityBindingAfterSuccess).not.toHaveBeenCalled();
     expect(terminal.result.cancelStream).toHaveBeenCalledWith("Client disconnected");
     expect(upstreamCancelled).toBe(true);
+  });
+
+  it("settles request-signal abort as non-success and cancels the upstream reader", async () => {
+    const controller = new AbortController();
+    const context = makeContext(controller.signal);
+    let upstreamCancelled = false;
+    const pendingStream = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        streamController.enqueue(new TextEncoder().encode("data: partial\n\n"));
+      },
+      cancel() {
+        upstreamCancelled = true;
+      },
+    });
+    const terminal = makeTerminal(pendingStream);
+    terminal.result.streamMetricsPromise = Promise.withResolvers<StreamMetrics>().promise;
+
+    const response = createStreamResponse(context, terminal);
+    const reader = response.body!.getReader();
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: false }));
+
+    controller.abort();
+
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: true }));
+    await expect.poll(() => mocks.persistBillingSnapshot.mock.calls.length).toBe(1);
+    expect(terminal.result.cancelStream).toHaveBeenCalledWith("Client disconnected");
+    expect(upstreamCancelled).toBe(true);
+    expect(mocks.commitAffinityBindingAfterSuccess).not.toHaveBeenCalled();
+  });
+
+  it("settles immediately when the request signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const context = makeContext(controller.signal);
+    let upstreamCancelled = false;
+    const pendingStream = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        streamController.enqueue(new TextEncoder().encode("data: partial\n\n"));
+      },
+      cancel() {
+        upstreamCancelled = true;
+      },
+    });
+    const terminal = makeTerminal(pendingStream);
+    terminal.result.streamMetricsPromise = Promise.withResolvers<StreamMetrics>().promise;
+
+    const response = createStreamResponse(context, terminal);
+    const reader = response.body!.getReader();
+
+    await expect(reader.read()).resolves.toEqual(expect.objectContaining({ done: true }));
+    await expect.poll(() => mocks.persistBillingSnapshot.mock.calls.length).toBe(1);
+    expect(terminal.result.cancelStream).toHaveBeenCalledWith("Client disconnected");
+    expect(upstreamCancelled).toBe(true);
+    expect(mocks.commitAffinityBindingAfterSuccess).not.toHaveBeenCalled();
   });
 });
 describe("settleStreamFailureRequest", () => {
@@ -463,6 +556,7 @@ describe("settleStreamFailureRequest", () => {
     expect(mocks.persistBillingSnapshot).toHaveBeenCalledTimes(1);
     expect(mocks.buildFixture).toHaveBeenCalledTimes(1);
     expect(mocks.recordTrafficFixture).toHaveBeenCalledTimes(1);
+    expect(mocks.commitAffinityBindingAfterSuccess).not.toHaveBeenCalled();
     expect(mocks.updateRequestLog).toHaveBeenCalledWith(
       "log-1",
       expect.objectContaining({

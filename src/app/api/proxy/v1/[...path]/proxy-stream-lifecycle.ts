@@ -23,7 +23,14 @@ import {
   type InboundBody,
 } from "@/lib/services/traffic-recorder";
 import type { TrafficRecordingSettingsValue } from "@/lib/services/traffic-recording-service";
-import { affinityStore, type AffinityUsage } from "@/lib/services/session-affinity";
+import {
+  affinityStore,
+  commitAffinityBindingAfterSuccess,
+  computeAffinityTokens,
+  resolveAffinityFailureBindingState,
+  type AffinityBindingExpectation,
+  type AffinityUsage,
+} from "@/lib/services/session-affinity";
 import { getHttpStatusForError } from "@/lib/services/unified-error";
 import type { RouteCapability } from "@/lib/route-capabilities";
 import { createLogger } from "@/lib/utils/logger";
@@ -40,6 +47,7 @@ import type {
   RequestThinkingConfig,
   RoutingDecisionLog,
   RoutingSelectionReason,
+  AffinityBindingState,
 } from "@/types/api";
 import { recordApiKeyTokenUsage } from "@/lib/services/api-key-rate-limiter";
 
@@ -72,6 +80,8 @@ export interface StreamLifecycleContext {
   thinkingConfig: RequestThinkingConfig | null;
   sessionId: string | null;
   matchedRouteCapability: RouteCapability;
+  contentLength: number;
+  affinityBindingExpectation: AffinityBindingExpectation | null;
   inboundBody: InboundBody | null;
   trafficRecordingSettings: Pick<TrafficRecordingSettingsValue, "redactSensitive">;
   shouldRecordSuccess: boolean;
@@ -174,39 +184,13 @@ export function resolveEffectiveServiceTier(
   return requestedServiceTier === "fast" ? "unknown" : null;
 }
 
-/** Calculate the token count used to update session affinity. */
-export function computeAffinityTokens(
-  routeCapability: RouteCapability,
-  usage: {
-    promptTokens: number;
-    cacheReadTokens?: number;
-    cacheCreationTokens?: number;
-    rawInputTokens?: number;
-  }
-): number {
-  const prompt = usage.promptTokens || 0;
-
-  if (routeCapability !== "anthropic_messages" && routeCapability !== "claude_code_messages") {
-    return prompt;
-  }
-
-  const rawInput = usage.rawInputTokens ?? 0;
-  const cacheRead = usage.cacheReadTokens || 0;
-  const cacheCreation = usage.cacheCreationTokens || 0;
-
-  if (rawInput > 0) {
-    return rawInput + cacheRead + cacheCreation;
-  }
-
-  return prompt;
-}
-
 function buildSuccessLogFields(
   context: StreamLifecycleContext,
   terminal: StreamLifecycleTerminal,
   metrics: StreamMetrics,
   usageForBilling: StreamBillingUsage,
-  durationMs: number
+  durationMs: number,
+  affinityBindingState: AffinityBindingState | null
 ): StreamLogFields {
   const usage = metrics.usage;
   return {
@@ -242,6 +226,7 @@ function buildSuccessLogFields(
     sessionId: context.sessionId,
     affinityHit: terminal.affinityHit,
     affinityMigrated: terminal.affinityMigrated,
+    affinityBindingState,
     ttftMs: metrics.ttftMs ?? null,
     isStream: true,
     routingDurationMs: terminal.routingDurationMs,
@@ -283,6 +268,7 @@ function buildDisconnectLogFields(
     sessionId: context.sessionId,
     affinityHit: terminal.affinityHit,
     affinityMigrated: terminal.affinityMigrated,
+    affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
     isStream: true,
     sessionIdCompensated: terminal.sessionIdCompensated,
     headerDiff: terminal.headerDiff,
@@ -344,6 +330,7 @@ function buildFailureLogFields(
       sessionId: context.sessionId,
       affinityHit: terminal.affinityHit,
       affinityMigrated: terminal.affinityMigrated,
+      affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
       isStream: true,
       sessionIdCompensated: terminal.sessionIdCompensated,
       headerDiff: terminal.headerDiff,
@@ -440,6 +427,7 @@ function buildRequestFailureLogFields(
     routingDecision: terminal.routingDecision,
     thinkingConfig: context.thinkingConfig,
     sessionId: context.sessionId,
+    affinityBindingState: resolveAffinityFailureBindingState(context.affinityBindingExpectation),
     isStream: true,
     routingDurationMs: terminal.routingDurationMs,
     sessionIdCompensated: terminal.sessionIdCompensated,
@@ -611,6 +599,7 @@ function wrapStreamWithDownstreamSettlement(
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
   let abortHandled = false;
+  let abortHandler: (() => void) | null = null;
 
   const handleAbortOnce = () => {
     if (streamCompleted || abortHandled) {
@@ -620,13 +609,27 @@ function wrapStreamWithDownstreamSettlement(
     onAbort();
   };
 
+  const cleanup = () => {
+    if (abortSignal && abortHandler) {
+      abortSignal.removeEventListener("abort", abortHandler);
+      abortHandler = null;
+    }
+    reader?.releaseLock();
+    reader = null;
+  };
+
   return new ReadableStream({
-    async start(controller) {
+    start(controller) {
       reader = stream.getReader();
 
-      const abortHandler = () => {
+      abortHandler = () => {
         handleAbortOnce();
-        void reader?.cancel("Client disconnected").catch(() => undefined);
+        const cancellation = reader?.cancel("Client disconnected");
+        if (cancellation) {
+          void cancellation.catch(() => undefined).finally(cleanup);
+        } else {
+          cleanup();
+        }
         try {
           controller.close();
         } catch {
@@ -636,44 +639,49 @@ function wrapStreamWithDownstreamSettlement(
 
       if (abortSignal) {
         abortSignal.addEventListener("abort", abortHandler, { once: true });
+        if (abortSignal.aborted) {
+          abortHandler();
+        }
+      }
+    },
+    async pull(controller) {
+      if (streamCompleted || !reader) {
+        return;
+      }
+      if (abortSignal?.aborted) {
+        abortHandler?.();
+        return;
       }
 
       try {
-        while (true) {
-          if (abortSignal?.aborted) {
-            handleAbortOnce();
-            break;
-          }
-
-          const { done, value } = await reader.read();
-          if (done) {
-            streamCompleted = true;
-            onComplete();
-            break;
-          }
-
-          controller.enqueue(value);
+        const { done, value } = await reader.read();
+        if (done) {
+          streamCompleted = true;
+          controller.close();
+          queueMicrotask(onComplete);
+          cleanup();
+          return;
         }
 
-        controller.close();
+        controller.enqueue(value);
       } catch (error) {
         if (abortSignal?.aborted) {
           handleAbortOnce();
+          cleanup();
           return;
         }
 
         controller.error(error);
-      } finally {
-        reader?.releaseLock();
-        reader = null;
-        if (abortSignal) {
-          abortSignal.removeEventListener("abort", abortHandler);
-        }
+        cleanup();
       }
     },
     async cancel(reason) {
       handleAbortOnce();
-      await reader?.cancel(reason);
+      try {
+        await reader?.cancel(reason);
+      } finally {
+        cleanup();
+      }
     },
   });
 }
@@ -824,8 +832,18 @@ export function createStreamResponse(
         context.requestedServiceTier,
         metrics.effectiveServiceTier ?? terminal.result.effectiveServiceTier
       );
+      const affinityBindingResult = commitAffinityBindingAfterSuccess({
+        apiKeyId: context.apiKeyId,
+        affinityScope: context.matchedRouteCapability,
+        sessionId: context.sessionId,
+        contentLength: context.contentLength,
+        expectation: context.affinityBindingExpectation,
+        selectedUpstreamId: terminal.upstream.id,
+        affinityMigrated: terminal.affinityMigrated,
+      });
+      const affinityBindingState = affinityBindingResult.state;
 
-      if (context.sessionId && metrics.usage) {
+      if (context.sessionId && affinityBindingResult.bindingMatchesSelection && metrics.usage) {
         const affinityUsage: AffinityUsage = {
           totalInputTokens: computeAffinityTokens(context.matchedRouteCapability, metrics.usage),
         };
@@ -851,12 +869,13 @@ export function createStreamResponse(
         terminal,
         metrics,
         usageForBilling,
-        Date.now() - context.startTime
+        Date.now() - context.startTime,
+        affinityBindingState
       );
-      const requestLogId = await persistTerminalRequestLog(context, logFields);
-      if (requestLogId) {
+      const persistedLogId = await persistTerminalRequestLog(context, logFields);
+      if (persistedLogId) {
         await context.persistBillingSnapshot({
-          requestLogId,
+          requestLogId: persistedLogId,
           apiKeyId: context.apiKeyId,
           upstreamId: terminal.upstream.id,
           model: terminal.resolvedModel,

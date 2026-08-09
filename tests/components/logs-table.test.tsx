@@ -59,6 +59,7 @@ describe("LogsTable", () => {
     session_id: null,
     affinity_hit: false,
     affinity_migrated: false,
+    affinity_binding_state: null,
     ttft_ms: null,
     is_stream: false,
     created_at: new Date().toISOString(),
@@ -2226,6 +2227,22 @@ describe("LogsTable", () => {
       expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText(/journeySelectedCircuitState/)).toBeInTheDocument();
+    });
+
+    it("shows the created binding state for a first successful session", () => {
+      const firstBindingLog: RequestLog = {
+        ...mockLog,
+        session_id: "session-created",
+        affinity_binding_state: "created",
+        status_code: 200,
+      };
+
+      render(<LogsTable logs={[firstBindingLog]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+
+      expect(screen.getAllByText("affinityBindingState.created").length).toBeGreaterThan(0);
     });
 
     it("shows queue termination chain in the request stage detail", () => {
