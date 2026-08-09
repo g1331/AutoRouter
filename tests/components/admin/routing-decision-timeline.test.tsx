@@ -235,4 +235,30 @@ describe("RoutingDecisionTimeline", () => {
     expect(screen.getByText("timelineAffinityHit")).toBeInTheDocument();
     expect(screen.queryByText("affinityBindingState.unchanged")).not.toBeInTheDocument();
   });
+  it("shows created binding without an affinity-missed label", () => {
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          did_send_upstream: true,
+          candidate_upstream_id: "up-2",
+          actual_upstream_id: "up-2",
+          failure_stage: null,
+        }}
+        upstreamName="rc"
+        routingType="provider_type"
+        groupName={null}
+        failoverAttempts={0}
+        statusCode={200}
+        sessionId="session-created"
+        affinityHit={false}
+        affinityMigrated={false}
+        affinityBindingState="created"
+        compact={false}
+      />
+    );
+
+    expect(screen.getByText(/affinityBindingState\.created/)).toBeInTheDocument();
+    expect(screen.queryByText("timelineAffinityMissed")).not.toBeInTheDocument();
+  });
 });

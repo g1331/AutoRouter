@@ -2243,6 +2243,7 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
 
       expect(screen.getAllByText("affinityBindingState.created").length).toBeGreaterThan(0);
+      expect(screen.queryByText("timelineAffinityMissed")).not.toBeInTheDocument();
     });
 
     it("shows queue termination chain in the request stage detail", () => {

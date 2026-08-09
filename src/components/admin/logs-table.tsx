@@ -862,6 +862,13 @@ export function LogsTable({
     const hasFailoverHistory =
       log.failover_attempts > 0 && !!log.failover_history && log.failover_history.length > 0;
     const hasFailoverWithoutHistory = log.failover_attempts > 0 && !hasFailoverHistory;
+    const displayedAffinityBindingState =
+      (log.affinity_binding_state === "unchanged" && log.affinity_hit) ||
+      (log.affinity_binding_state === "migrated" && log.affinity_migrated)
+        ? null
+        : log.affinity_binding_state;
+    const shouldShowAffinityMiss =
+      log.status_code != null && !log.affinity_hit && log.affinity_binding_state == null;
     const hasLifecycleFusion = Boolean(
       totalMs != null ||
       routingDecision ||
@@ -1334,13 +1341,13 @@ export function LogsTable({
                   {hasSession ? (
                     <>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {log.affinity_binding_state
+                        {displayedAffinityBindingState
                           ? renderMetricPill(
                               t("timelineAffinityBindingState"),
-                              t("affinityBindingState." + log.affinity_binding_state),
-                              log.affinity_binding_state === "created"
+                              t("affinityBindingState." + displayedAffinityBindingState),
+                              displayedAffinityBindingState === "created"
                                 ? "success"
-                                : log.affinity_binding_state === "none"
+                                : displayedAffinityBindingState === "none"
                                   ? "neutral"
                                   : "info"
                             )
@@ -1351,14 +1358,14 @@ export function LogsTable({
                                 "info"
                               )
                             : null}
+                        {shouldShowAffinityMiss
+                          ? renderMetricPill(t("timelineAffinityMissed"), "", "neutral")
+                          : null}
                         {log.affinity_hit && !log.affinity_migrated
                           ? renderMetricPill(t("timelineAffinityHit"), "", "success")
                           : null}
                         {log.affinity_migrated
                           ? renderMetricPill(t("timelineAffinityMigrated"), "", "warning")
-                          : null}
-                        {!log.affinity_hit
-                          ? renderMetricPill(t("timelineAffinityMissed"), "", "neutral")
                           : null}
                         {log.session_id_compensated ? (
                           <Badge variant="warning" className="px-1.5 py-0 text-[10px]">
