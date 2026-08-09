@@ -128,7 +128,11 @@ export function RoutingDecisionTimeline({
 }: RoutingDecisionTimelineProps) {
   const t = useTranslations("logs");
   const displayedAffinityBindingState =
-    affinityBindingState === "unchanged" ? null : affinityBindingState;
+    (affinityBindingState === "unchanged" && affinityHit === true) ||
+    (affinityBindingState === "migrated" && affinityMigrated === true)
+      ? null
+      : affinityBindingState;
+  const shouldShowAffinityMiss = statusCode != null && !affinityHit && affinityBindingState == null;
 
   const indicators = useMemo(() => {
     if (!routingDecision)
@@ -364,7 +368,7 @@ export function RoutingDecisionTimeline({
                   {t("timelineAffinityMigrated")}
                 </span>
               )}
-              {!affinityHit && (
+              {shouldShowAffinityMiss && (
                 <span className="flex items-center gap-1 text-muted-foreground">
                   {t("timelineAffinityMissed")}
                 </span>
