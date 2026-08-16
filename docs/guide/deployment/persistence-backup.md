@@ -11,14 +11,14 @@ AutoRouter 的运行状态分布在四个位置：PostgreSQL 数据库、`autoro
 
 ## 持久化位置清单
 
-| 位置                                           | 形态                             | 内容                                                                               | 丢失后果                                                         |
-| ---------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| PostgreSQL 数据库（默认在 `postgres-data` 卷） | docker compose 命名卷            | 上游配置、客户端 Key、熔断状态、请求日志、计费快照、CLIProxy 实例与账号注册        | 系统状态归零，需要重新登记上游与 Key                             |
-| `autorouter-data` 卷                           | docker compose 命名卷            | 容器内 `/app/data`；当前主要承载 SQLite 模式的 `dev.sqlite`，PG 部署下该卷基本为空 | 仅 SQLite 模式有影响；PG 部署可忽略                              |
-| `cliproxy-auth` 卷                             | docker compose 命名卷（sidecar） | Codex / Claude / Gemini 的 OAuth token 明文                                        | 所有账号需要在 CLIProxyAPI 管理端重新 OAuth 登录                 |
-| `cliproxy-logs` 卷                             | docker compose 命名卷（sidecar） | CLIProxyAPI 的运行日志                                                             | 仅丢历史日志，不影响运行                                         |
-| 流量录制目录（`RECORDER_FIXTURES_DIR`）        | 容器内目录或绑定挂载             | 已录制的请求 / 响应 fixture（JSON 文件）；数据库 `traffic_recordings` 表仅存索引   | 索引仍在，但 `fixture_path` 指向的文件已丢失，回放与详情查看失效 |
-| `ENCRYPTION_KEY`（不在卷里，但同等关键）       | `.env` 文件                      | Fernet 加密密钥，用于解密上游 API Key、CLIProxy 凭据等敏感字段                     | 数据库行还在，但所有加密字段都无法解密；上游配置必须逐条手工重填 |
+| 位置                                           | 形态                             | 内容                                                                                                             | 丢失后果                                                             |
+| ---------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| PostgreSQL 数据库（默认在 `postgres-data` 卷） | docker compose 命名卷            | 上游配置、客户端 Key、熔断状态、请求日志、计费快照、CLIProxy 实例与账号注册                                      | 系统状态归零，需要重新登记上游与 Key                                 |
+| `autorouter-data` 卷                           | docker compose 命名卷            | 容器内 `/app/data`；生产 PG 部署默认包含 `/app/data/traffic-recordings` 录制文件，SQLite 模式还包含 `dev.sqlite` | 录制文件丢失会使详情 / 回放失效；SQLite 数据库丢失会导致本地数据归零 |
+| `cliproxy-auth` 卷                             | docker compose 命名卷（sidecar） | Codex / Claude / Gemini 的 OAuth token 明文                                                                      | 所有账号需要在 CLIProxyAPI 管理端重新 OAuth 登录                     |
+| `cliproxy-logs` 卷                             | docker compose 命名卷（sidecar） | CLIProxyAPI 的运行日志                                                                                           | 仅丢历史日志，不影响运行                                             |
+| 自定义流量录制目录（`RECORDER_FIXTURES_DIR`）  | 容器内目录或绑定挂载             | 当 env 覆盖默认路径时的请求 / 响应 fixture；数据库 `traffic_recordings` 表仅存索引                               | 索引仍在，但 `fixture_path` 指向的文件已丢失，回放与详情查看失效     |
+| `ENCRYPTION_KEY`（不在卷里，但同等关键）       | `.env` 文件                      | Fernet 加密密钥，用于解密上游 API Key、CLIProxy 凭据等敏感字段                                                   | 数据库行还在，但所有加密字段都无法解密；上游配置必须逐条手工重填     |
 
 ::: danger 备份策略必须覆盖 .env
 `.env` 中的 `ENCRYPTION_KEY` 不存在于任何 named volume 中，标准的 `docker volume` 备份命令不会带上它。一旦 `.env` 丢失且没有离线副本，即使 PG 数据库完整恢复，所有上游凭据仍然不可读。`.env` 必须作为独立项纳入备份计划，建议在密码管理器或离线介质中保留至少一份。
@@ -203,27 +203,64 @@ docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d clipro
 
 ## 流量录制目录备份
 
-`recordTrafficFixture`（`src/lib/services/traffic-recorder.ts:517`）把录制内容以 JSON 写到 `RECORDER_FIXTURES_DIR` 指向的目录。数据库 `trafficRecordings` 表只存元数据与 `fixture_path` 路径。这意味着：
+`recordTrafficFixture`（`src/lib/services/traffic-recorder.ts:533`）把录制内容以 JSON 写到 `RECORDER_FIXTURES_DIR` 指向的目录。数据库 `trafficRecordings` 表只存元数据与 `fixture_path` 路径。这意味着：
 
 - 单独备份 PG 不足以恢复录制；恢复后详情页打开会找不到文件。
 - 单独备份录制目录也不够；查询索引、过滤、统计都依赖 PG。
 
 完整的录制备份必须 PG 与录制目录一起做。
 
-::: danger 默认 RECORDER_FIXTURES_DIR 不是持久路径
-`docker-compose.yml` 中 `RECORDER_FIXTURES_DIR` 的默认值是 `tests/fixtures`（相对于容器内 `/app/`），实际写到 `/app/tests/fixtures`——这个目录在容器内部、**不在任何 named volume 上**。容器一旦重建（`docker compose up -d` 拉新镜像、`docker compose down && up -d` 等）所有录制文件即丢失。
-
-要在生产环境保留录制，必须显式把 `RECORDER_FIXTURES_DIR` 指到挂在持久卷上的子目录。最少改动是把它指到 `autorouter-data` 卷下的子目录：
-
-```env
-# .env
-RECORDER_FIXTURES_DIR=/app/data/traffic-recordings
-```
-
-`docker compose up -d` 让 autorouter 容器读到新值后，录制就会落到 `autorouter-data` 卷里，下面的备份命令才有意义。如果当前部署是默认值，需要在改 `.env` 之前接受「现存的容器内录制将随重建丢失」这一前提。
+::: tip 生产默认路径
+`docker-compose.yml` 默认将 `RECORDER_FIXTURES_DIR` 指向 `/app/data/traffic-recordings`，该目录位于 `autorouter-data` named volume 中。容器重建后，录制文件会随卷保留。
 :::
 
-把 `RECORDER_FIXTURES_DIR` 指到 `/app/data/...` 之后，录制目录就并入了 `autorouter-data` 卷，备份方式与 `cliproxy-auth` 同套路：用一次性容器 + `tar`。
+::: warning 旧部署迁移
+如果旧部署实际使用过 `tests/fixtures`（无论来自 `.env` 显式配置还是旧版本 Compose 默认值），不要直接重建容器。旧目录在容器的可写层中，容器重建后可能丢失；必须先备份仍存在的 fixture 文件和 PostgreSQL，再把文件迁入 `autorouter-data`，同步更新 PostgreSQL 中的 `traffic_recordings.fixture_path`，最后才切换配置。已经随旧容器丢失的文件无法由数据库索引恢复。
+:::
+
+### 从旧 `tests/fixtures` 切换
+
+以下步骤使用仓库默认的 service/container 名称；如果项目名不同，按 `docker volume ls` 的实际卷名替换 `autorouter_autorouter-data`。迁移前先停止应用，避免备份期间继续写入旧目录。`pg_dump` 和 `psql` 从 `db` 容器内读取 Compose 注入的 `POSTGRES_USER`、`POSTGRES_DB`，不依赖宿主 shell 是否导出了 `.env`：
+
+```bash
+mkdir -p backup/autorouter/legacy-fixtures
+docker compose stop autorouter
+docker cp autorouter:/app/tests/fixtures/. ./backup/autorouter/legacy-fixtures/
+docker compose exec -T db \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  > backup/autorouter/postgres-before-recording-migration.sql
+```
+
+把仍存在的 fixture 文件复制到持久化卷，并保留 `tests/fixtures/` 后面的目录结构：
+
+```bash
+docker run --rm \
+  -v autorouter_autorouter-data:/target \
+  -v "$PWD/backup/autorouter/legacy-fixtures:/source:ro" \
+  alpine \
+  sh -c 'mkdir -p /target/traffic-recordings && cp -a /source/. /target/traffic-recordings/'
+```
+
+确认旧路径格式后，将数据库索引改为新绝对路径：
+
+```bash
+docker compose exec -T db \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+UPDATE traffic_recordings
+SET fixture_path = CASE
+  WHEN fixture_path LIKE 'tests/fixtures/%' THEN
+    '/app/data/traffic-recordings/' ||
+    substring(fixture_path from length('tests/fixtures/') + 1)
+  WHEN fixture_path LIKE '/app/tests/fixtures/%' THEN
+    '/app/data/traffic-recordings/' ||
+    substring(fixture_path from length('/app/tests/fixtures/') + 1)
+  ELSE fixture_path
+END
+WHERE fixture_path LIKE 'tests/fixtures/%'
+   OR fixture_path LIKE '/app/tests/fixtures/%';
+```
+
+最后将 `.env` 改为 `RECORDER_FIXTURES_DIR=/app/data/traffic-recordings` 并执行 `docker compose up -d`。如果暂时必须保留旧 override，就必须另行把宿主机目录挂载到 `/app/tests/fixtures`；`autorouter-data:/app/data` 不会持久化容器可写层中的旧路径。
 
 ```bash
 docker run --rm \

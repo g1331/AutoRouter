@@ -1631,6 +1631,7 @@
     "filters": "筛选",
     "cleanupExpired": "清理过期记录",
     "cleanupComplete": "已清理 {count} 条过期录制",
+    "cleanupPartial": "已清理 {deleted} 条过期录制；{failed} 条失败。{message}",
     "cleanupFailed": "清理失败：{message}",
     "statusFilter": "状态码筛选",
     "statusAll": "全部状态",

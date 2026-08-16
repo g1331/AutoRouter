@@ -36,8 +36,8 @@ shouldRecordTraffic(outcome) === enabled && (mode === "all" || mode === outcome)
 
 由 env 变量 `RECORDER_FIXTURES_DIR` 指定，未设置时默认 `data/traffic-recordings`（`src/lib/services/traffic-recording-service.ts:10`）。
 
-::: warning .env.example 注释与实际默认值不一致
-`.env.example:92` 的注释里把默认目录写成 `tests/fixtures`，但源码常量 `DEFAULT_TRAFFIC_RECORDING_ROOT` 是 `data/traffic-recordings`。实际生效值以源码为准——env 不设时录制写到 `data/traffic-recordings`，不是 `tests/fixtures`。
+::: tip
+Docker Compose 的生产默认目录是 `/app/data/traffic-recordings`，位于 `autorouter-data` 持久卷中。未设置 env 时，应用代码默认使用 `data/traffic-recordings`。
 :::
 
 ### 文件路径与命名
@@ -120,7 +120,7 @@ x-codex-turn-metadata, x-codex-beta-features
 
 ### 保留期与清理
 
-后台任务 `traffic recording cleanup`（已注册到 background sync 注册表，`src/lib/services/background-sync-registry.ts`）按 `retention_days` 字段定期跑，删除超期的 DB 行与对应磁盘文件。
+后台任务 `traffic recording cleanup`（已注册到 background sync 注册表，`src/lib/services/background-sync-registry.ts`）按 `retention_days` 字段定期尝试清理超期录制：只有 fixture 文件存在、位于配置根目录且 DB 与文件删除都成功时，才会同时删除 DB 行和磁盘文件。文件缺失、路径越界或删除失败时保留索引，并在结果中报告失败，便于定位历史数据问题。
 
 手动触发：
 
@@ -128,20 +128,20 @@ x-codex-turn-metadata, x-codex-beta-features
 POST /api/admin/traffic-recordings/cleanup
 ```
 
-返回 `{deleted_count, failure_count, error_summary}`。
+返回 `{deleted_count, failure_count, error_summary}`；`failure_count > 0` 时表示仍有索引未清理，管理页面会以警告提示。
 
 ## 管理 API
 
 全部要求 `Authorization: Bearer <ADMIN_TOKEN>`。
 
-| Method   | Path                                    | 行为                                                                                                                 |
-| -------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/admin/traffic-recording/settings` | 读 Runtime Settings                                                                                                  |
-| `PATCH`  | `/api/admin/traffic-recording/settings` | 更新 Runtime Settings（字段任意可选）                                                                                |
-| `GET`    | `/api/admin/traffic-recordings`         | 分页列表；过滤 `api_key_id` / `upstream_id` / `request_log_id` / `status_code` / `model` / `start_time` / `end_time` |
-| `GET`    | `/api/admin/traffic-recordings/[id]`    | 返回单条索引元数据 + 内联 `fixture` 字段（磁盘 JSON 内容）                                                           |
-| `DELETE` | `/api/admin/traffic-recordings/[id]`    | 删 DB 行 + 删磁盘文件                                                                                                |
-| `POST`   | `/api/admin/traffic-recordings/cleanup` | 立即清理所有超 `retention_days` 的录制                                                                               |
+| Method   | Path                                    | 行为                                                                                                                           |
+| -------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/admin/traffic-recording/settings` | 读 Runtime Settings                                                                                                            |
+| `PATCH`  | `/api/admin/traffic-recording/settings` | 更新 Runtime Settings（字段任意可选）                                                                                          |
+| `GET`    | `/api/admin/traffic-recordings`         | 分页列表；过滤 `api_key_id` / `upstream_id` / `request_log_id` / `status_code` / `model` / `start_time` / `end_time`           |
+| `GET`    | `/api/admin/traffic-recordings/[id]`    | 返回单条索引元数据 + 内联 `fixture` 字段（磁盘 JSON 内容）                                                                     |
+| `DELETE` | `/api/admin/traffic-recordings/[id]`    | 先删除 DB 行，再尝试删除对应磁盘文件                                                                                           |
+| `POST`   | `/api/admin/traffic-recordings/cleanup` | 尝试清理所有超 `retention_days` 的录制；缺失/越界 fixture 的索引会保留并计入失败；文件在数据库索引删除后才消失时按幂等成功处理 |
 
 源文件分别是 `src/app/api/admin/traffic-recording/settings/route.ts`、`src/app/api/admin/traffic-recordings/route.ts`、`.../[id]/route.ts`、`.../cleanup/route.ts`。
 
