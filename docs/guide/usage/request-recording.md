@@ -134,14 +134,14 @@ POST /api/admin/traffic-recordings/cleanup
 
 全部要求 `Authorization: Bearer <ADMIN_TOKEN>`。
 
-| Method   | Path                                    | 行为                                                                                                                 |
-| -------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/admin/traffic-recording/settings` | 读 Runtime Settings                                                                                                  |
-| `PATCH`  | `/api/admin/traffic-recording/settings` | 更新 Runtime Settings（字段任意可选）                                                                                |
-| `GET`    | `/api/admin/traffic-recordings`         | 分页列表；过滤 `api_key_id` / `upstream_id` / `request_log_id` / `status_code` / `model` / `start_time` / `end_time` |
-| `GET`    | `/api/admin/traffic-recordings/[id]`    | 返回单条索引元数据 + 内联 `fixture` 字段（磁盘 JSON 内容）                                                           |
-| `DELETE` | `/api/admin/traffic-recordings/[id]`    | 先删除 DB 行，再尝试删除对应磁盘文件                                                                                 |
-| `POST`   | `/api/admin/traffic-recordings/cleanup` | 尝试清理所有超 `retention_days` 的录制；缺失/越界 fixture 的索引会保留并计入失败                                     |
+| Method   | Path                                    | 行为                                                                                                                           |
+| -------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/admin/traffic-recording/settings` | 读 Runtime Settings                                                                                                            |
+| `PATCH`  | `/api/admin/traffic-recording/settings` | 更新 Runtime Settings（字段任意可选）                                                                                          |
+| `GET`    | `/api/admin/traffic-recordings`         | 分页列表；过滤 `api_key_id` / `upstream_id` / `request_log_id` / `status_code` / `model` / `start_time` / `end_time`           |
+| `GET`    | `/api/admin/traffic-recordings/[id]`    | 返回单条索引元数据 + 内联 `fixture` 字段（磁盘 JSON 内容）                                                                     |
+| `DELETE` | `/api/admin/traffic-recordings/[id]`    | 先删除 DB 行，再尝试删除对应磁盘文件                                                                                           |
+| `POST`   | `/api/admin/traffic-recordings/cleanup` | 尝试清理所有超 `retention_days` 的录制；缺失/越界 fixture 的索引会保留并计入失败；文件在数据库索引删除后才消失时按幂等成功处理 |
 
 源文件分别是 `src/app/api/admin/traffic-recording/settings/route.ts`、`src/app/api/admin/traffic-recordings/route.ts`、`.../[id]/route.ts`、`.../cleanup/route.ts`。
 

@@ -569,7 +569,7 @@ describe("traffic-recording-service", () => {
     );
   });
 
-  it("does not restore an index when the fixture vanishes after deletion", async () => {
+  it("treats a fixture that vanishes after database deletion as cleaned", async () => {
     const { cleanupExpiredTrafficRecordings } =
       await import("@/lib/services/traffic-recording-service");
 
@@ -594,9 +594,9 @@ describe("traffic-recording-service", () => {
 
     const result = await cleanupExpiredTrafficRecordings(new Date("2026-01-01T00:00:00.000Z"));
 
-    expect(result.deletedCount).toBe(0);
-    expect(result.failureCount).toBe(1);
-    expect(result.errorSummary).toContain("fixture disappeared");
+    expect(result.deletedCount).toBe(1);
+    expect(result.failureCount).toBe(0);
+    expect(result.errorSummary).toBeNull();
     expect(dbInsertMock).toHaveBeenCalledTimes(1);
     expect(unlinkMock).toHaveBeenCalledTimes(1);
   });

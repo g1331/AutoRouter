@@ -455,7 +455,11 @@ export async function cleanupExpiredTrafficRecordings(
       deletedCount += 1;
     } catch (error) {
       const errorCode = error && typeof error === "object" && "code" in error ? error.code : null;
-      if (deletedFromDatabase && errorCode !== "ENOENT") {
+      if (deletedFromDatabase && errorCode === "ENOENT") {
+        deletedCount += 1;
+        continue;
+      }
+      if (deletedFromDatabase) {
         try {
           await restoreTrafficRecordingIndex(recording);
         } catch (restoreError) {
