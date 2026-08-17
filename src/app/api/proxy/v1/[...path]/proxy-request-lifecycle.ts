@@ -113,8 +113,11 @@ import {
   createApiKeyModelListResponseBody,
   isModelAllowedByApiKey,
   normalizeApiKeyAllowedModels,
-  pickUpstreamLocalModels,
 } from "@/lib/api-key-models";
+import {
+  resolveDownstreamModelList,
+  type DownstreamModelListResolution,
+} from "@/lib/services/downstream-model-catalog";
 
 const log = createLogger("proxy-route");
 
@@ -501,7 +504,7 @@ async function logApiKeyAdmissionRejectedRequest(input: {
   });
 }
 
-async function logLocalApiKeyModelListRequest(input: {
+async function logLocalModelListRequest(input: {
   apiKeyId: string;
   apiKeyName: string | null;
   apiKeyPrefix: string | null;
@@ -704,37 +707,6 @@ function filterCandidatesByModelRules(
   }
 
   return { allowed, excluded };
-}
-
-function getApiKeyVisibleModelList(
-  apiKeyAllowedModels: string[],
-  candidates: Upstream[]
-): string[] {
-  return apiKeyAllowedModels.filter((model) =>
-    candidates.some((candidate) => resolvePathRoutingModelForUpstream(model, candidate).matched)
-  );
-}
-
-/**
- * Collect the model names an upstream is known to serve, from local data only:
- * synced model catalog first, then declared allowed models, then exact model rules.
- * Used to answer /v1/models locally when no upstream candidate is reachable.
- */
-function collectLocalModelListFallbackModels(candidates: Upstream[]): string[] {
-  const models = new Set<string>();
-  for (const upstream of candidates) {
-    const upstreamModels = pickUpstreamLocalModels({
-      catalogModels: (upstream.modelCatalog ?? []).map((entry) => entry.model),
-      allowedModels: upstream.allowedModels ?? [],
-      exactRuleModels: (upstream.modelRules ?? [])
-        .filter((rule) => rule.type === "exact")
-        .map((rule) => rule.value),
-    });
-    for (const model of upstreamModels) {
-      models.add(model);
-    }
-  }
-  return [...models].sort((a, b) => a.localeCompare(b));
 }
 
 function mergeExcludedCandidates(
@@ -1395,46 +1367,52 @@ export async function executeProxyRequest(request: Request, path: string): Promi
       : activeUpstreams.map((upstream) => upstream.id);
   const allowedUpstreamIdSet = new Set(allowedUpstreamIds);
 
-  // Serve the OpenAI-compatible model list locally for keys that declare allowed
-  // models. Model listing is a discovery endpoint and must not be gated on a
-  // specific route capability (openai_chat_compatible): a key whose authorized
-  // upstreams only expose openai_responses / codex_cli_responses can still
-  // enumerate its allowed models, mirroring what those upstreams actually serve.
+  // Serve a complete cached model list before candidate selection. Model listing is
+  // a discovery endpoint and must not be gated on a specific route capability:
+  // authorized upstreams can expose models through any supported provider protocol.
   const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
-  if (isOpenAIModelListRequest(request.method, path) && apiKeyAllowedModels) {
-    const authorizedActiveUpstreams = activeUpstreams.filter((upstream) =>
-      allowedUpstreamIdSet.has(upstream.id)
-    );
-    if (authorizedActiveUpstreams.length > 0) {
-      const visibleModels = getApiKeyVisibleModelList(
+  const modelListRequest = isOpenAIModelListRequest(request.method, path);
+  const authorizedActiveUpstreams = modelListRequest
+    ? activeUpstreams.filter((upstream) => allowedUpstreamIdSet.has(upstream.id))
+    : [];
+  const localModelListResolution: DownstreamModelListResolution | null = modelListRequest
+    ? resolveDownstreamModelList({
+        upstreams: activeUpstreams,
+        allowedUpstreamIds: allowedUpstreamIdSet,
         apiKeyAllowedModels,
-        authorizedActiveUpstreams
-      );
+      })
+    : null;
 
-      try {
-        await logLocalApiKeyModelListRequest({
-          apiKeyId: validApiKey.id,
-          apiKeyName: apiKeySnapshot.apiKeyName,
-          apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
-          userId: apiKeySnapshot.userId,
-          request,
-          path,
-          requestId,
-          startTime,
-          matchedRouteCapability,
-          routeMatchSource: matchedRouteMatchSource,
-        });
-      } catch (error) {
-        log.error({ err: error, requestId }, "failed to log local API key model list request");
-      }
+  if (
+    modelListRequest &&
+    authorizedActiveUpstreams.length > 0 &&
+    (apiKeyAllowedModels !== null || localModelListResolution?.complete)
+  ) {
+    const visibleModels = localModelListResolution?.models ?? [];
 
-      return new Response(Buffer.from(createApiKeyModelListResponseBody(visibleModels)), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
+    try {
+      await logLocalModelListRequest({
+        apiKeyId: validApiKey.id,
+        apiKeyName: apiKeySnapshot.apiKeyName,
+        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        userId: apiKeySnapshot.userId,
+        request,
+        path,
+        requestId,
+        startTime,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
       });
+    } catch (error) {
+      log.error({ err: error, requestId }, "failed to log local API key model list request");
     }
+
+    return new Response(Buffer.from(createApiKeyModelListResponseBody(visibleModels)), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
   }
 
   const primaryCandidatePool = resolveRouteCapabilityCandidatePool(
@@ -2367,16 +2345,14 @@ export async function executeProxyRequest(request: Request, path: string): Promi
     };
 
     // Model listing is a read-only discovery endpoint: when every candidate was
-    // blocked by circuit breakers, answer from the locally synced model catalog
-    // instead of failing the request. Other outage classes (concurrency saturation,
-    // plain unhealthy candidates, …) keep their 503 semantics.
+    // blocked by circuit breakers, answer from cached local model data instead of
+    // failing the request. Other outage classes (concurrency saturation, plain
+    // unhealthy candidates, …) keep their 503 semantics.
     if (
       failureReason === "UPSTREAM_CIRCUIT_OPEN" &&
       isOpenAIModelListRequest(request.method, path)
     ) {
-      const fallbackModels = collectLocalModelListFallbackModels(
-        activeUpstreams.filter((upstream) => allowedUpstreamIdSet.has(upstream.id))
-      );
+      const fallbackModels = localModelListResolution?.models ?? [];
       if (fallbackModels.length > 0) {
         log.warn(
           { requestId, path, failureReason, modelCount: fallbackModels.length },
