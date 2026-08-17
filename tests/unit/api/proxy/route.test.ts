@@ -8246,6 +8246,117 @@ describe("proxy route upstream selection", () => {
     expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-4.1", "gpt-5.2"]);
     expect(forwardRequest).not.toHaveBeenCalled();
   });
+  it("should resolve model aliases for normal routed requests", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const aliasUpstream = {
+      id: "up-alias",
+      name: "openai-alias",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      modelRules: [
+        {
+          type: "alias",
+          value: "public-model",
+          targetModel: "internal-model",
+          source: "manual",
+          displayLabel: null,
+        },
+      ],
+      allowedModels: null,
+      modelRedirects: null,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-alias",
+        keyHash: "hash-alias",
+        keyPrefix: "sk-test",
+        name: "Alias Routing Key",
+        expiresAt: null,
+        isActive: true,
+        accessMode: "restricted",
+        allowedModels: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-alias" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([aliasUpstream]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: aliasUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(JSON.stringify({ id: "alias-response" })),
+      isStream: false,
+      usage: null,
+    });
+
+    const response = await executeProxyRequest(
+      new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "public-model",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+      "chat/completions"
+    );
+
+    expect(response.status).toBe(200);
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-alias"],
+      undefined,
+      undefined,
+      expect.objectContaining({ candidateSnapshot: expect.any(Array) })
+    );
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      aliasUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "internal-model",
+        routingDecision: expect.objectContaining({
+          original_model: "public-model",
+          resolved_model: "internal-model",
+          model_redirect_applied: true,
+        }),
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        model: "internal-model",
+        routingDecision: expect.objectContaining({
+          original_model: "public-model",
+          resolved_model: "internal-model",
+          model_redirect_applied: true,
+        }),
+      })
+    );
+  });
 
   it("should return model list for keys bound only to non-chat-compatible upstreams", async () => {
     const { db } = await import("@/lib/db");
