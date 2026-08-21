@@ -1,9 +1,10 @@
-import { createHash } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import bcryptjs from "bcryptjs";
 import { config, validateAdminToken } from "./config";
 import { decrypt, EncryptionError } from "./encryption";
 
 const BCRYPT_ROUNDS = 12;
+const API_KEY_VERIFY_CACHE_SECRET = randomBytes(32);
 
 // The proxy still loads the active key row before calling verifyApiKey, so this
 // cache only removes repeated bcrypt work; revocation, expiry, ownership, and
@@ -30,7 +31,7 @@ export async function hashApiKey(key: string): Promise<string> {
  * @returns True if the key matches the hash
  */
 export async function verifyApiKey(key: string, hash: string): Promise<boolean> {
-  const keyDigest = createHash("sha256").update(key).digest("hex");
+  const keyDigest = createHmac("sha256", API_KEY_VERIFY_CACHE_SECRET).update(key).digest("hex");
   const cacheKey = `${hash}:${keyDigest}`;
   const now = Date.now();
   const cachedUntil = apiKeyVerificationCache.get(cacheKey);

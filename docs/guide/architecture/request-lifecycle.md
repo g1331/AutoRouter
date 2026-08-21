@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 ### 重复鉴权校验的性能边界
 
-`verifyApiKey` 对成功的 bcrypt 比对使用进程内短 TTL 缓存（当前 TTL 为 10 秒、最多保留 2048 条），缓存键由 API Key 的 SHA-256 摘要与当前 bcrypt hash 组成，不保存 API Key 明文。首次请求或缓存失效时仍执行完整 bcrypt 比对。
+`verifyApiKey` 对成功的 bcrypt 比对使用进程内短 TTL 缓存（当前 TTL 为 10 秒、最多保留 2048 条），缓存键由进程随机密钥保护的 HMAC-SHA-256 API Key 摘要与当前 bcrypt hash 组成，不保存 API Key 明文。首次请求或缓存失效时仍执行完整 bcrypt 比对。
 
 该缓存不改变撤销和准入语义：代理每次请求仍先从数据库读取 `is_active` 的 Key 记录，并在缓存命中后继续检查过期时间、用户状态、模型权限、上游授权与速率 / 消费规则。停用或删除 Key 后，后续请求不会因为缓存命中而继续通过。缓存是单进程的，多实例之间不共享。
 
