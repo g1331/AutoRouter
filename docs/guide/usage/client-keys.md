@@ -56,6 +56,8 @@ outline: deep
 
 过期判定（`src/app/api/proxy/v1/[...path]/proxy-request-lifecycle.ts` 的 `executeProxyRequest`）发生在每次代理请求鉴权时：`expiresAt && expiresAt < new Date()` 即返回 401。无需周期任务介入。
 
+重复请求的成功校验可能命中进程内短 TTL 鉴权缓存，但缓存不会绕过数据库中的 `is_active`、过期时间或用户状态检查；停用、删除或过期后的后续请求仍会被拒绝。
+
 `spending_rules` 与上游的 `spending_rules` 含义类似，但作用对象是「该 Key 的累计消费」而非「该上游的累计消费」。
 
 ## 每分钟速率限制（RPM / TPM）
