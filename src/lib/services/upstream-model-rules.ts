@@ -321,16 +321,15 @@ export function resolveModelWithRedirects(
 }
 
 /**
- * Matches a requested model against upstream model rules.
+ * Matches a requested model against already normalized upstream rules.
+ *
+ * Callers that normalize a rule set once can use this helper to avoid
+ * rebuilding the same runtime rule state for every model match.
  */
-export function matchUpstreamModelRules(
+export function matchNormalizedUpstreamModelRules(
   model: string,
-  modelRules: UpstreamModelRule[] | null | undefined
+  normalizedRules: UpstreamModelRule[] | null | undefined
 ): UpstreamModelRuleMatchResult {
-  const normalizedRules = normalizeUpstreamModelRules({
-    modelRules,
-  });
-
   if (!normalizedRules || normalizedRules.length === 0) {
     return {
       hasExplicitRules: false,
@@ -373,16 +372,14 @@ export function matchUpstreamModelRules(
       };
     }
 
-    if (rule.type === "regex") {
-      if (new RegExp(rule.value).test(model)) {
-        return {
-          hasExplicitRules: true,
-          matched: true,
-          resolvedModel: model,
-          redirectApplied: false,
-          matchedRule: rule,
-        };
-      }
+    if (rule.type === "regex" && new RegExp(rule.value).test(model)) {
+      return {
+        hasExplicitRules: true,
+        matched: true,
+        resolvedModel: model,
+        redirectApplied: false,
+        matchedRule: rule,
+      };
     }
   }
 
@@ -393,6 +390,21 @@ export function matchUpstreamModelRules(
     redirectApplied: false,
     matchedRule: null,
   };
+}
+
+/**
+ * Matches a requested model against upstream model rules.
+ */
+export function matchUpstreamModelRules(
+  model: string,
+  modelRules: UpstreamModelRule[] | null | undefined
+): UpstreamModelRuleMatchResult {
+  return matchNormalizedUpstreamModelRules(
+    model,
+    normalizeUpstreamModelRules({
+      modelRules,
+    })
+  );
 }
 
 /**

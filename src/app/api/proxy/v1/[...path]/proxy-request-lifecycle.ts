@@ -29,7 +29,7 @@ import {
   getFallbackRouteCapability,
   getProviderByRouteCapability,
   isCliRouteCapability,
-  resolveRouteCapabilities,
+  upstreamSupportsRouteCapability,
   type RouteCapability,
   type RouteMatchSource,
 } from "@/lib/route-capabilities";
@@ -40,7 +40,7 @@ import {
 } from "@/lib/services/route-capability-matcher";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
 import {
-  matchUpstreamModelRules,
+  matchNormalizedUpstreamModelRules,
   normalizeUpstreamModelRules,
 } from "@/lib/services/upstream-model-rules";
 import {
@@ -658,14 +658,12 @@ function resolvePathRoutingModelForUpstream(
     };
   }
 
-  const result = matchUpstreamModelRules(
-    originalModel,
-    normalizeUpstreamModelRules({
-      modelRules: upstream.modelRules,
-      allowedModels: upstream.allowedModels,
-      modelRedirects: upstream.modelRedirects,
-    })
-  );
+  const normalizedRules = normalizeUpstreamModelRules({
+    modelRules: upstream.modelRules,
+    allowedModels: upstream.allowedModels,
+    modelRedirects: upstream.modelRedirects,
+  });
+  const result = matchNormalizedUpstreamModelRules(originalModel, normalizedRules);
   return {
     matched: result.matched,
     hasExplicitRules: result.hasExplicitRules,
@@ -742,7 +740,7 @@ function resolveRouteCapabilityCandidatePool(
   candidateCapability: RouteCapability
 ): RouteCapabilityCandidatePool {
   const capabilityCandidates = activeUpstreams.filter((upstream) =>
-    resolveRouteCapabilities(upstream.routeCapabilities).includes(candidateCapability)
+    upstreamSupportsRouteCapability(upstream.routeCapabilities, candidateCapability)
   );
   const authorizedCapabilityCandidates = capabilityCandidates.filter((upstream) =>
     allowedUpstreamIdSet.has(upstream.id)
