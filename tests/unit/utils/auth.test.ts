@@ -49,6 +49,17 @@ describe("auth utilities", () => {
       expect(isValid).toBe(false);
     });
 
+    it("should bind cached verification to both the key and its hash", async () => {
+      const key = "sk-auto-cache-key123456789012345678901234";
+      const otherKey = "sk-auto-cache-other12345678901234567890";
+      const hash = await hashApiKey(key);
+
+      expect(await verifyApiKey(key, hash)).toBe(true);
+      expect(await verifyApiKey(otherKey, hash)).toBe(false);
+
+      const otherHash = await hashApiKey(otherKey);
+      expect(await verifyApiKey(key, otherHash)).toBe(false);
+    });
     it("should handle invalid hash gracefully", async () => {
       const key = "sk-auto-testkey123456789012345678901234";
 
@@ -56,7 +67,6 @@ describe("auth utilities", () => {
       expect(isValid).toBe(false);
     });
   });
-
   describe("extractApiKey", () => {
     it("should extract key from Bearer token", () => {
       const key = extractApiKey("Bearer sk-auto-mykey123");

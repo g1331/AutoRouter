@@ -47,6 +47,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 这些早期鉴权错误保留简单的顶层 `error` 字符串格式，并通过 `logRejectedRequest` 写入拒绝日志；它们不产生上游请求、计费快照或 traffic fixture。
 
+### 重复鉴权校验的性能边界
+
+`verifyApiKey` 对成功的 bcrypt 比对使用进程内短 TTL 缓存（当前 TTL 为 10 秒、最多保留 2048 条），缓存键由进程随机密钥保护的 HMAC-SHA-256 API Key 摘要与当前 bcrypt hash 组成，不保存 API Key 明文。首次请求或缓存失效时仍执行完整 bcrypt 比对。
+
+该缓存不改变撤销和准入语义：代理每次请求仍先从数据库读取 `is_active` 的 Key 记录，并在缓存命中后继续检查过期时间、用户状态、模型权限、上游授权与速率 / 消费规则。停用或删除 Key 后，后续请求不会因为缓存命中而继续通过。缓存是单进程的，多实例之间不共享。
+
 ## 阶段四：路由能力、模型与 API Key 准入
 
 鉴权通过后，`extractRequestContext` 从请求体和路径提取模型、session ID、stream 标志、reasoning effort 与 service tier。`resolveRouteCapability` 将 method、path 和 client profile 映射为 `RouteCapability`。
@@ -80,6 +86,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 2. `filterByCircuitBreaker`：跳过 `OPEN` 或尚未到探测时间的 `HALF_OPEN` 上游。
 3. `selectFromUpstreamCandidates`：按 tier、权重、健康和 session affinity 选择候选。
 4. 转发前再次申请熔断器准入；期间变为 `OPEN` 的候选会被拒绝或触发失败转移。
+
+路径 capability 候选筛选只执行成员判断，并保留 `codex_responses` 等 legacy capability 映射；不会为每个候选重复构造完整 capability 列表。模型规则在单次候选判断中只归一化一次，已归一化规则由路由与模型目录读取路径直接复用。
 
 如果路径不支持 capability、Key 没有授权上游或候选集合为空，请求在发送上游前结束。常见统一错误会包含 `request_id`、`reason`、`did_send_upstream` 和用户可读的 `user_hint`。
 

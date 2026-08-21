@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  areSingleProviderCapabilities,
   getPrimaryProviderByCapabilities,
   normalizeCompensationRuleCapabilities,
   normalizeRouteCapabilities,
   resolveRouteCapabilities,
-  areSingleProviderCapabilities,
+  upstreamSupportsRouteCapability,
 } from "@/lib/route-capabilities";
 
 describe("route-capabilities", () => {
@@ -22,6 +23,15 @@ describe("route-capabilities", () => {
 
   it("normalizes legacy upstream codex_responses capability to openai_responses", () => {
     expect(normalizeRouteCapabilities(["codex_responses"])).toEqual(["openai_responses"]);
+  });
+
+  it("checks canonical and legacy upstream capabilities without changing matching semantics", () => {
+    expect(
+      upstreamSupportsRouteCapability([" openai_chat_compatible "], "openai_chat_compatible")
+    ).toBe(true);
+    expect(upstreamSupportsRouteCapability(["codex_responses"], "openai_responses")).toBe(true);
+    expect(upstreamSupportsRouteCapability(["codex_responses"], "openai_extended")).toBe(false);
+    expect(upstreamSupportsRouteCapability(["invalid"], "openai_extended")).toBe(false);
   });
 
   it("normalizes legacy compensation codex_responses capability to generic and cli responses", () => {

@@ -190,6 +190,33 @@ export function resolveRouteCapabilities(
 ): RouteCapability[] {
   return normalizeRouteCapabilities(routeCapabilities);
 }
+/**
+ * Checks whether an upstream capability list contains a requested capability.
+ *
+ * This preserves legacy upstream aliases without allocating the normalized
+ * capability array needed by callers that only need a membership check.
+ */
+export function upstreamSupportsRouteCapability(
+  routeCapabilities: readonly string[] | null | undefined,
+  requestedCapability: RouteCapability
+): boolean {
+  if (!routeCapabilities || routeCapabilities.length === 0) {
+    return false;
+  }
+
+  for (const capability of routeCapabilities) {
+    const normalized = capability.trim();
+    if (normalized === requestedCapability) {
+      return true;
+    }
+
+    if (LEGACY_UPSTREAM_CAPABILITY_MAP[normalized]?.includes(requestedCapability)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export function isCliRouteCapability(capability: RouteCapability): boolean {
   return capability === "codex_cli_responses" || capability === "claude_code_messages";

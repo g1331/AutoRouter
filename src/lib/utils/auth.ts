@@ -1,8 +1,23 @@
+import { randomBytes, webcrypto } from "crypto";
 import bcryptjs from "bcryptjs";
 import { config, validateAdminToken } from "./config";
 import { decrypt, EncryptionError } from "./encryption";
 
 const BCRYPT_ROUNDS = 12;
+const API_KEY_VERIFY_CACHE_KEY_PROMISE = webcrypto.subtle.importKey(
+  "raw",
+  randomBytes(32),
+  { name: "HMAC", hash: "SHA-256" },
+  false,
+  ["sign"]
+);
+
+// The proxy still loads the active key row before calling verifyApiKey, so this
+// cache only removes repeated bcrypt work; revocation, expiry, ownership, and
+// authorization changes remain database-authoritative on every request.
+const API_KEY_VERIFY_CACHE_TTL_MS = 10_000;
+const API_KEY_VERIFY_CACHE_MAX_ENTRIES = 2_048;
+const apiKeyVerificationCache = new Map<string, number>();
 
 /**
  * Hash an API key using bcrypt.
@@ -22,8 +37,40 @@ export async function hashApiKey(key: string): Promise<string> {
  * @returns True if the key matches the hash
  */
 export async function verifyApiKey(key: string, hash: string): Promise<boolean> {
+  const cacheKeyDigest = Buffer.from(
+    await webcrypto.subtle.sign(
+      "HMAC",
+      await API_KEY_VERIFY_CACHE_KEY_PROMISE,
+      new TextEncoder().encode(key)
+    )
+  ).toString("hex");
+  const cacheKey = `${hash}:${cacheKeyDigest}`;
+  const now = Date.now();
+  const cachedUntil = apiKeyVerificationCache.get(cacheKey);
+
+  if (cachedUntil !== undefined) {
+    if (cachedUntil > now) {
+      apiKeyVerificationCache.delete(cacheKey);
+      apiKeyVerificationCache.set(cacheKey, cachedUntil);
+      return true;
+    }
+    apiKeyVerificationCache.delete(cacheKey);
+  }
+
   try {
-    return await bcryptjs.compare(key, hash);
+    const isValid = await bcryptjs.compare(key, hash);
+    if (!isValid) {
+      return false;
+    }
+
+    if (apiKeyVerificationCache.size >= API_KEY_VERIFY_CACHE_MAX_ENTRIES) {
+      const oldestKey = apiKeyVerificationCache.keys().next().value;
+      if (typeof oldestKey === "string") {
+        apiKeyVerificationCache.delete(oldestKey);
+      }
+    }
+    apiKeyVerificationCache.set(cacheKey, now + API_KEY_VERIFY_CACHE_TTL_MS);
+    return true;
   } catch {
     return false;
   }

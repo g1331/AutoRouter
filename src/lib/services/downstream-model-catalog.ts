@@ -1,7 +1,7 @@
 import type { Upstream } from "@/lib/db";
 import { normalizeApiKeyAllowedModels } from "@/lib/api-key-models";
 import {
-  matchUpstreamModelRules,
+  matchNormalizedUpstreamModelRules,
   normalizeUpstreamModelRules,
 } from "@/lib/services/upstream-model-rules";
 import type { UpstreamModelRule } from "@/lib/services/upstream-model-types";
@@ -43,7 +43,7 @@ function getModelsForUpstream(
 ): string[] {
   if (apiKeyAllowedModels !== null) {
     return apiKeyAllowedModels.filter(
-      (model) => rules.length === 0 || matchUpstreamModelRules(model, rules).matched
+      (model) => rules.length === 0 || matchNormalizedUpstreamModelRules(model, rules).matched
     );
   }
 
@@ -56,7 +56,7 @@ function getModelsForUpstream(
 
   const models = new Set<string>();
   for (const model of catalogModels) {
-    if (matchUpstreamModelRules(model, rules).matched) {
+    if (matchNormalizedUpstreamModelRules(model, rules).matched) {
       models.add(model);
     }
   }
