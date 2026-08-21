@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import bcryptjs from "bcryptjs";
 import {
   hashApiKey,
   verifyApiKey,
@@ -59,6 +60,29 @@ describe("auth utilities", () => {
 
       const otherHash = await hashApiKey(otherKey);
       expect(await verifyApiKey(key, otherHash)).toBe(false);
+    });
+    it("should expire cached verification after the two-minute TTL", async () => {
+      const key = "sk-auto-cache-expiring-key12345678901234567890";
+      const hash = await hashApiKey(key);
+      const compareSpy = vi.spyOn(bcryptjs, "compare");
+      const baseTime = Date.now();
+      const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(baseTime);
+
+      try {
+        expect(await verifyApiKey(key, hash)).toBe(true);
+        expect(compareSpy).toHaveBeenCalledTimes(1);
+
+        dateNowSpy.mockReturnValue(baseTime + 119_999);
+        expect(await verifyApiKey(key, hash)).toBe(true);
+        expect(compareSpy).toHaveBeenCalledTimes(1);
+
+        dateNowSpy.mockReturnValue(baseTime + 120_000);
+        expect(await verifyApiKey(key, hash)).toBe(true);
+        expect(compareSpy).toHaveBeenCalledTimes(2);
+      } finally {
+        dateNowSpy.mockRestore();
+        compareSpy.mockRestore();
+      }
     });
     it("should handle invalid hash gracefully", async () => {
       const key = "sk-auto-testkey123456789012345678901234";
