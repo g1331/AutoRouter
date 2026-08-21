@@ -211,6 +211,48 @@ jobs:
 
               return parsedBody;
             }
+            async function waitForRequestSettlement(apiKeyId, expectedRequestCount) {
+              const deadline = Date.now() + 30_000;
+              let latestLogs = [];
+
+              while (Date.now() < deadline) {
+                const query = new URLSearchParams({
+                  api_key_id: apiKeyId,
+                  model: "gpt-4.1-smoke",
+                  page: "1",
+                  page_size: "10",
+                  sort: "created_at",
+                  order: "asc",
+                });
+                const result = await fetchJson(
+                  `${baseUrl}/api/admin/logs?${query.toString()}`,
+                  {
+                    headers: {
+                      authorization: `Bearer ${adminToken}`,
+                    },
+                  },
+                  [200]
+                );
+                latestLogs = Array.isArray(result?.items) ? result.items : [];
+
+                const settled = latestLogs.length >= expectedRequestCount &&
+                  latestLogs.slice(0, expectedRequestCount).every(
+                    (item) =>
+                      typeof item?.status_code === "number" &&
+                      Object.prototype.hasOwnProperty.call(item, "billing_status")
+                  );
+                if (settled) {
+                  return;
+                }
+
+                await delay(250);
+              }
+
+              throw new Error(
+                `Timed out waiting for ${expectedRequestCount} smoke request logs to settle; observed ${latestLogs.length}`
+              );
+            }
+
 
             async function main() {
               assert(adminToken, "Missing AUTOROUTER_ADMIN_TOKEN");
@@ -402,6 +444,7 @@ jobs:
                 assert(streamText.includes("[DONE]"), "Deployment smoke stream missing [DONE]");
 
                 assert(requests.length >= 2, "Deployment smoke mock upstream did not receive requests");
+                await waitForRequestSettlement(apiKey.id, 2);
               } finally {
                 for (const apiKeyId of resources.apiKeyIds) {
                   try {
