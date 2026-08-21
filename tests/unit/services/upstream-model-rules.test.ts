@@ -4,6 +4,7 @@ import {
   deriveModelRedirectsFromRules,
   hasExplicitModelRules,
   importCatalogEntriesToModelRules,
+  matchNormalizedUpstreamModelRules,
   matchUpstreamModelRules,
   normalizeUpstreamModelRules,
   resolveModelWithRedirects,
@@ -220,6 +221,23 @@ describe("upstream-model-rules", () => {
         redirectApplied: false,
         matchedRule: null,
       });
+    });
+
+    it("should match an already normalized rule set identically", () => {
+      const rawRules = [
+        {
+          type: "alias" as const,
+          value: "gpt-4.1-preview",
+          targetModel: "gpt-4.1",
+          source: "manual" as const,
+          displayLabel: null,
+        },
+      ];
+      const normalizedRules = normalizeUpstreamModelRules({ modelRules: rawRules });
+
+      expect(matchNormalizedUpstreamModelRules("gpt-4.1-preview", normalizedRules)).toEqual(
+        matchUpstreamModelRules("gpt-4.1-preview", rawRules)
+      );
     });
 
     it("should match exact rules without rewriting the model", () => {
