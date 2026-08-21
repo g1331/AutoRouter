@@ -33,7 +33,7 @@ export async function hashApiKey(key: string): Promise<string> {
 export async function verifyApiKey(key: string, hash: string): Promise<boolean> {
   // This is only a keyed cache fingerprint; bcrypt remains the authentication check.
   // codeql[js/insufficient-password-hash]
-  const keyDigest = createHmac("sha256", API_KEY_VERIFY_CACHE_SECRET).update(key).digest("hex");
+  const keyDigest = createHmac("sha256", API_KEY_VERIFY_CACHE_SECRET).update(key).digest("hex"); // lgtm[js/insufficient-password-hash]
   const cacheKey = `${hash}:${keyDigest}`;
   const now = Date.now();
   const cachedUntil = apiKeyVerificationCache.get(cacheKey);
