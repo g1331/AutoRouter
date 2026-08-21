@@ -31,7 +31,8 @@ export async function hashApiKey(key: string): Promise<string> {
  * @returns True if the key matches the hash
  */
 export async function verifyApiKey(key: string, hash: string): Promise<boolean> {
-  // codeql[js/insufficient-password-hash] This is only a keyed cache fingerprint; bcrypt remains the authentication check.
+  // This is only a keyed cache fingerprint; bcrypt remains the authentication check.
+  // codeql[js/insufficient-password-hash]
   const keyDigest = createHmac("sha256", API_KEY_VERIFY_CACHE_SECRET).update(key).digest("hex");
   const cacheKey = `${hash}:${keyDigest}`;
   const now = Date.now();
