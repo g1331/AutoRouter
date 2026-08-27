@@ -1,4 +1,8 @@
 import type { Upstream } from "@/lib/db";
+import {
+  getPrimaryProviderByCapabilities,
+  type CapabilityProvider,
+} from "@/lib/route-capabilities";
 import { normalizeApiKeyAllowedModels } from "@/lib/api-key-models";
 import {
   matchNormalizedUpstreamModelRules,
@@ -10,6 +14,7 @@ export interface ResolveDownstreamModelListInput {
   upstreams: Upstream[];
   allowedUpstreamIds: ReadonlySet<string>;
   apiKeyAllowedModels: string[] | null;
+  modelListProvider: CapabilityProvider;
 }
 
 export interface DownstreamModelListResolution {
@@ -77,7 +82,10 @@ export function resolveDownstreamModelList(
   input: ResolveDownstreamModelListInput
 ): DownstreamModelListResolution {
   const authorizedUpstreams = input.upstreams.filter(
-    (upstream) => upstream.isActive !== false && input.allowedUpstreamIds.has(upstream.id)
+    (upstream) =>
+      upstream.isActive !== false &&
+      input.allowedUpstreamIds.has(upstream.id) &&
+      getPrimaryProviderByCapabilities(upstream.routeCapabilities) === input.modelListProvider
   );
   const normalizedApiKeyAllowedModels =
     input.apiKeyAllowedModels === null
