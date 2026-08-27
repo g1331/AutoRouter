@@ -15,7 +15,7 @@ const API_KEY_VERIFY_CACHE_KEY_PROMISE = webcrypto.subtle.importKey(
 // The proxy still loads the active key row before calling verifyApiKey, so this
 // cache only removes repeated bcrypt work; revocation, expiry, ownership, and
 // authorization changes remain database-authoritative on every request.
-const API_KEY_VERIFY_CACHE_TTL_MS = 120_000;
+const API_KEY_VERIFY_CACHE_TTL_MS = 5 * 60 * 1000;
 const API_KEY_VERIFY_CACHE_MAX_ENTRIES = 2_048;
 const apiKeyVerificationCache = new Map<string, number>();
 
