@@ -7888,7 +7888,7 @@ describe("proxy route upstream selection", () => {
     );
     expect(forwardRequest).toHaveBeenCalledTimes(1);
   });
-  it("should aggregate a complete cached model list for unrestricted keys", async () => {
+  it("should aggregate a complete cached OpenAI-compatible model list for unrestricted keys", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
@@ -7897,17 +7897,21 @@ describe("proxy route upstream selection", () => {
 
     const cachedUpstreams = [
       {
-        id: "up-openai",
-        name: "openai-main",
+        id: "up-openrouter",
+        name: "openrouter-main",
         providerType: "openai",
-        baseUrl: "https://api.openai.com",
+        baseUrl: "https://openrouter.ai/api/v1",
         isDefault: false,
         isActive: true,
         timeout: 60,
         priority: 0,
         weight: 1,
         routeCapabilities: ["openai_chat_compatible"],
-        modelCatalog: [{ model: "gpt-5.2", source: "native" }],
+        modelCatalog: [
+          { model: "gpt-5.2", source: "native" },
+          { model: "claude-3.7", source: "native" },
+          { model: "gemini-2.5-pro", source: "native" },
+        ],
         modelRules: null,
         allowedModels: null,
         modelRedirects: null,
@@ -7923,7 +7927,23 @@ describe("proxy route upstream selection", () => {
         priority: 0,
         weight: 1,
         routeCapabilities: ["anthropic_messages"],
-        modelCatalog: [{ model: "claude-3.7", source: "native" }],
+        modelCatalog: [{ model: "claude-native-only", source: "native" }],
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+      {
+        id: "up-google",
+        name: "google-main",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelCatalog: [{ model: "gemini-native-only", source: "native" }],
         modelRules: null,
         allowedModels: null,
         modelRedirects: null,
@@ -7959,7 +7979,11 @@ describe("proxy route upstream selection", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["claude-3.7", "gpt-5.2"]);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual([
+      "claude-3.7",
+      "gemini-2.5-pro",
+      "gpt-5.2",
+    ]);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).not.toHaveBeenCalled();
     expect(forwardRequest).not.toHaveBeenCalled();
@@ -8070,6 +8094,23 @@ describe("proxy route upstream selection", () => {
     ]);
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
       { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
     ]);
 
     const request = new NextRequest("http://localhost/api/proxy/v1/models", {
@@ -8498,7 +8539,7 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
-  it("should list models across providers for a key authorized on multiple upstreams", async () => {
+  it("should list OpenAI-compatible models without leaking native provider catalogs", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
 
@@ -8510,24 +8551,30 @@ describe("proxy route upstream selection", () => {
         name: "Multi-provider Model List Key",
         expiresAt: null,
         isActive: true,
-        allowedModels: ["gpt-5.5", "claude-3.7", "unserved-model"],
+        allowedModels: [
+          "gpt-5.5",
+          "claude-3.7",
+          "gemini-2.5-pro",
+          "claude-native-only",
+          "gemini-native-only",
+          "unserved-model",
+        ],
       },
     ]);
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
-      { upstreamId: "up-openai" },
+      { upstreamId: "up-openrouter" },
       { upstreamId: "up-anthropic" },
+      { upstreamId: "up-google" },
     ]);
-    // The discovery list now reflects ALL authorized active upstreams regardless
-    // of route capability: claude-3.7 is only served by the Anthropic upstream,
-    // yet it appears on the OpenAI-style /v1/models response, while a model no
-    // upstream serves is filtered out.
+    // OpenRouter is OpenAI-compatible even when its catalog includes Claude and
+    // Gemini IDs. Native provider capabilities must not contribute to /v1/models.
     vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
       {
-        id: "up-openai",
-        name: "openai-main",
+        id: "up-openrouter",
+        name: "openrouter-main",
         providerType: "openai",
         routeCapabilities: ["openai_chat_compatible"],
-        baseUrl: "https://api.openai.com",
+        baseUrl: "https://openrouter.ai/api/v1",
         isDefault: false,
         isActive: true,
         timeout: 60,
@@ -8537,6 +8584,20 @@ describe("proxy route upstream selection", () => {
           {
             type: "exact",
             value: "gpt-5.5",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+          {
+            type: "exact",
+            value: "claude-3.7",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+          {
+            type: "exact",
+            value: "gemini-2.5-pro",
             targetModel: null,
             source: "manual",
             displayLabel: null,
@@ -8559,7 +8620,30 @@ describe("proxy route upstream selection", () => {
         modelRules: [
           {
             type: "exact",
-            value: "claude-3.7",
+            value: "claude-native-only",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+      {
+        id: "up-google",
+        name: "google-main",
+        providerType: "google",
+        routeCapabilities: ["gemini_native_generate"],
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: [
+          {
+            type: "exact",
+            value: "gemini-native-only",
             targetModel: null,
             source: "manual",
             displayLabel: null,
@@ -8583,7 +8667,11 @@ describe("proxy route upstream selection", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.5", "claude-3.7"]);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual([
+      "gpt-5.5",
+      "claude-3.7",
+      "gemini-2.5-pro",
+    ]);
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 

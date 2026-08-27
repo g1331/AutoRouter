@@ -43,34 +43,41 @@ describe("resolveDownstreamModelList", () => {
     vi.restoreAllMocks();
   });
 
-  it("aggregates authorized active catalogs in stable sorted order", () => {
+  it("aggregates authorized active catalogs within the requested provider", () => {
     const upstreams = [
       createUpstream({
-        id: "up-openai",
+        id: "up-openrouter",
+        name: "OpenRouter",
+        routeCapabilities: ["openai_chat_compatible"],
         modelCatalog: [
           { model: "gpt-5.2", source: "native" },
-          { model: "gpt-4.1", source: "native" },
+          { model: "claude-3.7", source: "native" },
+          { model: "gemini-2.5-pro", source: "native" },
         ],
       }),
       createUpstream({
         id: "up-anthropic",
-        modelCatalog: [
-          { model: "claude-3.7", source: "native" },
-          { model: "gpt-4.1", source: "native" },
-        ],
+        routeCapabilities: ["anthropic_messages"],
+        modelCatalog: [{ model: "claude-native-only", source: "native" }],
+      }),
+      createUpstream({
+        id: "up-google",
+        routeCapabilities: ["gemini_native_generate"],
+        modelCatalog: [{ model: "gemini-native-only", source: "native" }],
       }),
     ];
 
     expect(
       resolveDownstreamModelList({
         upstreams,
-        allowedUpstreamIds: new Set(["up-openai", "up-anthropic"]),
+        allowedUpstreamIds: new Set(["up-openrouter", "up-anthropic", "up-google"]),
         apiKeyAllowedModels: null,
+        modelListProvider: "openai",
       })
     ).toEqual({
-      models: ["claude-3.7", "gpt-4.1", "gpt-5.2"],
-      authorizedUpstreamCount: 2,
-      knownUpstreamCount: 2,
+      models: ["claude-3.7", "gemini-2.5-pro", "gpt-5.2"],
+      authorizedUpstreamCount: 1,
+      knownUpstreamCount: 1,
       complete: true,
     });
   });
@@ -97,6 +104,7 @@ describe("resolveDownstreamModelList", () => {
         upstreams,
         allowedUpstreamIds: new Set(["authorized", "inactive"]),
         apiKeyAllowedModels: null,
+        modelListProvider: "openai",
       })
     ).toMatchObject({
       models: ["visible"],
@@ -117,6 +125,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["known", "unknown"]),
       apiKeyAllowedModels: null,
+      modelListProvider: "openai",
     });
 
     expect(resolution).toEqual({
@@ -132,6 +141,7 @@ describe("resolveDownstreamModelList", () => {
       upstreams: [createUpstream({ id: "upstream-without-catalog" })],
       allowedUpstreamIds: new Set(["upstream-without-catalog"]),
       apiKeyAllowedModels: [" gpt-5.5 ", "gpt-4.1", "gpt-5.5", "  "],
+      modelListProvider: "openai",
     });
 
     expect(resolution).toEqual({
@@ -159,6 +169,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["upstream-1"]),
       apiKeyAllowedModels: ["gpt-4.1", "gpt-5.5"],
+      modelListProvider: "openai",
     });
 
     expect(resolution.models).toEqual(["gpt-5.5"]);
@@ -208,6 +219,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["upstream-1"]),
       apiKeyAllowedModels: null,
+      modelListProvider: "openai",
     });
 
     expect(resolution.models).toEqual(["claude-3-7-sonnet", "configured-model", "public-model"]);
@@ -230,6 +242,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["alias-owner", "catalog-owner"]),
       apiKeyAllowedModels: null,
+      modelListProvider: "openai",
     });
 
     expect(resolution.models).toEqual(["other-model", "public-model"]);
@@ -245,6 +258,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["upstream-1"]),
       apiKeyAllowedModels: null,
+      modelListProvider: "openai",
     });
 
     expect(resolution.models).toEqual(["public-model"]);
@@ -268,6 +282,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["upstream-1"]),
       apiKeyAllowedModels: null,
+      modelListProvider: "openai",
     });
 
     expect(resolution).toEqual({
@@ -290,6 +305,7 @@ describe("resolveDownstreamModelList", () => {
       ],
       allowedUpstreamIds: new Set(["upstream-1"]),
       apiKeyAllowedModels: null,
+      modelListProvider: "openai",
     });
 
     expect(resolution.models).toEqual(["stale-model"]);

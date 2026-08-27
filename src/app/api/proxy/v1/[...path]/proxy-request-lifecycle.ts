@@ -1366,24 +1366,21 @@ export async function executeProxyRequest(request: Request, path: string): Promi
   const allowedUpstreamIdSet = new Set(allowedUpstreamIds);
 
   // Serve a complete cached model list before candidate selection. Model listing is
-  // a discovery endpoint and must not be gated on a specific route capability:
-  // authorized upstreams can expose models through any supported provider protocol.
+  // a discovery endpoint scoped to the provider selected by its protocol.
   const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
   const modelListRequest = isOpenAIModelListRequest(request.method, path);
-  const authorizedActiveUpstreams = modelListRequest
-    ? activeUpstreams.filter((upstream) => allowedUpstreamIdSet.has(upstream.id))
-    : [];
   const localModelListResolution: DownstreamModelListResolution | null = modelListRequest
     ? resolveDownstreamModelList({
         upstreams: activeUpstreams,
         allowedUpstreamIds: allowedUpstreamIdSet,
         apiKeyAllowedModels,
+        modelListProvider: getProviderByRouteCapability(matchedRouteCapability),
       })
     : null;
 
   if (
     modelListRequest &&
-    authorizedActiveUpstreams.length > 0 &&
+    (localModelListResolution?.authorizedUpstreamCount ?? 0) > 0 &&
     (apiKeyAllowedModels !== null || localModelListResolution?.complete)
   ) {
     const visibleModels = localModelListResolution?.models ?? [];
