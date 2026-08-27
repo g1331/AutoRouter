@@ -61,7 +61,7 @@ describe("auth utilities", () => {
       const otherHash = await hashApiKey(otherKey);
       expect(await verifyApiKey(key, otherHash)).toBe(false);
     });
-    it("should expire cached verification after the two-minute TTL", async () => {
+    it("should expire cached verification after the five-minute TTL", async () => {
       const key = "sk-auto-cache-expiring-key12345678901234567890";
       const hash = await hashApiKey(key);
       const compareSpy = vi.spyOn(bcryptjs, "compare");
@@ -72,11 +72,11 @@ describe("auth utilities", () => {
         expect(await verifyApiKey(key, hash)).toBe(true);
         expect(compareSpy).toHaveBeenCalledTimes(1);
 
-        dateNowSpy.mockReturnValue(baseTime + 119_999);
+        dateNowSpy.mockReturnValue(baseTime + 299_999);
         expect(await verifyApiKey(key, hash)).toBe(true);
         expect(compareSpy).toHaveBeenCalledTimes(1);
 
-        dateNowSpy.mockReturnValue(baseTime + 120_000);
+        dateNowSpy.mockReturnValue(baseTime + 300_000);
         expect(await verifyApiKey(key, hash)).toBe(true);
         expect(compareSpy).toHaveBeenCalledTimes(2);
       } finally {
