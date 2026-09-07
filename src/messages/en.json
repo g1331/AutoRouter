@@ -9,7 +9,55 @@
     "subheadline": "API key distribution, multi-upstream routing, load balancing with circuit breaking, and per-request billing — manage every bit of AI traffic from one self-hosted console.",
     "ctaPrimary": "Get started",
     "ctaSecondary": "View docs",
+    "scene": {
+      "caption": "Routing illustration · Not live data",
+      "description": "A three-dimensional particle gateway carries the request flow through six scenes: capability matching, upstream selection, admission limits, billing, permissions, and recovery."
+    },
+    "flowLabels": {
+      "hero": {
+        "input": "Requests",
+        "operation": "AutoRouter",
+        "output": "Upstreams"
+      },
+      "integration": {
+        "input": "Client",
+        "operation": "Gateway endpoint",
+        "output": "Upstreams"
+      },
+      "routing": {
+        "input": "Request",
+        "operation": "Model match",
+        "output": "Selected upstream"
+      },
+      "balancing": {
+        "input": "Requests",
+        "operation": "Weighted split",
+        "output": "Upstream pool"
+      },
+      "quota": {
+        "input": "Request",
+        "operation": "Concurrency cap",
+        "output": "Admitted"
+      },
+      "billing": {
+        "input": "Usage",
+        "operation": "Price rules",
+        "output": "Request cost"
+      },
+      "keys": {
+        "input": "API Key",
+        "operation": "Permission scope",
+        "output": "Allowed upstreams"
+      },
+      "failover": {
+        "input": "Request",
+        "operation": "Failed route",
+        "output": "Alternate upstream"
+      }
+    },
     "terminal": {
+      "title": "One endpoint. Unified routing.",
+      "exampleNote": "Integration example: replace the domain, API key, and model.",
       "caption": "Point one base URL at the gateway — AutoRouter handles routing, balancing, and billing."
     },
     "features": {
@@ -25,7 +73,7 @@
       },
       "quota": {
         "title": "Quota & concurrency control",
-        "desc": "Applies quota, concurrency, and queue-admission limits per key to keep upstreams stable."
+        "desc": "Protects capacity with key spending quotas and upstream concurrency and queue-admission limits."
       },
       "billing": {
         "title": "Per-request billing",
@@ -39,6 +87,112 @@
         "title": "Failover & session affinity",
         "desc": "Switches candidates seamlessly on failure and can pin a conversation to a chosen upstream."
       }
+    },
+    "chapters": {
+      "routing": {
+        "eyebrow": "Match the request",
+        "label": "Request endpoints and their capabilities",
+        "chat": "Chat Completions",
+        "responses": "Responses",
+        "messages": "Messages",
+        "takeaway": "The endpoint identifies the capability. The model narrows the matching upstreams."
+      },
+      "balancing": {
+        "eyebrow": "Choose the upstream",
+        "label": "Upstream selection policies",
+        "priority": {
+          "title": "Priority sets the tier",
+          "desc": "Prefer the highest-priority tier that has available candidates."
+        },
+        "weight": {
+          "title": "Weight guides the split",
+          "desc": "Distribute selections by relative weight within the same tier."
+        },
+        "health": {
+          "title": "Health gates availability",
+          "desc": "Circuit breaking keeps unavailable candidates out of selection."
+        },
+        "takeaway": "Priority and weight guide selection; circuit state determines who can participate."
+      },
+      "quota": {
+        "eyebrow": "Control admission",
+        "label": "Request admission constraints",
+        "spending": {
+          "title": "Spending · Within budget",
+          "desc": "Check the key's configured spending quota before admitting more usage."
+        },
+        "concurrency": {
+          "title": "Concurrency · Within capacity",
+          "desc": "Limit how many requests an upstream can have in flight at once."
+        },
+        "queue": {
+          "title": "Queue · Bounded waiting",
+          "desc": "Apply queue-admission limits when requests must wait for capacity."
+        },
+        "takeaway": "Budget, active work, and waiting work are separate admission constraints."
+      },
+      "billing": {
+        "eyebrow": "Account for the request",
+        "label": "Sources of the request price",
+        "usage": "Usage",
+        "price": "Applicable price",
+        "snapshot": "Request billing snapshot",
+        "base": {
+          "title": "Base price",
+          "desc": "Synced model prices provide the starting rate for each usage category."
+        },
+        "override": {
+          "title": "Price override",
+          "desc": "A configured override replaces the corresponding base rate."
+        },
+        "multiplier": {
+          "title": "Upstream multiplier",
+          "desc": "The upstream's billing multiplier scales the applicable usage charge."
+        },
+        "takeaway": "Apply the rate to each usage category, then preserve the calculation in a request snapshot."
+      },
+      "keys": {
+        "eyebrow": "Define the candidate set",
+        "label": "Intersection of key scope, granted upstreams, and model capability",
+        "scope": {
+          "title": "Key scope",
+          "desc": "Start with the client key's access scope and validity."
+        },
+        "upstreams": {
+          "title": "Granted upstreams",
+          "desc": "Keep only upstreams authorized for that key."
+        },
+        "capability": {
+          "title": "Model capability",
+          "desc": "Keep candidates that support the requested model and capability."
+        },
+        "takeaway": "The intersection forms the permitted candidate set—not a guarantee of availability."
+      },
+      "failover": {
+        "eyebrow": "Recover within policy",
+        "label": "Candidate recovery path for retryable failures",
+        "failure": {
+          "title": "Request failure",
+          "desc": "A failure enters recovery when it is eligible for retry."
+        },
+        "exclude": {
+          "title": "Exclude the failed candidate",
+          "desc": "Remove that upstream from this request's remaining choices."
+        },
+        "retry": {
+          "title": "Try the next available",
+          "desc": "Select another eligible candidate within the retry policy."
+        },
+        "takeaway": "No candidate left? Return an explicit error. Not every failure is retried."
+      }
+    },
+    "bookends": {
+      "eyebrow": "From request to response",
+      "protocols": "Compatible interfaces",
+      "closing": "Your upstreams. Your rules.",
+      "setup": "Configure upstreams",
+      "issueKey": "Create an API key",
+      "send": "Send a request"
     },
     "cta": {
       "title": "Ready to connect?",
