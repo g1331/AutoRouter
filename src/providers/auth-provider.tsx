@@ -12,6 +12,7 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import { createApiClient } from "@/lib/api";
 import { toast } from "sonner";
+import { locales } from "@/i18n/config";
 
 /**
  * 登录凭据的存储键名。按 token 类型分流存储：
@@ -254,9 +255,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return basePrincipal;
   }, [basePrincipal, profile, token]);
 
-  // 等待 hydration 完成
-  if (!isHydrated) {
-    return null; // 或者返回 loading 组件
+  // 仅公开语言根路径允许 SSR；业务页面继续等待本地会话恢复。
+  const isPublicLanding = locales.some((locale) => pathname === `/${locale}`);
+  if (!isHydrated && !isPublicLanding) {
+    return null;
   }
 
   return (

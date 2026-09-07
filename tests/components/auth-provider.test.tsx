@@ -1,14 +1,18 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, it, expect, vi } from "vitest";
+import { renderToString } from "react-dom/server";
 
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
 
-const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
+const { pushMock, pathnameMock } = vi.hoisted(() => ({
+  pushMock: vi.fn(),
+  pathnameMock: vi.fn(() => "/dashboard"),
+}));
 
 // AuthProvider 使用 next/navigation 的 useRouter / usePathname。
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  usePathname: () => "/dashboard",
+  usePathname: pathnameMock,
 }));
 
 // apiClient 仅在业务请求时使用，这里桩掉以隔离副作用。
@@ -81,12 +85,30 @@ function renderProvider() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  pathnameMock.mockReturnValue("/dashboard");
   localStorage.clear();
   sessionStorage.clear();
   global.fetch = vi.fn();
 });
 
 describe("AuthProvider principal 派生", () => {
+  it("公开语言根路径提供 SSR 内容，其他页面仍等待会话恢复", () => {
+    const content = (
+      <AuthProvider>
+        <h1>Public content</h1>
+      </AuthProvider>
+    );
+    for (const path of ["/en", "/zh-CN"]) {
+      pathnameMock.mockReturnValue(path);
+      const document = new DOMParser().parseFromString(renderToString(content), "text/html");
+      expect(document.querySelector("h1")?.textContent).toBe("Public content");
+    }
+    for (const path of ["/en/dashboard", "/zh-CN/portal", "/en/login"]) {
+      pathnameMock.mockReturnValue(path);
+      expect(renderToString(content)).toBe("");
+    }
+  });
+
   it("无 token 时未认证", async () => {
     renderProvider();
     await screen.findByTestId("ready");
