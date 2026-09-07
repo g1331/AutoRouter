@@ -9,7 +9,55 @@
     "subheadline": "API Key 分发、多上游路由、负载均衡与熔断、按请求计费——在一个自托管控制台里管好所有 AI 流量。",
     "ctaPrimary": "开始使用",
     "ctaSecondary": "查看文档",
+    "scene": {
+      "caption": "路由示意 · 非实时数据",
+      "description": "立体粒子网关承载请求流，依次进入能力匹配、上游选择、准入限制、计费、权限与故障恢复六个场景。"
+    },
+    "flowLabels": {
+      "hero": {
+        "input": "请求",
+        "operation": "AutoRouter",
+        "output": "上游服务"
+      },
+      "integration": {
+        "input": "客户端",
+        "operation": "网关入口",
+        "output": "上游服务"
+      },
+      "routing": {
+        "input": "请求",
+        "operation": "模型匹配",
+        "output": "目标上游"
+      },
+      "balancing": {
+        "input": "请求",
+        "operation": "按权重分发",
+        "output": "上游池"
+      },
+      "quota": {
+        "input": "请求",
+        "operation": "并发限制",
+        "output": "准入请求"
+      },
+      "billing": {
+        "input": "用量",
+        "operation": "价格规则",
+        "output": "请求费用"
+      },
+      "keys": {
+        "input": "API Key",
+        "operation": "权限范围",
+        "output": "授权上游"
+      },
+      "failover": {
+        "input": "请求",
+        "operation": "故障路径",
+        "output": "备选上游"
+      }
+    },
     "terminal": {
+      "title": "改一个入口，接入统一调度",
+      "exampleNote": "接入示例：请替换域名、API Key 与模型。",
       "caption": "改一行 base URL 指向网关，路由、负载均衡与计费由 AutoRouter 接管。"
     },
     "features": {
@@ -25,7 +73,7 @@
       },
       "quota": {
         "title": "配额与并发控制",
-        "desc": "对每个密钥施加配额、并发与排队准入限制，保护上游稳定。"
+        "desc": "以密钥消费配额、上游并发与排队准入限制，保护服务稳定。"
       },
       "billing": {
         "title": "按请求计费",
@@ -39,6 +87,112 @@
         "title": "故障转移与会话亲和",
         "desc": "请求失败时无缝切换候选上游，并可将同一会话固定到既定上游。"
       }
+    },
+    "chapters": {
+      "routing": {
+        "eyebrow": "识别请求所需能力",
+        "label": "请求端点与对应能力",
+        "chat": "Chat Completions",
+        "responses": "Responses",
+        "messages": "Messages",
+        "takeaway": "端点确定能力类型，模型进一步收窄匹配的上游范围。"
+      },
+      "balancing": {
+        "eyebrow": "有序选择上游",
+        "label": "上游选择策略",
+        "priority": {
+          "title": "优先级决定层级",
+          "desc": "优先从仍有可用候选的最高优先级层中选择。"
+        },
+        "weight": {
+          "title": "权重决定分配",
+          "desc": "同一优先级内，按相对权重分配请求。"
+        },
+        "health": {
+          "title": "健康状态决定可用性",
+          "desc": "通过熔断状态，将不可用候选移出选择范围。"
+        },
+        "takeaway": "优先级与权重指导选择，熔断状态决定哪些候选可以参与。"
+      },
+      "quota": {
+        "eyebrow": "在入口明确边界",
+        "label": "请求准入约束",
+        "spending": {
+          "title": "消费额度 · 预算边界",
+          "desc": "准入新请求前，检查密钥配置的消费配额。"
+        },
+        "concurrency": {
+          "title": "并发请求 · 执行边界",
+          "desc": "限制同一上游在同一时刻执行中的请求数量。"
+        },
+        "queue": {
+          "title": "排队准入 · 等待边界",
+          "desc": "请求需要等待空闲容量时，按排队准入限制处理。"
+        },
+        "takeaway": "预算、执行中的请求与等待中的请求，分别受独立的准入约束。"
+      },
+      "billing": {
+        "eyebrow": "让每次计费有据可查",
+        "label": "请求计费的价格来源",
+        "usage": "用量",
+        "price": "适用价格",
+        "snapshot": "请求计费快照",
+        "base": {
+          "title": "基础价格",
+          "desc": "同步的模型价格，为各类用量提供基础单价。"
+        },
+        "override": {
+          "title": "价格覆盖",
+          "desc": "配置价格覆盖时，替换对应的基础单价。"
+        },
+        "multiplier": {
+          "title": "上游倍率",
+          "desc": "按上游计费倍率调整适用价格计算出的用量费用。"
+        },
+        "takeaway": "按用量类别分别计算，再将本次计费依据保留为请求快照。"
+      },
+      "keys": {
+        "eyebrow": "界定可选范围",
+        "label": "密钥范围、授权上游与模型能力的交集",
+        "scope": {
+          "title": "密钥范围",
+          "desc": "从客户端密钥的访问范围与有效期开始检查。"
+        },
+        "upstreams": {
+          "title": "授权上游",
+          "desc": "只保留该密钥获准访问的上游。"
+        },
+        "capability": {
+          "title": "模型能力",
+          "desc": "进一步匹配请求所需的模型与能力。"
+        },
+        "takeaway": "三者交集形成允许参与路由的候选集，不代表每个候选都当前可用。"
+      },
+      "failover": {
+        "eyebrow": "在策略内恢复请求",
+        "label": "可重试故障的候选恢复路径",
+        "failure": {
+          "title": "请求失败",
+          "desc": "故障符合重试条件时，进入恢复流程。"
+        },
+        "exclude": {
+          "title": "排除失败候选",
+          "desc": "将该上游从本次请求的剩余选项中移除。"
+        },
+        "retry": {
+          "title": "重试下一可用上游",
+          "desc": "在重试策略允许的范围内，选择其他合格候选。"
+        },
+        "takeaway": "没有候选可用时，返回明确错误；并非所有故障都会重试。"
+      }
+    },
+    "bookends": {
+      "eyebrow": "从请求到响应",
+      "protocols": "兼容接口",
+      "closing": "你的上游。你的规则。",
+      "setup": "配置上游",
+      "issueKey": "创建 API Key",
+      "send": "发起请求"
     },
     "cta": {
       "title": "准备好接入了吗？",

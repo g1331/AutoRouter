@@ -2,36 +2,45 @@
 
 import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
-
 import { RippleLinkButton } from "@/components/landing/ripple-button";
+import styles from "./landing.module.css";
 
-/**
- * 落地页底部行动召唤区：amber glow 卡片，再次引导进入控制台。
- */
+/** 橙色行动区承接同一个雕塑，保留本地化登录入口。 */
 export function CtaSection() {
   const t = useTranslations("hero");
-
   return (
-    <section className="relative px-6 pb-24 pt-4 sm:px-8">
-      <div className="relative mx-auto max-w-3xl overflow-hidden rounded-cf-md border border-amber-500/30 bg-surface-300/70 px-6 py-12 text-center shadow-cf-glow-medium sm:px-12">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-70"
-          aria-hidden="true"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--vr-accent-500) 20%, transparent), transparent 60%)",
-          }}
-        />
-        <div className="relative z-10 flex flex-col items-center">
-          <h2 className="type-display-small text-foreground">{t("cta.title")}</h2>
-          <p className="mt-3 max-w-xl type-body-medium text-muted-foreground">{t("cta.desc")}</p>
-          <div className="mt-8">
-            <RippleLinkButton href="/login" className="gap-2">
-              {t("cta.button")}
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </RippleLinkButton>
+    <section className={styles.cta} data-scene-step="cta">
+      <div className={`${styles.container} ${styles.closing}`}>
+        <div className={`${styles.closingStatement} font-display`} data-scene-panel>
+          {t("bookends.closing")}
+        </div>
+        <div className={styles.copy} data-scene-panel>
+          <h2 className={`${styles.sectionTitle} font-display`}>
+            <span className={styles.textBacking}>{t("cta.title")}</span>
+          </h2>
+          <p>
+            <span className={styles.textBacking}>{t("cta.desc")}</span>
+          </p>
+          <RippleLinkButton href="/login" className={styles.primary}>
+            {t("cta.button")}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </RippleLinkButton>
+        </div>
+        <div className={styles.ctaArt}>
+          <div className={styles.ctaAnchor} data-scene-anchor="cta" />
+          <div className={`${styles.wordmark} font-display`} aria-hidden="true" data-scene-panel>
+            AUTO ROUTER
           </div>
         </div>
+        <ol className={`${styles.closingSteps} font-mono`} data-scene-panel>
+          {(["setup", "issueKey", "send"] as const).map((key, index) => (
+            <li key={key}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              {t(`bookends.${key}`)}
+              <ArrowRight size={18} aria-hidden="true" />
+            </li>
+          ))}
+        </ol>
       </div>
     </section>
   );

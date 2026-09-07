@@ -33,6 +33,14 @@ for (const theme of THEMES) {
       await seedTheme(page, theme);
     });
 
+    test("landing page has no WCAG A/AA violations", async ({ page }) => {
+      for (const locale of ["en", "zh-CN"]) {
+        await page.goto(`/${locale}`);
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        await expectNoViolations(page);
+      }
+    });
+
     test("login page has no WCAG A/AA violations", async ({ page }) => {
       await page.goto("/en/login");
       await expect(page.getByLabel("USERNAME")).toBeEnabled({ timeout: 15_000 });
