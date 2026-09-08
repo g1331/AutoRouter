@@ -27,6 +27,7 @@ describe("PageShell", () => {
   it.each([
     ["7xl", "max-w-7xl"],
     ["4xl", "max-w-4xl"],
+    ["2xl", "max-w-2xl"],
     ["full", "max-w-full"],
   ] as const)("applies the %s max-width class", (maxWidth, expectedClass) => {
     const { container } = render(

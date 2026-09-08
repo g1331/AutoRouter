@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
@@ -22,7 +23,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-overlay",
-      "data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
@@ -38,6 +39,8 @@ const DialogContent = React.forwardRef<
     morphName?: string;
   }
 >(({ className, children, morph = false, morphName = "morph-dialog", style, ...props }, ref) => {
+  const t = useTranslations("common");
+  const returnFocus = React.useRef<HTMLElement | null>(null);
   warnIfForbiddenVisualStyle("DialogContent", className);
   return (
     <DialogPortal>
@@ -53,29 +56,50 @@ const DialogContent = React.forwardRef<
           "duration-cf-normal ease-cf-standard",
           // 走容器变形（View Transition）时关闭默认 zoom/slide 进出场，运动交给 VT 接管
           !morph && [
-            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-            "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
-            "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
           ],
           className
         )}
         style={morph ? { viewTransitionName: morphName, ...style } : style}
         {...props}
+        onOpenAutoFocus={(event) => {
+          const active = document.activeElement;
+          const menuTriggerId = active?.closest('[role="menu"]')?.getAttribute("aria-labelledby");
+          returnFocus.current = menuTriggerId
+            ? document.getElementById(menuTriggerId)
+            : active instanceof HTMLElement
+              ? active
+              : null;
+          props.onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          props.onCloseAutoFocus?.(event);
+          const target = returnFocus.current;
+          if (
+            !event.defaultPrevented &&
+            target?.isConnected &&
+            target !== document.body &&
+            !document.activeElement?.closest('[role="dialog"], [role="alertdialog"]')
+          ) {
+            event.preventDefault();
+            target.focus({ preventScroll: true });
+          }
+        }}
       >
         {children}
         <DialogPrimitive.Close
+          aria-label={t("close")}
           className={cn(
             "absolute right-3 top-3 rounded-cf-sm border border-transparent p-1.5 text-muted-foreground",
-            "transition-all duration-cf-fast ease-cf-standard",
+            "transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-fast ease-cf-standard",
             "hover:border-border hover:bg-surface-300 hover:text-foreground",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card",
             "disabled:pointer-events-none"
           )}
         >
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

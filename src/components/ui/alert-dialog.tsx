@@ -20,7 +20,7 @@ const AlertDialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-overlay",
-      "data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
@@ -35,33 +35,57 @@ const AlertDialogContent = React.forwardRef<
     morph?: boolean;
     morphName?: string;
   }
->(({ className, morph = false, morphName = "morph-alert-dialog", style, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <AlertDialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%]",
-        // 与 dialog.tsx 同根因：矮视口（软键盘 / 横屏 / 小屏）下限高 + 内滚，避免标题与确认按钮被推出视口
-        "max-h-[calc(100dvh-2rem)] overflow-y-auto",
-        "gap-6 p-6 rounded-cf-sm",
-        "bg-surface-300 border-2 border-amber-500 shadow-cf-glow-subtle",
-        "duration-cf-normal ease-cf-standard",
-        // 走容器变形（View Transition）时关闭默认 zoom/slide 进出场，运动交给 VT 接管
-        !morph && [
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
-          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-          "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
-          "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        ],
-        className
-      )}
-      style={morph ? { viewTransitionName: morphName, ...style } : style}
-      {...props}
-    />
-  </AlertDialogPortal>
-));
+>(({ className, morph = false, morphName = "morph-alert-dialog", style, ...props }, ref) => {
+  const returnFocus = React.useRef<HTMLElement | null>(null);
+  return (
+    <AlertDialogPortal>
+      <AlertDialogOverlay />
+      <AlertDialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%]",
+          // 与 dialog.tsx 同根因：矮视口（软键盘 / 横屏 / 小屏）下限高 + 内滚，避免标题与确认按钮被推出视口
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto",
+          "gap-6 p-6 rounded-cf-sm",
+          "bg-surface-300 border border-border shadow-[var(--vr-shadow-lg)]",
+          "duration-cf-normal ease-cf-standard",
+          // 走容器变形（View Transition）时关闭默认 zoom/slide 进出场，运动交给 VT 接管
+          !morph && [
+            "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          ],
+          className
+        )}
+        style={morph ? { viewTransitionName: morphName, ...style } : style}
+        {...props}
+        onOpenAutoFocus={(event) => {
+          const active = document.activeElement;
+          const menuTriggerId = active?.closest('[role="menu"]')?.getAttribute("aria-labelledby");
+          returnFocus.current = menuTriggerId
+            ? document.getElementById(menuTriggerId)
+            : active instanceof HTMLElement
+              ? active
+              : null;
+          props.onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          props.onCloseAutoFocus?.(event);
+          const target = returnFocus.current;
+          if (
+            !event.defaultPrevented &&
+            target?.isConnected &&
+            target !== document.body &&
+            !document.activeElement?.closest('[role="dialog"], [role="alertdialog"]')
+          ) {
+            event.preventDefault();
+            target.focus({ preventScroll: true });
+          }
+        }}
+      />
+    </AlertDialogPortal>
+  );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -83,7 +107,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
-    className={cn("font-mono text-lg font-medium tracking-wide text-amber-500", className)}
+    className={cn("type-title-large text-foreground", className)}
     {...props}
   />
 ));
@@ -95,7 +119,7 @@ const AlertDialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Description
     ref={ref}
-    className={cn("font-sans text-sm leading-relaxed text-amber-700", className)}
+    className={cn("text-sm leading-relaxed text-muted-foreground", className)}
     {...props}
   />
 ));

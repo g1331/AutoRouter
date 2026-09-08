@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
+import { Collapse } from "@/components/ui/collapse";
 
 export type KeyOwnerScope = "unowned" | "all";
 
@@ -87,6 +88,15 @@ export function KeysTable({
   onOwnerScopeChange,
 }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const copyRequest = useRef(0);
+  useEffect(
+    () => () => {
+      copyRequest.current++;
+      clearTimeout(copyTimer.current);
+    },
+    []
+  );
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
   const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map());
   // Local echo keeps typing responsive; updates are debounced up to the parent.
@@ -198,6 +208,8 @@ export function KeysTable({
   };
 
   const copyKey = async (keyId: string) => {
+    const request = ++copyRequest.current;
+    clearTimeout(copyTimer.current);
     try {
       let keyValue = revealedKeys.get(keyId);
 
@@ -210,12 +222,15 @@ export function KeysTable({
         }
       }
 
+      if (request !== copyRequest.current) return;
       await navigator.clipboard.writeText(keyValue);
+      if (request !== copyRequest.current) return;
       setCopiedId(keyId);
-      toast.success(tCommon("copied"));
-      setTimeout(() => setCopiedId(null), 2000);
+      toast.success(tCommon("copied"), { id: "api-key-copy" });
+      copyTimer.current = setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      toast.error(tCommon("error"));
+      if (request !== copyRequest.current) return;
+      toast.error(tCommon("error"), { id: "api-key-copy" });
     }
   };
 
@@ -615,13 +630,25 @@ export function KeysTable({
                       >
                         <div className="flex min-w-0 items-center gap-2">
                           {hasQuota ? (
-                            <ChevronRight
-                              className={cn(
-                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                                isExpanded && "rotate-90"
-                              )}
-                              aria-hidden="true"
-                            />
+                            <button
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-controls={`key-quota-${key.id}`}
+                              aria-label={`${tCommon(isExpanded ? "collapse" : "expand")}: ${key.name}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleExpand(key.id);
+                              }}
+                              className="shrink-0 rounded-cf-sm p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                                  isExpanded && "rotate-90"
+                                )}
+                                aria-hidden="true"
+                              />
+                            </button>
                           ) : (
                             <span className="w-4 shrink-0" />
                           )}
@@ -781,13 +808,20 @@ export function KeysTable({
                         </div>
                       </TableCell>
                     </TableRow>
-                    {isExpanded && hasQuota ? (
-                      <TableRow className="animate-in fade-in-0 slide-in-from-top-1 duration-200 hover:bg-transparent">
-                        <TableCell colSpan={7} className="border-t-0 bg-surface-300/30 px-4 py-2.5">
-                          {renderQuotaRules(key)}
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
+                    <TableRow
+                      aria-hidden={!isExpanded || !hasQuota}
+                      className="border-0 hover:bg-transparent"
+                    >
+                      <TableCell colSpan={7} className="h-auto border-t-0 bg-surface-300/30 p-0">
+                        <Collapse
+                          open={isExpanded && hasQuota}
+                          id={`key-quota-${key.id}`}
+                          className="px-4 py-2.5"
+                        >
+                          {() => renderQuotaRules(key)}
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
                   </Fragment>
                 );
               })}

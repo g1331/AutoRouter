@@ -236,9 +236,9 @@ export function AccessGrantsSection({ apiKey }: { apiKey: APIKeyResponse }) {
                             />
                           </FormControl>
                           <div className="flex-1 space-y-1 leading-none">
-                            <label className="cursor-pointer type-body-medium text-foreground">
+                            <FormLabel className="cursor-pointer type-body-medium text-foreground">
                               {upstream.name}
-                            </label>
+                            </FormLabel>
                             {upstream.description && (
                               <p className="type-body-small text-muted-foreground">
                                 {upstream.description}

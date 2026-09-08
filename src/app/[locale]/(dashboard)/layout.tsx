@@ -12,6 +12,7 @@ import { LivePulseProvider } from "@/providers/live-pulse-provider";
 const MOBILE_ROOT_ROUTES = ["/dashboard", "/keys", "/upstreams", "/logs", "/settings"] as const;
 
 function getMobileBackHref(pathname: string): string {
+  if (pathname.startsWith("/system/users/")) return "/system/users";
   if (pathname.startsWith("/system/")) {
     return "/settings";
   }

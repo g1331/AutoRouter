@@ -113,7 +113,7 @@ export function EditUserDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <label className="type-label-small text-muted-foreground">{t("username")}</label>
-              <Input value={user.username} disabled readOnly />
+              <Input value={user.username} aria-label={t("username")} disabled readOnly />
             </div>
             <FormField
               control={form.control}

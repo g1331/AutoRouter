@@ -82,7 +82,19 @@ export function CliproxyInstancesTable({
             data-state={selectedInstanceId === instance.id ? "selected" : undefined}
             className="cursor-pointer"
           >
-            <TableCell className="font-medium">{instance.name}</TableCell>
+            <TableCell className="font-medium">
+              <button
+                type="button"
+                className="rounded-cf-sm text-left hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-pressed={selectedInstanceId === instance.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(instance);
+                }}
+              >
+                {instance.name}
+              </button>
+            </TableCell>
             <TableCell>
               <Badge variant="secondary">
                 {instance.mode === "managed" ? t("modeManaged") : t("modeExternal")}

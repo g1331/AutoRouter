@@ -207,6 +207,9 @@
     "status": "Status",
     "online": "Online",
     "offline": "Offline",
+    "loadFailed": "Could not load this data.",
+    "refreshFailed": "Refresh failed. Showing the previously loaded data.",
+    "refreshing": "Updating results…",
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
@@ -273,7 +276,7 @@
     "users": "Users"
   },
   "rankings": {
-    "pageTitle": "RANKINGS",
+    "pageTitle": "Rankings",
     "title": "LEADERBOARD",
     "description": "Full ranking across upstreams, models, API keys and users",
     "dimensions": {
@@ -309,10 +312,12 @@
     "distribution": {
       "models": "Model breakdown",
       "upstreams": "Upstream breakdown"
-    }
+    },
+    "expandDetails": "Expand details",
+    "collapseDetails": "Collapse details"
   },
   "users": {
-    "pageTitle": "USERS",
+    "pageTitle": "Users",
     "managementDesc": "Create and manage user accounts and their access",
     "createUser": "Create User",
     "createUserTitle": "Create New User",
@@ -419,7 +424,7 @@
   },
   "auth": {
     "title": "AUTOROUTER",
-    "subtitle": "Admin Console",
+    "subtitle": "Sign in",
     "terminalTitle": "AUTOROUTER TERMINAL v1.0",
     "systemMessage": "SYSTEM MESSAGE",
     "authRequired": "Authentication requires Admin Token",
@@ -446,7 +451,7 @@
   },
   "dashboard": {
     "title": "System Monitor",
-    "pageTitle": "SYSTEM MONITOR",
+    "pageTitle": "Dashboard",
     "controlPanel": "AUTOROUTER CONTROL PANEL",
     "controlPanelDesc": "Manage API keys and upstream services",
     "apiKeysCount": "API KEYS",
@@ -555,7 +560,7 @@
   },
   "keys": {
     "title": "API Keys",
-    "pageTitle": "API KEYS",
+    "pageTitle": "API keys",
     "management": "API KEYS Management",
     "managementDesc": "Create and manage API Keys for client access",
     "createKey": "Create API Key",
@@ -661,7 +666,7 @@
     "revokeSuccess": "API Key revoked",
     "revokeFailed": "Failed to revoke API Key",
     "noKeys": "No API Keys yet",
-    "noKeysDesc": "Create your first client Key so external apps can call the proxy API via Bearer Token. To limit which upstreams the Key can reach, switch to \"Specific Upstreams\" at creation time and tick the allowed ones.",
+    "noKeysDesc": "Create an API key for your client, then configure its upstream access and limits on the key details page.",
     "searchKeys": "Search keys by name...",
     "ownerScopeLabel": "Owner scope",
     "ownerScopeUnowned": "Unassigned",
@@ -706,7 +711,7 @@
   },
   "logs": {
     "title": "Request Logs",
-    "pageTitle": "REQUEST LOGS",
+    "pageTitle": "Request logs",
     "management": "REQUEST LOGS",
     "managementDesc": "View and analyze API request history",
     "focusActive": "Viewing a single log",
@@ -1051,7 +1056,7 @@
   },
   "upstreams": {
     "title": "Upstreams",
-    "pageTitle": "UPSTREAMS",
+    "pageTitle": "Upstreams",
     "tabUpstreams": "Upstreams",
     "management": "UPSTREAMS Management",
     "managementDesc": "Configure and manage upstream AI service providers",
@@ -1575,7 +1580,7 @@
   },
   "billing": {
     "title": "Billing",
-    "pageTitle": "BILLING",
+    "pageTitle": "Billing",
     "management": "BILLING Management",
     "managementDesc": "Maintain model price catalog, fix missing prices, and keep billing consistent",
     "todayCost": "Today Cost",
@@ -1710,7 +1715,7 @@
   },
   "backgroundSync": {
     "title": "Background Tasks",
-    "pageTitle": "BACKGROUND TASKS",
+    "pageTitle": "Background tasks",
     "panelTitle": "Background Tasks",
     "panelDescription": "Review scheduled sync jobs, update scheduling settings, and trigger a single immediate run when needed.",
     "loading": "Loading background tasks...",
@@ -1763,7 +1768,7 @@
   },
   "trafficRecording": {
     "title": "Traffic Recording",
-    "pageTitle": "TRAFFIC RECORDING",
+    "pageTitle": "Traffic recording",
     "settingsDescription": "Control request recording in real time and manage stored recording files.",
     "description": "Control proxy request recording, inspect disk usage, and search, view, or delete saved recording details.",
     "enabled": "Enabled",
@@ -1820,7 +1825,8 @@
     "logSectionLoadFailed": "Failed to load recording: {message}",
     "logSectionOpenRecordings": "Open in recordings",
     "logSectionOpenRecordingSettings": "Open recording settings",
-    "openSourceLog": "Open source log"
+    "openSourceLog": "Open source log",
+    "cleanupConfirmDescription": "Delete recordings older than the configured retention period? This cannot be undone."
   },
   "upstreamFailureRules": {
     "title": "Global Failure Rules",
@@ -1832,7 +1838,7 @@
   },
   "compensation": {
     "title": "Header Compensation",
-    "pageTitle": "HEADER COMPENSATION",
+    "pageTitle": "Header compensation",
     "management": "HEADER COMPENSATION Rules",
     "managementDesc": "Configure outbound header compensation rules for upstream requests",
     "addRule": "Add Rule",
@@ -1859,6 +1865,7 @@
     "enableSuccess": "Rule enabled",
     "disableSuccess": "Rule disabled",
     "updateFailed": "Failed to update rule",
+    "updateSuccess": "Rule updated",
     "createSuccess": "Rule created",
     "createFailed": "Failed to create rule",
     "ruleName": "Name",
@@ -1876,7 +1883,12 @@
     "modeMissingOnly": "Missing Only",
     "creating": "Creating...",
     "capabilityMatrix": "CAPABILITY MATRIX",
-    "capabilityMatrixDesc": "Which capabilities each rule applies to"
+    "capabilityMatrixDesc": "Which capabilities each rule applies to",
+    "moveSourceUp": "Move {source} up",
+    "moveSourceDown": "Move {source} down",
+    "removeSource": "Remove {source}",
+    "addSource": "Add source",
+    "sourceMoved": "{source} moved to position {position}"
   },
   "cliproxy": {
     "pageTitle": "CLIProxyAPI",
@@ -2023,7 +2035,7 @@
     "uploadAuthFileDescription": "Upload an OAuth auth file in JSON format. After upload, the account list is automatically synced.",
     "uploadAuthFileMethodFile": "Choose File",
     "uploadAuthFileMethodPaste": "Paste JSON",
-    "uploadAuthFileChoose": "Click to select a .json file or drop one here",
+    "uploadAuthFileChoose": "Click to select a .json file",
     "uploadAuthFilePastePlaceholder": "Paste auth file JSON here…",
     "uploadAuthFileInvalidJson": "Invalid JSON content",
     "uploadAuthFileEmpty": "Auth file content is required",
@@ -2077,7 +2089,8 @@
     "oauthManualCallbackEmpty": "Callback URL is required",
     "oauthCallbackSubmitSuccess": "Callback URL submitted, accounts synced",
     "oauthCallbackSubmitFailed": "Failed to submit callback URL: {message}",
-    "linkedUpstreamProviderUnknown": "Unknown"
+    "linkedUpstreamProviderUnknown": "Unknown",
+    "oauthCopyFailed": "Could not copy the authorization URL. Select and copy it manually."
   },
   "portal": {
     "nav": {

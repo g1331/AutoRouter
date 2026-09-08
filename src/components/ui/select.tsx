@@ -24,7 +24,7 @@ const SelectTrigger = React.forwardRef<
         "flex h-11 w-full items-center justify-between whitespace-nowrap",
         "rounded-cf-sm border border-input bg-surface-200 px-3.5",
         "type-body-medium text-foreground",
-        "transition-all duration-cf-normal ease-cf-standard",
+        "transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard",
         "data-[placeholder]:text-muted-foreground",
         "hover:border-amber-500/45 hover:bg-surface-300/80",
         "focus:outline-none focus:border-amber-500/70",
@@ -88,15 +88,15 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Content
         ref={ref}
         className={cn(
-          "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem]",
+          "relative z-50 max-h-[var(--radix-select-content-available-height)] min-w-[8rem]",
           "overflow-y-auto overflow-x-hidden rounded-cf-md border border-transparent bg-surface-400",
           "bg-card text-foreground shadow-[var(--vr-shadow-md)]",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
           "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-          "origin-[--radix-select-content-transform-origin]",
+          "origin-[var(--radix-select-content-transform-origin)]",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className

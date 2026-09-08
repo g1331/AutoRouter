@@ -1,4 +1,5 @@
-import { Fragment } from "react";
+import { Fragment, useId } from "react";
+import { Collapse } from "@/components/ui/collapse";
 import { Check, RotateCcw, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +72,7 @@ export function BillingPriceRow({
     startEditingPrice,
   } = edit;
 
+  const detailsId = useId();
   const override = manualOverrideMap.get(item.model);
   const tierPreview = tierRulePreviewMap.get(item.model);
   const tierPreviewLabel = tierPreview
@@ -293,6 +295,8 @@ export function BillingPriceRow({
                     className="flex h-8 w-8 items-center justify-center rounded-cf-sm hover:bg-surface-300/60"
                     onClick={() => togglePriceRow(item.model)}
                     title={t(isExpanded ? "priceCatalogCollapseTiers" : "priceCatalogExpandTiers")}
+                    aria-expanded={isExpanded}
+                    aria-controls={detailsId}
                   >
                     <ExpandChevron expanded={isExpanded} />
                   </button>
@@ -302,9 +306,9 @@ export function BillingPriceRow({
           </>
         )}
       </TableRow>
-      {isExpanded && (
-        <TableRow className="bg-surface-300/10">
-          <TableCell colSpan={7} className="px-3 py-3">
+      <TableRow aria-hidden={!isExpanded} className="border-0 bg-surface-300/10">
+        <TableCell colSpan={7} className="h-auto p-0">
+          <Collapse open={isExpanded} id={detailsId} className="px-3 py-3">
             <div className="space-y-4">
               {hasTiers && modelTierRules && (
                 <BillingTierSubTable
@@ -317,9 +321,9 @@ export function BillingPriceRow({
                 />
               )}
             </div>
-          </TableCell>
-        </TableRow>
-      )}
+          </Collapse>
+        </TableCell>
+      </TableRow>
     </Fragment>
   );
 }

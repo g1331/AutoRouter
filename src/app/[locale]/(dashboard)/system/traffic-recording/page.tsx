@@ -2,10 +2,24 @@
 
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { DatabaseZap, ExternalLink, FileJson, Loader2, Save, Search, Trash2 } from "lucide-react";
+import { ExternalLink, FileJson, Loader2, Save, Search, Trash2 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { RecordingJsonBlock } from "@/components/admin/recording-json-block";
 import { Topbar } from "@/components/admin/topbar";
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
+import { QueryStatus } from "@/components/ui/query-status";
+import { Collapse } from "@/components/ui/collapse";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import {
   TimeRangeSelector,
@@ -119,6 +133,8 @@ export default function TrafficRecordingPage() {
   const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRangeOrCustom>("30d");
   const [customTimeRange, setCustomTimeRange] = useState<CustomDateRange | undefined>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const settings = useTrafficRecordingSettings();
   const updateSettings = useUpdateTrafficRecordingSettings();
@@ -166,16 +182,21 @@ export default function TrafficRecordingPage() {
   };
 
   const handleSave = () => {
-    updateSettings.mutate({
-      enabled: formSettings.enabled,
-      mode: formSettings.mode,
-      redact_sensitive: formSettings.redactSensitive,
-      retention_days: retentionDaysValue,
-    });
+    if (!canSave || updateSettings.isPending) return;
+    updateSettings.mutate(
+      {
+        enabled: formSettings.enabled,
+        mode: formSettings.mode,
+        redact_sensitive: formSettings.redactSensitive,
+        retention_days: retentionDaysValue,
+      },
+      { onSuccess: () => setDraft(null) }
+    );
   };
 
   const handleSelect = (recording: TrafficRecordingResponse) => {
-    setSelectedId((current) => (current === recording.id ? null : recording.id));
+    setDetailOpen((open) => (selectedId === recording.id ? !open : true));
+    setSelectedId(recording.id);
   };
 
   const handleTimeRangeChange = (value: TimeRangeOrCustom, range?: CustomDateRange) => {
@@ -185,17 +206,27 @@ export default function TrafficRecordingPage() {
   };
 
   const handleConfirmDelete = (recordingId: string) => {
-    deleteRecording.mutate(recordingId);
-    setConfirmingDeleteId(null);
-    setSelectedId((current) => (current === recordingId ? null : current));
+    deleteRecording.mutate(recordingId, {
+      onSuccess: () => {
+        setConfirmingDeleteId(null);
+        if (selectedId === recordingId) setDetailOpen(false);
+        if (rows.length === 1 && page > 1) setPage((current) => current - 1);
+      },
+    });
   };
 
   // 表格行与窄屏卡片共用同一套操作按钮（查看详情 / 跳源日志 / 删除含二次确认），避免重复实现
   const renderRecordingActions = (recording: TrafficRecordingResponse) => (
     <>
-      <Button size="sm" variant="outline" onClick={() => handleSelect(recording)}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => handleSelect(recording)}
+        aria-expanded={detailOpen && selectedId === recording.id}
+        aria-controls="recording-detail"
+      >
         <FileJson className="h-4 w-4" />
-        {selectedId === recording.id ? t("hideDetail") : t("viewDetail")}
+        {detailOpen && selectedId === recording.id ? t("hideDetail") : t("viewDetail")}
       </Button>
       {recording.request_log_id ? (
         <Button asChild size="sm" variant="outline">
@@ -249,38 +280,44 @@ export default function TrafficRecordingPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <PageShell maxWidth="full">
+        <PageHeader title={t("pageTitle")} />
+        <QueryStatus
+          error={settings.error}
+          hasData={Boolean(settings.data)}
+          onRetry={() => void settings.refetch()}
+        />
         <Card variant="outlined" className="bg-card">
           <CardContent className="space-y-5 p-5 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-1.5">
-                <div className="flex items-center gap-2 text-amber-500">
-                  <DatabaseZap className="h-4 w-4" aria-hidden="true" />
-                  <span className="type-label-medium">{t("title")}</span>
-                </div>
                 <p className="type-body-medium max-w-3xl text-muted-foreground">
                   {t("description")}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant={formSettings.enabled ? "success" : "neutral"}>
-                  {formSettings.enabled ? t("enabled") : t("disabled")}
-                </Badge>
-                <Badge variant={formSettings.redactSensitive ? "success" : "warning"}>
-                  {formSettings.redactSensitive ? t("redacted") : t("notRedacted")}
-                </Badge>
-              </div>
+              {currentSettings && (
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={currentSettings.enabled ? "success" : "neutral"}>
+                    {currentSettings.enabled ? t("enabled") : t("disabled")}
+                  </Badge>
+                  <Badge variant={currentSettings.redact_sensitive ? "success" : "warning"}>
+                    {currentSettings.redact_sensitive ? t("redacted") : t("notRedacted")}
+                  </Badge>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
                 <p className="type-caption text-muted-foreground">{t("recordCount")}</p>
-                <p className="type-title-small tabular-nums">{recordings.data?.stats.total ?? 0}</p>
+                <p className="type-title-small tabular-nums">
+                  {recordings.data?.stats.total ?? "—"}
+                </p>
               </div>
               <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
                 <p className="type-caption text-muted-foreground">{t("diskUsage")}</p>
                 <p className="type-title-small tabular-nums">
-                  {formatBytes(recordings.data?.stats.total_size_bytes ?? 0)}
+                  {recordings.data ? formatBytes(recordings.data.stats.total_size_bytes) : "—"}
                 </p>
               </div>
               <div className="space-y-1 rounded-cf-md border border-transparent bg-surface-400 p-3">
@@ -295,7 +332,10 @@ export default function TrafficRecordingPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
+            <fieldset
+              disabled={!currentSettings || updateSettings.isPending}
+              className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end"
+            >
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Switch
                   checked={formSettings.enabled}
@@ -346,7 +386,7 @@ export default function TrafficRecordingPage() {
                 )}
                 {t("save")}
               </Button>
-            </div>
+            </fieldset>
           </CardContent>
         </Card>
 
@@ -359,7 +399,7 @@ export default function TrafficRecordingPage() {
               </div>
               <Button
                 variant="outline"
-                onClick={() => cleanupRecordings.mutate()}
+                onClick={() => setCleanupOpen(true)}
                 disabled={cleanupRecordings.isPending}
               >
                 {cleanupRecordings.isPending ? (
@@ -427,7 +467,13 @@ export default function TrafficRecordingPage() {
               </div>
             </div>
 
-            {recordings.isLoading ? (
+            <QueryStatus
+              error={recordings.error}
+              fetching={recordings.isFetching && !recordings.isLoading}
+              hasData={Boolean(recordings.data)}
+              onRetry={() => void recordings.refetch()}
+            />
+            {recordings.error && !recordings.data ? null : recordings.isLoading ? (
               <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {t("loading")}
@@ -454,7 +500,9 @@ export default function TrafficRecordingPage() {
                       {rows.map((recording) => (
                         <TableRow
                           key={recording.id}
-                          className={cn(selectedId === recording.id && "bg-surface-300/55")}
+                          className={cn(
+                            detailOpen && selectedId === recording.id && "bg-surface-300/55"
+                          )}
                         >
                           <TableCell className="font-mono text-xs">
                             {formatDate(recording.created_at)}
@@ -495,7 +543,7 @@ export default function TrafficRecordingPage() {
                       key={recording.id}
                       className={cn(
                         "rounded-cf-sm border border-transparent p-3 bg-surface-400",
-                        selectedId === recording.id && "bg-surface-300/55"
+                        detailOpen && selectedId === recording.id && "bg-surface-300/55"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -545,7 +593,7 @@ export default function TrafficRecordingPage() {
           </CardContent>
         </Card>
 
-        {selectedId ? (
+        <Collapse open={detailOpen} id="recording-detail">
           <Card variant="outlined" className="bg-card">
             <CardContent className="space-y-3 p-5 sm:p-6">
               <div className="flex items-center gap-2 text-amber-500">
@@ -558,14 +606,42 @@ export default function TrafficRecordingPage() {
                   {t("loadingDetail")}
                 </div>
               ) : detail.isError ? (
-                <p className="text-sm text-status-error">{t("detailLoadFailed")}</p>
+                <QueryStatus
+                  error={detail.isError}
+                  fetching={detail.isFetching}
+                  onRetry={() => void detail.refetch()}
+                />
               ) : (
-                <RecordingJsonBlock key={selectedId} value={detail.data?.fixture ?? null} />
+                <div key={selectedId} className="content-enter">
+                  <RecordingJsonBlock value={detail.data?.fixture ?? null} />
+                </div>
               )}
             </CardContent>
           </Card>
-        ) : null}
-      </div>
+        </Collapse>
+      </PageShell>
+      <AlertDialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cleanupExpired")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("cleanupConfirmDescription")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cleanupRecordings.isPending}>
+              {tCommon("cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cleanupRecordings.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                cleanupRecordings.mutate(undefined, { onSuccess: () => setCleanupOpen(false) });
+              }}
+            >
+              {cleanupRecordings.isPending ? tCommon("loading") : t("cleanupExpired")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

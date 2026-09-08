@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapse } from "@/components/ui/collapse";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -356,7 +357,7 @@ export function PriceCatalogSection({
             <h3 className="type-label-medium text-foreground">{t("priceCatalogTitle")}</h3>
             <p className="text-sm text-muted-foreground">
               {t("priceCatalogDesc")}{" "}
-              <span className="text-muted-foreground/80">({t("priceCatalogOverrideHint")})</span>
+              <span className="text-muted-foreground">({t("priceCatalogOverrideHint")})</span>
             </p>
           </div>
           <div className="w-full sm:w-80">
@@ -1320,6 +1321,8 @@ export function PriceCatalogSection({
                                         type="button"
                                         className="flex h-8 w-8 items-center justify-center rounded-cf-sm hover:bg-surface-300/60"
                                         onClick={() => togglePriceRow(override.model)}
+                                        aria-expanded={isExpanded}
+                                        aria-controls={`override-tiers-${override.model}`}
                                         title={t(
                                           isExpanded
                                             ? "priceCatalogCollapseTiers"
@@ -1334,24 +1337,29 @@ export function PriceCatalogSection({
                               </>
                             )}
                           </TableRow>
-                          {isExpanded && (
-                            <TableRow className="bg-surface-300/10">
-                              <TableCell colSpan={7} className="px-3 py-3">
-                                <div className="space-y-4">
-                                  {hasTiers && modelTierRules && (
-                                    <BillingTierSubTable
-                                      model={override.model}
-                                      modelTierRules={modelTierRules}
-                                      edit={edit}
-                                      updateTierRule={updateTierRule}
-                                      deleteTierRule={deleteTierRule}
-                                      t={t}
-                                    />
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
+                          <TableRow
+                            aria-hidden={!isExpanded}
+                            className="border-0 bg-surface-300/10"
+                          >
+                            <TableCell colSpan={7} className="h-auto p-0">
+                              <Collapse open={isExpanded} id={`override-tiers-${override.model}`}>
+                                {() => (
+                                  <div className="space-y-4 px-3 py-3">
+                                    {hasTiers && modelTierRules && (
+                                      <BillingTierSubTable
+                                        model={override.model}
+                                        modelTierRules={modelTierRules}
+                                        edit={edit}
+                                        updateTierRule={updateTierRule}
+                                        deleteTierRule={deleteTierRule}
+                                        t={t}
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
                         </Fragment>
                       );
                     })}
@@ -1386,6 +1394,8 @@ export function PriceCatalogSection({
                                 type="button"
                                 className="flex h-8 w-8 items-center justify-center rounded-cf-sm hover:bg-surface-300/60"
                                 onClick={() => togglePriceRow(model)}
+                                aria-expanded={isExpanded}
+                                aria-controls={`model-tiers-${model}`}
                                 title={t(
                                   isExpanded
                                     ? "priceCatalogCollapseTiers"
@@ -1396,17 +1406,26 @@ export function PriceCatalogSection({
                               </button>
                             </TableCell>
                           </TableRow>
-                          {isExpanded && modelTierRules && (
-                            <TableRow className="bg-surface-300/10">
-                              <TableCell colSpan={7} className="px-3 py-3">
-                                <BillingTierSubTable
-                                  model={model}
-                                  modelTierRules={modelTierRules}
-                                  edit={edit}
-                                  updateTierRule={updateTierRule}
-                                  deleteTierRule={deleteTierRule}
-                                  t={t}
-                                />
+                          {modelTierRules && (
+                            <TableRow
+                              aria-hidden={!isExpanded}
+                              className="border-0 bg-surface-300/10"
+                            >
+                              <TableCell colSpan={7} className="h-auto p-0">
+                                <Collapse open={isExpanded} id={`model-tiers-${model}`}>
+                                  {() => (
+                                    <div className="px-3 py-3">
+                                      <BillingTierSubTable
+                                        model={model}
+                                        modelTierRules={modelTierRules}
+                                        edit={edit}
+                                        updateTierRule={updateTierRule}
+                                        deleteTierRule={deleteTierRule}
+                                        t={t}
+                                      />
+                                    </div>
+                                  )}
+                                </Collapse>
                               </TableCell>
                             </TableRow>
                           )}

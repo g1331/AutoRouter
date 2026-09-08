@@ -299,7 +299,7 @@ const BILLING_TIER_RULES = {
 };
 
 // 详情页/日志页共用同一份 key 与 upstream 身份，避免测试文件里出现重复的魔法 UUID。
-const LOGS_PAGE = {
+export const LOGS_PAGE = {
   items: [
     {
       id: "00000000-0000-4000-8000-00000000ff01",

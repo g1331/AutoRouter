@@ -15,7 +15,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useChangeOwnPassword } from "@/hooks/use-portal-account";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -65,7 +65,7 @@ export function PortalChangePasswordForm() {
   };
 
   return (
-    <Card variant="outlined" className="max-w-xl bg-card">
+    <Card variant="outlined" className="bg-card">
       <CardHeader>
         <CardTitle className="type-title-small">{t("password.cardTitle")}</CardTitle>
         <CardDescription>{t("password.cardDesc")}</CardDescription>
@@ -80,7 +80,12 @@ export function PortalChangePasswordForm() {
                 <FormItem>
                   <FormLabel>{t("password.currentLabel")}</FormLabel>
                   <FormControl>
-                    <Input type="password" autoComplete="current-password" {...field} />
+                    <PasswordInput
+                      allowPasswordManager
+                      autoComplete="current-password"
+                      disabled={changePasswordMutation.isPending}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -94,7 +99,12 @@ export function PortalChangePasswordForm() {
                 <FormItem>
                   <FormLabel>{t("password.newLabel")}</FormLabel>
                   <FormControl>
-                    <Input type="password" autoComplete="new-password" {...field} />
+                    <PasswordInput
+                      allowPasswordManager
+                      autoComplete="new-password"
+                      disabled={changePasswordMutation.isPending}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -108,7 +118,12 @@ export function PortalChangePasswordForm() {
                 <FormItem>
                   <FormLabel>{t("password.confirmLabel")}</FormLabel>
                   <FormControl>
-                    <Input type="password" autoComplete="new-password" {...field} />
+                    <PasswordInput
+                      allowPasswordManager
+                      autoComplete="new-password"
+                      disabled={changePasswordMutation.isPending}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

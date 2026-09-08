@@ -77,19 +77,33 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-/**
- * 等待开机动画结束、表单字段可交互（showForm=true 后输入框解除 disabled）。
- */
+/** 页面挂载后表单即可使用。 */
 async function waitForForm() {
   await waitFor(() => expect(screen.getByLabelText("username")).not.toBeDisabled());
 }
+
+it("普通动态偏好下立即可输入，模式可用方向键切换且保留草稿", () => {
+  vi.spyOn(window, "matchMedia").mockReturnValue({ matches: false } as MediaQueryList);
+  render(<LoginPage />);
+  const username = screen.getByLabelText("username");
+  expect(username).toBeEnabled();
+  fireEvent.change(username, { target: { value: "member-draft" } });
+  const account = screen.getByRole("tab", { name: "accountTab" });
+  fireEvent.keyDown(account, { key: "ArrowRight" });
+  const token = screen.getByRole("tab", { name: "tokenTab" });
+  expect(token).toHaveFocus();
+  expect(token).toHaveAttribute("aria-selected", "true");
+  fireEvent.keyDown(token, { key: "Home" });
+  expect(screen.getByLabelText("username")).toHaveValue("member-draft");
+  expect(screen.queryByText(/CPU READY|NETWORK ONLINE|Preparing admin workspace/)).toBeNull();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
   searchParamsState.redirect = null;
   authState.token = null;
   authState.principal = null;
-  // prefers-reduced-motion: reduce 让 BootSequence 立即完成开机序列。
+  // 保留减少动态效果偏好，登录可用性不依赖此设置。
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: true,
     media: query,

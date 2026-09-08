@@ -128,6 +128,16 @@ describe("CliproxyAccountsPanel 集成行为", () => {
     expect(screen.queryByTestId("accounts-table")).not.toBeInTheDocument();
   });
 
+  it("刷新失败保留账号并允许重试", () => {
+    const refetch = vi.fn();
+    useCliproxyAuthAccountsMock.mockReturnValue({ data: [account], isError: true, refetch });
+    render(<CliproxyAccountsPanel instance={instance} />);
+    expect(screen.getByTestId("accounts-table")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("refreshFailed");
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
   it("加载失败时展示错误文案", () => {
     useCliproxyAuthAccountsMock.mockReturnValue({
       data: undefined,
@@ -135,7 +145,7 @@ describe("CliproxyAccountsPanel 集成行为", () => {
       isError: true,
     });
     render(<CliproxyAccountsPanel instance={instance} />);
-    expect(screen.getByText("accountsLoadFailed")).toBeInTheDocument();
+    expect(screen.getByText("loadFailed")).toBeInTheDocument();
   });
 
   it("空账号列表时展示 noAccounts", () => {

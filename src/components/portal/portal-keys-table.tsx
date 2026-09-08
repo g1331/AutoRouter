@@ -73,16 +73,16 @@ export function PortalKeysTable({
   }
 
   return (
-    <Table>
+    <Table className="table-fixed md:table-auto">
       <TableHeader>
         <TableRow>
           <TableHead>{tCommon("name")}</TableHead>
           <TableHead className="hidden md:table-cell">{t("tableKeyPrefix")}</TableHead>
           <TableHead className="hidden lg:table-cell">{t("tableUpstreams")}</TableHead>
-          <TableHead>{t("spendingRules")}</TableHead>
-          <TableHead>{tCommon("status")}</TableHead>
+          <TableHead className="hidden md:table-cell">{t("spendingRules")}</TableHead>
+          <TableHead className="w-14 md:w-auto">{tCommon("status")}</TableHead>
           <TableHead className="hidden md:table-cell">{tCommon("createdAt")}</TableHead>
-          <TableHead className="text-right">{tCommon("actions")}</TableHead>
+          <TableHead className="w-24 text-right md:w-auto">{tCommon("actions")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -90,7 +90,15 @@ export function PortalKeysTable({
           <TableRow key={key.id} data-morph-source>
             <TableCell>
               <div className="min-w-0">
-                <p className="truncate type-body-medium text-foreground">{key.name}</p>
+                <p className="break-words type-body-medium text-foreground">{key.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground md:hidden">
+                  {key.is_quota_exceeded
+                    ? t("quotaExceeded")
+                    : key.spending_rule_statuses.length
+                      ? tPortal("keys.quotaRuleCount", { count: key.spending_rule_statuses.length })
+                      : tPortal("keys.quotaUnlimited")}
+                  {key.disabled_by_admin && ` · ${tPortal("keys.disabledByAdmin")}`}
+                </p>
                 {key.description && (
                   <p className="truncate type-body-small text-muted-foreground">
                     {key.description}
@@ -120,7 +128,7 @@ export function PortalKeysTable({
                 </Badge>
               )}
             </TableCell>
-            <TableCell>
+            <TableCell className="hidden md:table-cell">
               {key.spending_rule_statuses.length === 0 ? (
                 <span className="type-body-small text-muted-foreground">
                   {tPortal("keys.quotaUnlimited")}

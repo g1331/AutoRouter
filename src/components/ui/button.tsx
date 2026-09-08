@@ -8,7 +8,7 @@ const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
     "rounded-cf-md border text-sm font-semibold",
-    "transition-all duration-cf-normal ease-cf-standard",
+    "transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     "focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     // 不要在 disabled 变体里写 translate-y-0 之类的全局 transform 复位：
@@ -24,9 +24,9 @@ const buttonVariants = cva(
         // 亮色 hover 走深档（600=hot，白字对比更高），暗色 hover 走亮档（400=hot，
         // ink 字对比更高）；辉光令牌 --vr-glow 在亮色为 transparent，天然只在暗色发光
         default:
-          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] not-disabled:hover:-translate-y-px hover:bg-amber-600 hover:shadow-[var(--vr-glow)] active:translate-y-0 dark:hover:bg-amber-400",
+          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] hover:bg-amber-600 dark:hover:bg-amber-400",
         primary:
-          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] not-disabled:hover:-translate-y-px hover:bg-amber-600 hover:shadow-[var(--vr-glow)] active:translate-y-0 dark:hover:bg-amber-400",
+          "border-primary bg-primary text-primary-foreground shadow-[var(--vr-shadow-xs)] hover:bg-amber-600 dark:hover:bg-amber-400",
         secondary:
           "border-border bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)] hover:bg-surface-400 hover:border-amber-400/50",
         outline:
@@ -36,11 +36,11 @@ const buttonVariants = cva(
         ghost:
           "border-transparent bg-transparent text-foreground hover:bg-surface-300 hover:text-foreground",
         destructive:
-          "border-status-error bg-status-error text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--vr-status-error)_25%,transparent)] hover:brightness-105",
+          "border-status-error bg-status-error text-primary-foreground light:text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--vr-status-error)_25%,transparent)] hover:brightness-105",
         danger:
-          "border-status-error bg-status-error text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--vr-status-error)_25%,transparent)] hover:brightness-105",
+          "border-status-error bg-status-error text-primary-foreground light:text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--vr-status-error)_25%,transparent)] hover:brightness-105",
         success:
-          "border-status-success bg-status-success text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--vr-status-success)_25%,transparent)] hover:brightness-105",
+          "border-status-success bg-status-success text-primary-foreground light:text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--vr-status-success)_25%,transparent)] hover:brightness-105",
         link: "h-auto border-transparent bg-transparent px-0 py-0 text-amber-600 underline-offset-4 hover:underline dark:text-amber-500",
       },
       size: {

@@ -219,7 +219,7 @@ test.describe("Login role routing", () => {
     await waitForLoginForm(page);
 
     await page.getByRole("tab", { name: "ADMIN TOKEN" }).click();
-    await page.getByLabel("ADMIN TOKEN").fill("e2e-admin-token");
+    await page.getByRole("textbox", { name: "ADMIN TOKEN", exact: true }).fill("e2e-admin-token");
     await page.getByRole("button", { name: "LOGIN" }).click();
 
     await expect(page).toHaveURL(/\/en\/dashboard$/);

@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Rows3,
   Search,
-  Server,
   SlidersHorizontal,
 } from "lucide-react";
 
@@ -17,6 +16,9 @@ import { CreateUpstreamDialog } from "@/components/admin/create-upstream-dialog"
 import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { TestUpstreamDialog } from "@/components/admin/test-upstream-dialog";
+import { PageHeader } from "@/components/admin/page-header";
+import { PageShell } from "@/components/admin/page-shell";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Topbar } from "@/components/admin/topbar";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import { Button } from "@/components/ui/button";
@@ -113,7 +115,13 @@ export default function UpstreamsPage() {
 
   // Filters and pagination both run over the full upstream set so a search
   // matches every page, not just the currently fetched one.
-  const { data: allUpstreamsData, isLoading: isUpstreamsLoading } = useAllUpstreams();
+  const {
+    data: allUpstreamsData,
+    isLoading: isUpstreamsLoading,
+    error,
+    isFetching,
+    refetch,
+  } = useAllUpstreams();
   const {
     mutate: testUpstreamMutation,
     data: testResult,
@@ -214,40 +222,37 @@ export default function UpstreamsPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-8 lg:py-7 xl:px-10">
-        <Card
-          variant="outlined"
-          className="w-full max-w-full overflow-hidden border-surface-400/65 bg-surface-300/38 shadow-[var(--vr-shadow-sm)] backdrop-blur supports-[backdrop-filter]:bg-surface-300/32"
-        >
+      <PageShell maxWidth="full">
+        <PageHeader
+          title={t("pageTitle")}
+          actions={
+            <Button
+              onClick={(event) => {
+                const source = event.currentTarget;
+                morphSourceRef.current = source;
+                startMorph(() => setCreateDialogOpen(true), {
+                  source,
+                  name: "morph-upstream-form",
+                  mode: "enter",
+                });
+              }}
+              variant="primary"
+              className="w-full gap-2 sm:w-auto"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("addUpstream")}
+            </Button>
+          }
+        />
+        <QueryStatus
+          error={error}
+          fetching={isFetching && !isUpstreamsLoading}
+          hasData={Boolean(allUpstreamsData)}
+          onRetry={() => void refetch()}
+        />
+        <Card variant="outlined" className="bg-card">
           <CardContent className="space-y-4 p-4 sm:p-5 lg:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex items-center gap-2 text-amber-500">
-                  <Server className="h-4 w-4" aria-hidden="true" />
-                  <span className="type-label-medium">{t("workbenchTitle")}</span>
-                </div>
-                <p className="type-body-medium text-muted-foreground">{t("workbenchDesc")}</p>
-              </div>
-
-              <Button
-                onClick={(event) => {
-                  const source = event.currentTarget;
-                  morphSourceRef.current = source;
-                  startMorph(() => setCreateDialogOpen(true), {
-                    source,
-                    name: "morph-upstream-form",
-                    mode: "enter",
-                  });
-                }}
-                variant="primary"
-                className="w-full gap-2 sm:w-auto"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                {t("addUpstream")}
-              </Button>
-            </div>
-
-            <div className="border-t border-divider/70 pt-4">
+            <div className="space-y-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -410,10 +415,10 @@ export default function UpstreamsPage() {
           </CardContent>
         </Card>
 
-        {isUpstreamsLoading ? (
+        {error && !allUpstreamsData ? null : isUpstreamsLoading ? (
           <UpstreamsLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
-          <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-1 duration-300">
+          <div className="space-y-4" aria-busy={isFetching}>
             <UpstreamsTable
               upstreams={paginatedUpstreams}
               onDelete={(upstream, source) => {
@@ -445,7 +450,7 @@ export default function UpstreamsPage() {
             )}
           </div>
         )}
-      </div>
+      </PageShell>
 
       <CreateUpstreamDialog
         open={createDialogOpen}

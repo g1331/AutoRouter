@@ -134,15 +134,16 @@ export function TimeRangeSelector({
   }
 
   return (
-    <div className="flex items-stretch gap-1">
+    <div className="flex flex-wrap items-stretch gap-1">
       <div className="inline-flex rounded-cf-sm border border-transparent bg-surface-400 p-1">
         {presetRanges.map((range) => (
           <button
             key={range}
             type="button"
+            aria-pressed={value === range}
             onClick={() => onChange(range)}
             className={cn(
-              "rounded-cf-sm px-3.5 py-1.5 type-label-medium transition-all duration-cf-fast ease-cf-standard",
+              "whitespace-nowrap rounded-cf-sm px-3.5 py-1.5 type-label-medium transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-fast ease-cf-standard",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               value === range
                 ? "bg-amber-500 text-primary-foreground shadow-cf-glow-subtle"
@@ -171,7 +172,7 @@ export function TimeRangeSelector({
             <button
               type="button"
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-cf-sm border px-3 py-1.5 type-label-medium transition-all",
+                "inline-flex items-center gap-1.5 whitespace-nowrap rounded-cf-sm border px-3 py-1.5 type-label-medium transition-[color,background-color,border-color,box-shadow,opacity]",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                 value === "custom"
                   ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
@@ -184,12 +185,12 @@ export function TimeRangeSelector({
           </PopoverTrigger>
           {/* 日期选择器弹层用中性描边（覆盖 Popover 默认的琥珀边框），与下拉菜单一致 */}
           <PopoverContent
-            className="w-auto border border-transparent p-0 text-foreground shadow-[var(--vr-shadow-md)] bg-surface-400"
+            className="w-auto max-w-[calc(100vw-2rem)] border border-transparent p-0 text-foreground shadow-[var(--vr-shadow-md)] bg-surface-400"
             align="end"
           >
-            <div className="flex">
-              <div className="flex flex-col gap-1 border-r border-divider p-3">
-                <p className="type-label-medium mb-1 px-2 text-muted-foreground">
+            <div className="flex flex-col lg:flex-row">
+              <div className="flex flex-wrap gap-1 border-b border-divider p-3 lg:flex-col lg:border-b-0 lg:border-r">
+                <p className="type-label-medium mb-1 w-full px-2 text-muted-foreground">
                   {t("timeRange.quickSelect")}
                 </p>
                 {QUICK_RANGE_KEYS.map((key) => (
@@ -207,11 +208,13 @@ export function TimeRangeSelector({
                   </button>
                 ))}
               </div>
-              <div className="p-4">
+              <div className="p-2 sm:p-4">
                 <p className="type-label-medium mb-3 border-b border-divider pb-2.5 text-foreground">
                   {t("timeRange.customRange")}
                 </p>
                 <Calendar
+                  className="p-0 sm:p-3 max-sm:[&_td]:w-9 max-sm:[&_th]:w-9 max-sm:[&_td_button]:w-9"
+                  classNames={{ months: "relative flex flex-col gap-4 lg:flex-row" }}
                   locale={dateLocale}
                   mode="range"
                   selected={pendingRange}

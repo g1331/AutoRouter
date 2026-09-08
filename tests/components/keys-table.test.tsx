@@ -334,7 +334,7 @@ describe("KeysTable", () => {
       fireEvent.click(screen.getByLabelText("copy"));
 
       await waitFor(() => {
-        expect(mockToastError).toHaveBeenCalledWith("error");
+        expect(mockToastError).toHaveBeenCalledWith("error", { id: "api-key-copy" });
       });
 
       // Copy should use cached revealed key value, not call revealKey again.

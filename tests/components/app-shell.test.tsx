@@ -33,6 +33,8 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
+vi.mock("@/components/admin/sidebar", () => ({ CurrentLocation: () => <span>Current page</span> }));
+
 vi.mock("lucide-react", () => ({
   ChevronLeft: () => <svg data-testid="icon-chevron-left" />,
 }));
@@ -43,7 +45,7 @@ function renderShell(
   return render(
     <AppShell
       sidebar={({ collapsed }) => <nav data-testid="sidebar" data-collapsed={String(collapsed)} />}
-      mobileRootRoutes={["/portal"]}
+      mobileRootRoutes={["/portal", "/portal/keys"]}
       getMobileBackHref={() => "/portal"}
       {...overrides}
     >

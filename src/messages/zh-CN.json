@@ -207,6 +207,9 @@
     "status": "状态",
     "online": "在线",
     "offline": "离线",
+    "loadFailed": "数据加载失败。",
+    "refreshFailed": "刷新失败，当前显示上次加载的数据。",
+    "refreshing": "正在更新结果…",
     "loading": "加载中...",
     "error": "错误",
     "success": "成功",
@@ -309,10 +312,12 @@
     "distribution": {
       "models": "模型构成",
       "upstreams": "上游构成"
-    }
+    },
+    "expandDetails": "展开详情",
+    "collapseDetails": "收起详情"
   },
   "users": {
-    "pageTitle": "用户管理",
+    "pageTitle": "用户",
     "managementDesc": "创建并管理用户账号及其访问权限",
     "createUser": "新建用户",
     "createUserTitle": "新建用户",
@@ -419,14 +424,14 @@
   },
   "auth": {
     "title": "AUTOROUTER",
-    "subtitle": "管理控制台",
+    "subtitle": "登录",
     "terminalTitle": "AUTOROUTER TERMINAL v1.0",
     "systemMessage": "系统消息",
     "authRequired": "身份验证需要 Admin Token",
     "adminToken": "ADMIN TOKEN",
     "tokenPlaceholder": "输入您的 Admin Token",
     "login": "登录",
-    "loginButton": "LOGIN",
+    "loginButton": "登录",
     "loginSuccess": "登录成功",
     "loginFailed": "登录失败",
     "invalidToken": "无效的 Admin Token",
@@ -555,7 +560,7 @@
   },
   "keys": {
     "title": "API Keys",
-    "pageTitle": "API KEYS",
+    "pageTitle": "API 密钥",
     "management": "API KEYS 管理",
     "managementDesc": "创建和管理用于客户端访问的 API Keys",
     "createKey": "创建 API Key",
@@ -661,7 +666,7 @@
     "revokeSuccess": "API Key 已撤销",
     "revokeFailed": "撤销 API Key 失败",
     "noKeys": "还没有 API Key",
-    "noKeysDesc": "创建第一个客户端 Key，外部应用就可以通过 Bearer Token 调用代理 API。如需限制该 Key 可访问的上游范围，创建时切换为「指定上游」并勾选允许的上游。",
+    "noKeysDesc": "创建用于客户端调用的 API 密钥，然后在密钥详情页配置可访问的上游与使用限制。",
     "searchKeys": "按名称搜索...",
     "ownerScopeLabel": "归属范围",
     "ownerScopeUnowned": "未分配",
@@ -706,7 +711,7 @@
   },
   "logs": {
     "title": "请求日志",
-    "pageTitle": "REQUEST LOGS",
+    "pageTitle": "请求日志",
     "management": "REQUEST LOGS",
     "managementDesc": "查看和分析 API 请求历史记录",
     "focusActive": "正在查看单条日志",
@@ -1051,7 +1056,7 @@
   },
   "upstreams": {
     "title": "上游管理",
-    "pageTitle": "上游管理",
+    "pageTitle": "上游",
     "tabUpstreams": "上游",
     "management": "上游管理",
     "managementDesc": "配置和管理上游 AI 服务提供商",
@@ -1575,7 +1580,7 @@
   },
   "billing": {
     "title": "计费",
-    "pageTitle": "计费管理",
+    "pageTitle": "计费",
     "management": "计费管理",
     "managementDesc": "维护模型价格目录，修复缺失价格，保证计费结果一致",
     "todayCost": "今日费用",
@@ -1763,7 +1768,7 @@
   },
   "trafficRecording": {
     "title": "请求录制",
-    "pageTitle": "请求录制",
+    "pageTitle": "流量录制",
     "settingsDescription": "实时控制请求录制并管理已保存的录制文件。",
     "description": "控制代理请求录制，查看录制文件占用，并按条件检索、查看或删除录制详情。",
     "enabled": "已开启",
@@ -1820,7 +1825,8 @@
     "logSectionLoadFailed": "录制加载失败：{message}",
     "logSectionOpenRecordings": "在录制页打开",
     "logSectionOpenRecordingSettings": "打开录制管理",
-    "openSourceLog": "打开原始日志"
+    "openSourceLog": "打开原始日志",
+    "cleanupConfirmDescription": "删除超出当前保留期限的录制记录？此操作无法撤销。"
   },
   "upstreamFailureRules": {
     "title": "全局失败规则",
@@ -1859,6 +1865,7 @@
     "enableSuccess": "规则已启用",
     "disableSuccess": "规则已禁用",
     "updateFailed": "更新规则失败",
+    "updateSuccess": "规则已更新",
     "createSuccess": "规则已创建",
     "createFailed": "创建规则失败",
     "ruleName": "名称",
@@ -1876,7 +1883,12 @@
     "modeMissingOnly": "仅补缺失",
     "creating": "创建中...",
     "capabilityMatrix": "能力矩阵",
-    "capabilityMatrixDesc": "各规则适用的能力类型"
+    "capabilityMatrixDesc": "各规则适用的能力类型",
+    "moveSourceUp": "上移 {source}",
+    "moveSourceDown": "下移 {source}",
+    "removeSource": "移除 {source}",
+    "addSource": "添加来源",
+    "sourceMoved": "{source} 已移至第 {position} 位"
   },
   "cliproxy": {
     "pageTitle": "CLIProxyAPI",
@@ -2023,7 +2035,7 @@
     "uploadAuthFileDescription": "上传 JSON 格式的 OAuth 认证文件。上传成功后将自动同步账号列表。",
     "uploadAuthFileMethodFile": "选择文件",
     "uploadAuthFileMethodPaste": "粘贴 JSON",
-    "uploadAuthFileChoose": "点击选择 .json 文件或将文件拖到此处",
+    "uploadAuthFileChoose": "点击选择 .json 文件",
     "uploadAuthFilePastePlaceholder": "在此粘贴认证文件 JSON…",
     "uploadAuthFileInvalidJson": "JSON 内容格式无效",
     "uploadAuthFileEmpty": "请填写或选择认证文件",
@@ -2077,7 +2089,8 @@
     "oauthManualCallbackEmpty": "请填写回调 URL",
     "oauthCallbackSubmitSuccess": "回调 URL 已提交，账号已同步",
     "oauthCallbackSubmitFailed": "提交回调 URL 失败：{message}",
-    "linkedUpstreamProviderUnknown": "未识别"
+    "linkedUpstreamProviderUnknown": "未识别",
+    "oauthCopyFailed": "无法复制授权链接，请选中链接手动复制。"
   },
   "portal": {
     "nav": {

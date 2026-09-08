@@ -9,32 +9,28 @@
 .dark {
   color-scheme: dark;
 
-  /* Ops Console 2.0 暗色主人格：近黑冷灰基底 + amber 强调。
-     Visual rule: neutral base + restrained accent. Avoid large blue/purple solids or flashy blue/purple gradients. */
-  /* 容器不再用 amber 包边后，卡片必须靠明度差从底色里浮起来：原先 surface-2(#15181d)
-     与 surface-0(#0a0b0e) 几乎同色，卡片看上去糊在背景上。这里把底色压到近黑、
-     卡片只抬到 #191e25 —— 层级差约为原来的两倍，但卡片本身仍是深灰而非发白的中灰。 */
-  --vr-surface-0: #04050a;
-  --vr-surface-1: #0e1117;
-  --vr-surface-2: #191e25;
-  --vr-surface-3: #232932;
-  --vr-surface-4: #2e3540;
+  /* 应用与公开页共用中性表面和暖色强调，状态语义保持独立。 */
+  --vr-surface-0: #0c0d0f;
+  --vr-surface-1: #121315;
+  --vr-surface-2: #1b1d20;
+  --vr-surface-3: #25282c;
+  --vr-surface-4: #30343a;
 
-  --vr-border: #333b47;
-  --vr-border-subtle: #454f5d;
+  --vr-border: #373b42;
+  --vr-border-subtle: #4a5059;
 
-  --vr-text: #f0f2f6;
-  --vr-text-muted: #a2abb9;
+  --vr-text: #f1f2f4;
+  --vr-text-muted: #a9afb8;
   /* 仅限装饰/大字号 */
-  --vr-text-dim: #6c7583;
+  --vr-text-dim: #7a828e;
 
   --vr-accent-50: #fef7ec;
   --vr-accent-100: #fdeacf;
   --vr-accent-200: #fbdbab;
   --vr-accent-300: #ffd28f;
   --vr-accent-400: #ffc46e;
-  --vr-accent-500: #f2a950;
-  --vr-accent-600: #cf8b3c;
+  --vr-accent-500: #f5a261;
+  --vr-accent-600: #d38142;
   --vr-accent-700: #a86f2f;
   --vr-accent-800: #825523;
   --vr-accent-900: #5c3c18;
@@ -133,12 +129,12 @@
 .light {
   color-scheme: light;
 
-  /* Ops Console 2.0 亮色：中性冷灰基底 + 青铜强调，禁暖黄底、无辉光。 */
-  --vr-surface-0: #eef0f2;
-  --vr-surface-1: #f8f9fa;
-  --vr-surface-2: #fdfdfe;
-  --vr-surface-3: #eaedf0;
-  --vr-surface-4: #e2e6ea;
+  /* 亮色采用中性表面和可读的深暖色强调。 */
+  --vr-surface-0: #f3f4f5;
+  --vr-surface-1: #fafafa;
+  --vr-surface-2: #ffffff;
+  --vr-surface-3: #edeff1;
+  --vr-surface-4: #e4e7ea;
 
   --vr-border: #dcdfe4;
   --vr-border-subtle: #c6cbd2;
@@ -154,8 +150,8 @@
   --vr-accent-300: #cca66a;
   --vr-accent-400: #b3853a;
   /* 4.37:1，仅限大字号/边框/填充；文字级 accent 用 600（6.29:1） */
-  --vr-accent-500: #9a6410;
-  --vr-accent-600: #7a4e0a;
+  --vr-accent-500: #a04a16;
+  --vr-accent-600: #843b10;
   --vr-accent-700: #634007;
   --vr-accent-800: #4c3105;
   --vr-accent-900: #382404;
@@ -198,29 +194,6 @@
 
   --sidebar: var(--vr-surface-1);
   --sidebar-accent: var(--vr-surface-2);
-}
-
-@keyframes vr-theme-fade {
-  from {
-    opacity: 0.72;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes vr-log-section-enter {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-    filter: saturate(0.94);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: saturate(1);
-  }
 }
 
 @keyframes vr-log-row-enter {
@@ -270,18 +243,6 @@
   100% {
     background-color: transparent;
     box-shadow: 0 0 0 0 transparent;
-  }
-}
-
-@keyframes vr-log-detail-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -364,14 +325,11 @@
   }
 }
 
-html.theme-switching::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 99999;
-  background: radial-gradient(circle at center, var(--vr-overlay-soft) 0%, var(--vr-overlay) 100%);
-  animation: vr-theme-fade 320ms var(--vr-easing-standard) forwards;
+html.theme-switching,
+html.theme-switching * {
+  transition-property: color, background-color, border-color, box-shadow, fill, stroke;
+  transition-duration: var(--vr-motion-normal);
+  transition-timing-function: var(--vr-easing-standard);
 }
 
 @layer base {
@@ -609,14 +567,6 @@ html.theme-switching::before {
     border-color: var(--vr-border-subtle);
   }
 
-  .animate-log-section-enter {
-    animation: vr-log-section-enter var(--vr-motion-slow) var(--vr-easing-standard) both;
-  }
-
-  .animate-log-detail-enter {
-    animation: vr-log-detail-enter var(--vr-motion-normal) var(--vr-easing-standard) both;
-  }
-
   .animate-log-card-enter {
     animation: vr-log-card-enter var(--vr-motion-normal) var(--vr-easing-standard) both;
   }
@@ -700,11 +650,6 @@ html.theme-switching::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html.theme-switching::before {
-    animation: none;
-    opacity: 0;
-  }
-
   *,
   *::before,
   *::after {
@@ -787,5 +732,71 @@ html.theme-switching::before {
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none !important;
+  }
+}
+
+/* 仅页面内容参与路由快照，导航和实时信息保持原位。 */
+html[data-page-transition] .app-page {
+  view-transition-name: application-page;
+}
+html[data-page-transition]::view-transition {
+  pointer-events: none;
+}
+html[data-page-transition]::view-transition-old(root) {
+  display: none;
+}
+html[data-page-transition]::view-transition-new(root) {
+  animation: none;
+}
+html[data-page-transition]::view-transition-group(application-page) {
+  animation-duration: var(--vr-motion-normal);
+  animation-timing-function: var(--vr-easing-standard);
+}
+html[data-page-transition]::view-transition-old(application-page) {
+  animation: vr-page-out var(--vr-motion-fast) ease-out both;
+}
+html[data-page-transition]::view-transition-new(application-page) {
+  animation: vr-page-in var(--vr-motion-normal) var(--vr-easing-standard) both;
+}
+@keyframes vr-page-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vr-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+html[data-page-transition="back"]::view-transition-new(application-page) {
+  animation-name: vr-page-back;
+}
+@keyframes vr-page-back {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-page-transition] .app-page {
+    view-transition-name: none;
+  }
+  html[data-page-transition]::view-transition-group(*),
+  html[data-page-transition]::view-transition-old(*),
+  html[data-page-transition]::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+.content-enter {
+  animation: vr-content-in var(--vr-motion-fast) var(--vr-easing-standard);
+}
+@keyframes vr-content-in {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
   }
 }

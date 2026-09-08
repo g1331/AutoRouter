@@ -62,7 +62,12 @@ export default function BillingPage() {
   }, [recentlySavedModel]);
 
   const scrollToPriceCatalog = () => {
-    priceCatalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    priceCatalogRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
   };
 
   const handleOverrideSaved = (model: string) => {
@@ -104,7 +109,7 @@ export default function BillingPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <PageShell>
+      <PageShell maxWidth="full">
         <BillingSummaryCards
           t={t}
           locale={locale}

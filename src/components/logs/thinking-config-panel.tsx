@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 import type { RequestLog } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
+import { Collapse } from "@/components/ui/collapse";
 
 const DETAIL_PANEL_CLASS =
   "overflow-hidden rounded-cf-md border border-transparent bg-surface-400 shadow-[var(--vr-shadow-xs)]";
@@ -30,6 +31,7 @@ export function ThinkingConfigPanel({
   const t = useTranslations("logs");
   const locale = useLocale();
   const [isExpanded, setIsExpanded] = useState(false);
+  const detailsId = useId();
   const isZh = locale === "zh-CN" || locale === "zh";
   const panelTitle = t("thinkingConfig");
   const expandLabel = isZh ? "展开思考信息" : "Expand thinking details";
@@ -57,6 +59,7 @@ export function ThinkingConfigPanel({
               onClick={() => setIsExpanded((prev) => !prev)}
               className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-transparent px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground bg-surface-400"
               aria-expanded={isExpanded}
+              aria-controls={detailsId}
               aria-label={isExpanded ? collapseLabel : expandLabel}
             >
               <ChevronDown
@@ -66,13 +69,13 @@ export function ThinkingConfigPanel({
               <span>{isExpanded ? collapseLabel : expandLabel}</span>
             </button>
           </div>
-          {isExpanded ? (
+          <Collapse open={isExpanded} id={detailsId}>
             <div
               className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_MUTED_TEXT_CLASS)}
             >
               {t("thinkingNotExplicitlySpecified")}
             </div>
-          ) : null}
+          </Collapse>
         </div>
       </div>
     );
@@ -131,6 +134,7 @@ export function ThinkingConfigPanel({
             onClick={() => setIsExpanded((prev) => !prev)}
             className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-transparent px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground bg-surface-400"
             aria-expanded={isExpanded}
+            aria-controls={detailsId}
             aria-label={isExpanded ? collapseLabel : expandLabel}
           >
             <ChevronDown
@@ -140,7 +144,7 @@ export function ThinkingConfigPanel({
             <span>{isExpanded ? collapseLabel : expandLabel}</span>
           </button>
         </div>
-        {isExpanded ? (
+        <Collapse open={isExpanded} id={detailsId}>
           <div className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_STACK_CLASS)}>
             {detailRows.map((row) => (
               <div key={row.label} className={DETAIL_PANEL_ROW_CLASS}>
@@ -149,7 +153,7 @@ export function ThinkingConfigPanel({
               </div>
             ))}
           </div>
-        ) : null}
+        </Collapse>
       </div>
     </div>
   );

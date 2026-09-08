@@ -5,6 +5,7 @@ import { LogIn, RefreshCw, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import {
@@ -33,7 +34,13 @@ interface CliproxyAccountsPanelProps {
  */
 export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) {
   const t = useTranslations("cliproxy");
-  const { data: accounts, isLoading, isError } = useCliproxyAuthAccounts(instance.id);
+  const {
+    data: accounts,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useCliproxyAuthAccounts(instance.id);
   const syncMutation = useSyncCliproxyAuthAccounts();
   const statusMutation = useSetCliproxyAuthAccountStatus();
   const downloadMutation = useDownloadCliproxyAuthFile();
@@ -94,16 +101,18 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           </div>
         </div>
 
+        <QueryStatus
+          error={isError}
+          fetching={isFetching && !isLoading}
+          hasData={accounts !== undefined}
+          onRetry={() => void refetch()}
+        />
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
-        ) : isError ? (
-          <p className="py-8 text-center type-body-medium text-destructive">
-            {t("accountsLoadFailed")}
-          </p>
-        ) : !accounts || accounts.length === 0 ? (
+        ) : isError && !accounts ? null : !accounts || accounts.length === 0 ? (
           <p className="py-8 text-center type-body-medium text-muted-foreground">
             {t("noAccounts")}
           </p>

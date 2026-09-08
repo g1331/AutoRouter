@@ -12,7 +12,7 @@ const Switch = React.forwardRef<
   <SwitchPrimitives.Root
     className={cn(
       "peer inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-border",
-      "bg-surface-400 transition-all duration-cf-fast ease-cf-standard",
+      "bg-surface-400 transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-fast ease-cf-standard",
       // 仅浅色态：默认 OFF 轨 bg-surface-400(#eaedf0) 对页底仅约 1.03:1，违反 WCAG
       // 1.4.11（组件边界需 ≥3:1）。下探到 ≥3:1 的中性灰并加深边框，深色态不变。
       "light:data-[state=unchecked]:border-divider-subtle light:data-[state=unchecked]:bg-[#818892]",

@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { QueryStatus } from "@/components/ui/query-status";
 import { PageHeader } from "@/components/admin/page-header";
 import { PageShell } from "@/components/admin/page-shell";
 import { Topbar } from "@/components/admin/topbar";
@@ -195,7 +196,7 @@ export default function UpstreamDetailPage() {
 
   const { data: upstream, isLoading, error, refetch } = useUpstream(upstreamId);
   const notFound = error instanceof ApiError && error.status === 404;
-  const loadFailed = Boolean(error) && !notFound;
+  const loadFailed = Boolean(error) && !notFound && !upstream;
 
   const groupedSections = DETAIL_CATEGORY_ORDER.map((category) => ({
     category,
@@ -239,24 +240,27 @@ export default function UpstreamDetailPage() {
           <>
             <PageHeader
               icon={Server}
-              title={isLoading ? "" : (upstream?.name ?? upstreamId)}
+              title={isLoading ? t("detailTitle") : (upstream?.name ?? upstreamId)}
               description={isLoading ? undefined : upstream?.base_url}
             />
 
+            <QueryStatus error={error} hasData onRetry={() => void refetch()} />
             <div className="flex flex-col gap-6 lg:flex-row">
-              <aside className="hidden lg:block lg:w-56 lg:shrink-0">
+              <aside className="sticky top-14 z-10 min-w-0 bg-background py-2 lg:static lg:w-56 lg:shrink-0 lg:py-0">
                 <nav
                   aria-label={t("detailTitle")}
-                  className="sticky top-14 space-y-4 rounded-cf-md border border-transparent bg-surface-400 p-3"
+                  className="flex gap-2 overflow-x-auto rounded-cf-md border border-border/60 bg-card p-2 lg:sticky lg:top-14 lg:block lg:space-y-4 lg:p-3"
                 >
                   {groupedSections.map((group) => (
-                    <div key={group.category} className="space-y-1">
-                      <p className="type-caption px-2 text-muted-foreground">{t(group.category)}</p>
+                    <div key={group.category} className="flex shrink-0 gap-1 lg:block lg:space-y-1">
+                      <p className="type-caption hidden px-2 text-muted-foreground lg:block">
+                        {t(group.category)}
+                      </p>
                       {group.sections.map((section) => (
                         <a
                           key={section.id}
                           href={`#${section.id}`}
-                          className="flex items-center gap-2 rounded-cf-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-cf-fast hover:bg-surface-300/65 hover:text-foreground"
+                          className="flex items-center gap-2 whitespace-nowrap rounded-cf-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-cf-fast hover:bg-surface-300/65 hover:text-foreground"
                         >
                           <section.icon
                             className={`h-3.5 w-3.5 shrink-0 ${section.iconClass}`}
@@ -274,7 +278,11 @@ export default function UpstreamDetailPage() {
                 {UPSTREAM_DETAIL_SECTIONS.map((section) => {
                   const SectionComponent = SECTION_COMPONENTS[section.id];
                   return (
-                    <section key={section.id} id={section.id} className="scroll-mt-14">
+                    <section
+                      key={section.id}
+                      id={section.id}
+                      className="scroll-mt-32 lg:scroll-mt-14"
+                    >
                       {isLoading || !upstream ? (
                         <Card variant="outlined" className="bg-card">
                           <div className="flex items-center gap-3 border-b border-divider px-5 py-3.5">

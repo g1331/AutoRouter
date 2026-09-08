@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ExternalLink, Minus, Trophy } from "lu
 import { formatCost, formatNumber, formatTtft } from "@/components/dashboard/chart-theme";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Collapse } from "@/components/ui/collapse";
 import {
   Table,
   TableBody,
@@ -352,12 +353,24 @@ export function RankingsTable({
                     </TableCell>
                     <TableCell className="max-w-[240px] px-2 py-2">
                       <div className="flex items-center gap-1.5">
-                        <ChevronDown
-                          className={cn(
-                            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                            expanded && "rotate-180"
-                          )}
-                        />
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={`rankings-detail-${encodeURIComponent(key)}`}
+                          aria-label={t(expanded ? "collapseDetails" : "expandDetails")}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedKey(expanded ? null : key);
+                          }}
+                          className="shrink-0 rounded-cf-sm p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <ChevronDown
+                            className={cn(
+                              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                              expanded && "rotate-180"
+                            )}
+                          />
+                        </button>
                         <div className="min-w-0">
                           <ItemName dimension={dimension} item={item} />
                         </div>
@@ -379,9 +392,17 @@ export function RankingsTable({
                       <ComparisonCell item={item} rank={rank} />
                     </TableCell>
                   </TableRow>
-                  {expanded && (
-                    <TableRow data-testid="rankings-detail-row" className="bg-surface-300/40">
-                      <TableCell colSpan={columnCount} className="px-4 py-3">
+                  <TableRow
+                    aria-hidden={!expanded}
+                    data-testid={expanded ? "rankings-detail-row" : undefined}
+                    className="border-0 bg-surface-300/40"
+                  >
+                    <TableCell colSpan={columnCount} className="h-auto p-0">
+                      <Collapse
+                        open={expanded}
+                        id={`rankings-detail-${encodeURIComponent(key)}`}
+                        className="px-4 py-3"
+                      >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
                           {distribution.length > 0 ? (
                             <DistributionList data={distribution} label={distributionLabel} />
@@ -402,9 +423,9 @@ export function RankingsTable({
                             {t("viewLogs")}
                           </Link>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
                 </Fragment>
               );
             })

@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Cpu, Key, RotateCcw, Search, Server, Trophy, Users } from "lucide-react";
+import { Cpu, Key, RotateCcw, Search, Server, Users } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
+import { QueryStatus } from "@/components/ui/query-status";
 import {
   itemKey,
   RankingsTable,
@@ -91,7 +94,7 @@ export default function RankingsPage() {
     applyState({ ...state, range: value, customRange });
   }
 
-  const { data, isLoading } = useRankings({
+  const { data, isLoading, isFetching, error, refetch } = useRankings({
     dimension: state.dimension,
     range: state.range,
     sortBy: state.sortBy,
@@ -142,19 +145,17 @@ export default function RankingsPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto min-w-0 w-full max-w-[1560px] space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-amber-500" />
-            <h2 className="type-title-medium text-foreground">{t("title")}</h2>
-            <p className="type-caption hidden text-muted-foreground sm:block">{t("description")}</p>
-          </div>
-          <TimeRangeSelector
-            value={state.range}
-            onChange={handleTimeRangeChange}
-            customRange={state.customRange}
-          />
-        </div>
+      <PageShell maxWidth="full">
+        <PageHeader
+          title={t("pageTitle")}
+          actions={
+            <TimeRangeSelector
+              value={state.range}
+              onChange={handleTimeRangeChange}
+              customRange={state.customRange}
+            />
+          }
+        />
 
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div
@@ -170,11 +171,28 @@ export default function RankingsPage() {
                   type="button"
                   role="tab"
                   aria-selected={active}
+                  aria-controls="rankings-results"
+                  id={`rankings-tab-${key}`}
+                  tabIndex={active ? 0 : -1}
+                  onKeyDown={(event) => {
+                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    const index = DIMENSIONS.findIndex((item) => item.key === key);
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? DIMENSIONS.length - 1
+                          : (index + (event.key === "ArrowRight" ? 1 : -1) + DIMENSIONS.length) %
+                            DIMENSIONS.length;
+                    applyState({ ...state, dimension: DIMENSIONS[next].key, upstream: "" });
+                    document.getElementById(`rankings-tab-${DIMENSIONS[next].key}`)?.focus();
+                  }}
                   // Switching dimension drops the dimension-specific upstream
                   // filter; the generic filters (q/min/errors) carry over.
                   onClick={() => applyState({ ...state, dimension: key, upstream: "" })}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-cf-sm px-3.5 py-1.5 type-label-medium transition-all duration-cf-fast ease-cf-standard",
+                    "inline-flex items-center gap-1.5 rounded-cf-sm px-3.5 py-1.5 type-label-medium transition-colors duration-cf-fast ease-cf-standard",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     active
                       ? "bg-amber-500 text-primary-foreground shadow-cf-glow-subtle"
@@ -267,18 +285,35 @@ export default function RankingsPage() {
           </div>
         </div>
 
-        <RankingsTable
-          dimension={state.dimension}
-          items={filteredItems}
-          isLoading={isLoading}
-          sortBy={state.sortBy}
-          order={state.order}
-          onSortChange={handleSortChange}
-          logsWindow={logsWindow}
-          emptyLabel={filtersActive && items.length > 0 ? t("noMatch") : undefined}
-          ranks={globalRanks}
+        <QueryStatus
+          error={error}
+          fetching={isFetching && !isLoading}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
         />
-      </div>
+        <div
+          role="tabpanel"
+          id="rankings-results"
+          aria-labelledby={`rankings-tab-${state.dimension}`}
+          aria-busy={isFetching}
+          key={state.dimension}
+          className="content-enter min-w-0"
+        >
+          {!(error && !data) && (
+            <RankingsTable
+              dimension={state.dimension}
+              items={filteredItems}
+              isLoading={isLoading}
+              sortBy={state.sortBy}
+              order={state.order}
+              onSortChange={handleSortChange}
+              logsWindow={logsWindow}
+              emptyLabel={filtersActive && items.length > 0 ? t("noMatch") : undefined}
+              ranks={globalRanks}
+            />
+          )}
+        </div>
+      </PageShell>
     </>
   );
 }

@@ -3,7 +3,7 @@
  *
  * Recharts 把颜色写进 SVG presentation attribute，无法解析 var()，因此这里
  * 保留字面色值作为「图表令牌层」——数值必须与 globals.css 的 --vr-* 真源
- * 保持一致（dark accent-500 #f2a950 / light accent-500 #9a6410、surface 与
+ * 保持一致（dark accent-500 #f5a261 / light accent-500 #a04a16、surface 与
  * text 梯度同源）。改令牌时同步改这里。
  */
 
@@ -12,7 +12,7 @@ export type ChartThemeMode = "dark" | "light";
 // 上游序列 8 色：首位 = accent-500，其余为同明度带的低饱和辅助色，
 // 避开状态色（success/warning/error）的色相以免与告警语义混淆。
 export const UPSTREAM_COLORS_DARK = [
-  "#f2a950",
+  "#f5a261",
   "#56a99a",
   "#7fae74",
   "#d98a66",
@@ -23,7 +23,7 @@ export const UPSTREAM_COLORS_DARK = [
 ] as const;
 
 export const UPSTREAM_COLORS_LIGHT = [
-  "#9a6410",
+  "#a04a16",
   "#2f7f71",
   "#3e7c4e",
   "#a85e40",
@@ -39,16 +39,16 @@ export const UPSTREAM_COLORS = [...UPSTREAM_COLORS_DARK];
 const CHART_THEME_BY_MODE = {
   dark: {
     colors: {
-      primary: "#f2a950",
-      primaryMuted: "rgba(242, 169, 80, 0.24)",
-      grid: "rgba(242, 169, 80, 0.12)",
+      primary: "#f5a261",
+      primaryMuted: "rgba(245, 162, 97, 0.24)",
+      grid: "rgba(245, 162, 97, 0.12)",
       text: "#9aa2ae",
       textStrong: "#e8e4da",
       textMuted: "rgba(154, 162, 174, 0.7)",
-      background: "#15181d",
+      background: "#1b1d20",
       tooltip: {
-        background: "#1a1e24",
-        border: "#2b323c",
+        background: "#25282c",
+        border: "#373b42",
       },
     },
     area: {
@@ -61,15 +61,15 @@ const CHART_THEME_BY_MODE = {
   },
   light: {
     colors: {
-      primary: "#9a6410",
-      primaryMuted: "rgba(154, 100, 16, 0.2)",
-      grid: "rgba(154, 100, 16, 0.14)",
+      primary: "#a04a16",
+      primaryMuted: "rgba(160, 74, 22, 0.2)",
+      grid: "rgba(160, 74, 22, 0.14)",
       text: "#5f6570",
       textStrong: "#212327",
       textMuted: "rgba(95, 101, 112, 0.72)",
-      background: "#fdfdfe",
+      background: "#ffffff",
       tooltip: {
-        background: "#fdfdfe",
+        background: "#ffffff",
         border: "#c6cbd2",
       },
     },

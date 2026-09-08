@@ -70,7 +70,7 @@ export function CliproxyPoolUpstreamDialog({
             value={provider}
             onValueChange={(value) => setProvider(value as CliproxyUpstreamProvider)}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("poolUpstreamProvider")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

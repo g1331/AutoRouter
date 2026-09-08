@@ -59,12 +59,12 @@ const DropdownMenuSubContent = React.forwardRef<
       className={cn(
         "z-50 min-w-[9rem] overflow-hidden rounded-cf-md border border-transparent bg-surface-400 p-1",
         "text-foreground shadow-[var(--vr-shadow-md)]",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
         "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-        "origin-[--radix-dropdown-menu-content-transform-origin]",
+        "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
         className
       )}
       {...props}
@@ -86,12 +86,12 @@ const DropdownMenuContent = React.forwardRef<
         className={cn(
           "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[10rem] overflow-y-auto overflow-x-hidden",
           "rounded-cf-md border border-transparent bg-surface-400 p-1 text-foreground shadow-[var(--vr-shadow-md)]",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
           "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-          "origin-[--radix-dropdown-menu-content-transform-origin]",
+          "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
           className
         )}
         {...props}

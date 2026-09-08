@@ -1,116 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { ArrowRight, Cpu, KeyRound, Shield, Terminal, User } from "lucide-react";
+import { ArrowRight, KeyRound, User } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { statusTone } from "@/lib/status-tone";
+
 import { cn } from "@/lib/utils";
 import { sanitizeRedirect } from "@/lib/utils/safe-redirect";
 import { useRouter } from "@/i18n/navigation";
 import { useAuth } from "@/providers/auth-provider";
-
-const BOOT_MESSAGES = [
-  { text: "Preparing admin workspace", delay: 0 },
-  { text: "Checking gateway services", delay: 260 },
-  { text: "Verifying encryption module", delay: 560 },
-  { text: "Loading routing metadata", delay: 900 },
-  { text: "Authentication channel ready", delay: 1250 },
-];
-
-function BootSequence({ onComplete }: { onComplete: () => void }) {
-  const prefersReducedMotion = useMemo(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    []
-  );
-
-  const [visibleLines, setVisibleLines] = useState<number>(
-    prefersReducedMotion ? BOOT_MESSAGES.length : 0
-  );
-
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      onComplete();
-      return;
-    }
-
-    if (visibleLines < BOOT_MESSAGES.length) {
-      const currentDelay = BOOT_MESSAGES[visibleLines]?.delay ?? 0;
-      const previousDelay = BOOT_MESSAGES[visibleLines - 1]?.delay ?? 0;
-      const stepDelay = Math.max(0, currentDelay - previousDelay);
-      const timer = setTimeout(() => {
-        setVisibleLines((prev) => prev + 1);
-      }, stepDelay);
-      return () => clearTimeout(timer);
-    }
-
-    const completeTimer = setTimeout(onComplete, 300);
-    return () => clearTimeout(completeTimer);
-  }, [onComplete, prefersReducedMotion, visibleLines]);
-
-  return (
-    <div className="space-y-1.5 font-mono text-xs" role="status" aria-live="polite">
-      {BOOT_MESSAGES.slice(0, visibleLines).map((message, index) => (
-        <div
-          key={message.text}
-          className={cn(
-            "flex items-center gap-2",
-            index === visibleLines - 1 ? "text-foreground" : "text-muted-foreground"
-          )}
-        >
-          <span className="text-status-success">[OK]</span>
-          <span>{message.text}</span>
-        </div>
-      ))}
-      {visibleLines < BOOT_MESSAGES.length && (
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <span className="text-status-warning">[...]</span>
-          <span>{BOOT_MESSAGES[visibleLines]?.text || "..."}</span>
-          <span
-            className="inline-block h-3 w-1 animate-pulse rounded-cf-sm bg-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SystemStatus() {
-  return (
-    <div
-      className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3"
-      role="status"
-      aria-label="System status"
-    >
-      <div className="inline-flex items-center gap-2 rounded-cf-md border border-transparent bg-surface-400 px-2.5 py-1.5 font-mono text-muted-foreground">
-        <Cpu className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-        <span>CPU READY</span>
-      </div>
-      <div className="inline-flex items-center gap-2 rounded-cf-md border border-transparent bg-surface-400 px-2.5 py-1.5 font-mono text-muted-foreground">
-        <Shield className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-        <span>SECURE MODE</span>
-      </div>
-      <div
-        className={cn(
-          "inline-flex items-center gap-2 rounded-cf-md border px-2.5 py-1.5 font-mono",
-          statusTone("success")
-        )}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-        <span>NETWORK ONLINE</span>
-      </div>
-    </div>
-  );
-}
 
 type LoginMode = "account" | "token";
 
@@ -124,16 +28,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
-  const [bootComplete, setBootComplete] = useState(false);
-  const [showForm, setShowForm] = useState(false);
 
   const t = useTranslations("auth");
   const tCommon = useTranslations("common");
-
-  const handleBootComplete = useCallback(() => {
-    setBootComplete(true);
-    setTimeout(() => setShowForm(true), 180);
-  }, []);
 
   useEffect(() => {
     if (token && principal) {
@@ -233,6 +130,7 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     if (mode === "account") {
       void handleAccountLogin();
     } else {
@@ -245,58 +143,24 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-50"
-        aria-hidden="true"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 20% 18%, var(--vr-atmo), transparent 44%), radial-gradient(circle at 78% 4%, color-mix(in srgb, var(--vr-text-dim) 16%, transparent), transparent 34%)",
-        }}
-      />
-      <div className="pointer-events-none absolute inset-0 opacity-35" aria-hidden="true">
-        <div className="h-full w-full [background-image:linear-gradient(to_right,var(--vr-grid-dot)_1px,transparent_1px),linear-gradient(to_bottom,var(--vr-grid-dot)_1px,transparent_1px)] [background-size:44px_44px]" />
-      </div>
-
+    <div className="relative min-h-dvh overflow-hidden bg-background">
       <div className="fixed right-4 top-4 z-30">
         <LanguageSwitcher />
       </div>
 
-      <div className="relative z-10 grid min-h-screen place-items-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-md overflow-hidden rounded-cf-md border border-transparent bg-surface-400 shadow-[var(--vr-shadow-lg)] backdrop-blur">
+      <div className="relative z-10 grid min-h-dvh place-items-center px-4 py-20 sm:px-6">
+        <div className="w-full max-w-md overflow-hidden rounded-cf-md border border-border/60 bg-card shadow-[var(--vr-shadow-sm)]">
           <div className="border-b border-divider px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="type-title-large text-foreground">{t("title")}</h1>
                 <p className="type-body-small mt-1 text-muted-foreground">{t("subtitle")}</p>
               </div>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px]",
-                  statusTone("success")
-                )}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                SECURE
-              </span>
             </div>
           </div>
 
           <div className="space-y-5 p-5 sm:p-6">
-            {!bootComplete && (
-              <div className="rounded-cf-md border border-transparent bg-surface-400 px-3.5 py-3">
-                <BootSequence onComplete={handleBootComplete} />
-              </div>
-            )}
-
-            <div
-              className={cn(
-                "space-y-5 transition-all duration-300",
-                showForm ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
-              )}
-            >
-              <SystemStatus />
-
+            <div className="space-y-5">
               <div role="tablist" aria-label={t("login")} className="grid grid-cols-2 gap-2">
                 {[
                   { value: "account" as const, label: t("accountTab") },
@@ -309,8 +173,26 @@ export default function LoginPage() {
                       type="button"
                       role="tab"
                       aria-selected={selected}
+                      aria-controls={"login-panel"}
+                      id={"login-tab-" + tab.value}
+                      tabIndex={selected ? 0 : -1}
+                      onKeyDown={(event) => {
+                        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                          event.preventDefault();
+                          const next =
+                            event.key === "Home"
+                              ? "account"
+                              : event.key === "End"
+                                ? "token"
+                                : mode === "account"
+                                  ? "token"
+                                  : "account";
+                          switchMode(next);
+                          document.getElementById("login-tab-" + next)?.focus();
+                        }
+                      }}
                       onClick={() => switchMode(tab.value)}
-                      disabled={!showForm}
+                      disabled={isLoading}
                       className={cn(
                         "rounded-cf-md border px-3 py-2 text-center font-mono type-label-small transition-colors",
                         selected
@@ -324,17 +206,14 @@ export default function LoginPage() {
                 })}
               </div>
 
-              <div className="rounded-cf-md border border-transparent bg-surface-400 px-3.5 py-3">
-                <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
-                  <Terminal className="h-4 w-4 text-amber-500" aria-hidden="true" />
-                  <span className="type-label-small">{t("systemMessage")}</span>
-                </div>
-                <p className="type-body-small pl-6 text-foreground">
-                  {">"} {mode === "account" ? t("accountAuthRequired") : t("authRequired")}
-                </p>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form
+                id="login-panel"
+                role="tabpanel"
+                aria-labelledby={"login-tab-" + mode}
+                key={mode}
+                onSubmit={handleSubmit}
+                className="content-enter space-y-4"
+              >
                 {mode === "account" ? (
                   <>
                     <div className="space-y-2">
@@ -346,7 +225,7 @@ export default function LoginPage() {
                       </label>
                       <div className="relative">
                         <User
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                          className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                           aria-hidden="true"
                         />
                         <Input
@@ -355,7 +234,7 @@ export default function LoginPage() {
                           placeholder={t("usernamePlaceholder")}
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
-                          disabled={isLoading || !showForm}
+                          disabled={isLoading}
                           className="pl-10"
                           aria-invalid={!!error}
                           aria-describedby={error ? "login-error" : undefined}
@@ -371,7 +250,7 @@ export default function LoginPage() {
                       </label>
                       <div className="relative">
                         <KeyRound
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                          className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                           aria-hidden="true"
                         />
                         <PasswordInput
@@ -381,7 +260,7 @@ export default function LoginPage() {
                           placeholder={t("passwordPlaceholder")}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          disabled={isLoading || !showForm}
+                          disabled={isLoading}
                           className="pl-10"
                           aria-invalid={!!error}
                           aria-describedby={error ? "login-error" : undefined}
@@ -396,7 +275,7 @@ export default function LoginPage() {
                     </label>
                     <div className="relative">
                       <KeyRound
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                         aria-hidden="true"
                       />
                       <PasswordInput
@@ -406,7 +285,7 @@ export default function LoginPage() {
                         placeholder={t("tokenPlaceholder")}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
-                        disabled={isLoading || !showForm}
+                        disabled={isLoading}
                         className="pl-10"
                         aria-invalid={!!error}
                         aria-describedby={error ? "login-error" : undefined}
@@ -426,7 +305,7 @@ export default function LoginPage() {
                   variant="primary"
                   size="lg"
                   className="w-full gap-2"
-                  disabled={isLoading || !showForm}
+                  disabled={isLoading}
                 >
                   {isLoading ? (
                     <>

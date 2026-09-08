@@ -6,17 +6,15 @@ import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 const cardVariants = cva(
   [
     "rounded-cf-md border text-foreground",
-    "transition-all duration-cf-normal ease-cf-standard",
-    "shadow-[var(--vr-shadow-sm)]",
+    "transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard",
+    "shadow-[var(--vr-shadow-xs)]",
   ].join(" "),
   {
     variants: {
       variant: {
-        // 卡片不再用 amber 描边：默认无边框，靠 bg-card 的明度差 + 阴影脱离页面底色。
-        // outlined 原先是 bg-transparent，会直接露出页面背景，看上去和背景糊在一起，
-        // 改为同样吃 bg-card；显式在 className 里写了背景的调用点仍然覆盖它。
-        default: "bg-card border-transparent hover:shadow-cf-glow-subtle",
-        outlined: "bg-card border-transparent hover:bg-surface-300",
+        // 使用中性边界与表面层级；调用方可按语义覆盖背景。
+        default: "bg-card border-border/60",
+        outlined: "bg-card border-border/70",
         filled: "bg-surface-300 border-transparent shadow-[var(--vr-shadow-xs)]",
       },
     },

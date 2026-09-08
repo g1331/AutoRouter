@@ -1,11 +1,24 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useTranslations } from "next-intl";
-import { ArrowLeftRight, GripVertical, Pencil, Plus, Trash2, X, Check } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowLeftRight,
+  GripVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+  Check,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Topbar } from "@/components/admin/topbar";
 import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
 import { Button } from "@/components/ui/button";
@@ -63,6 +76,22 @@ function SourceList({ sources, onChange }: SourceListProps) {
   const [newSource, setNewSource] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [movedSource, setMovedSource] = useState("");
+
+  const moveSource = (from: number, to: number, trigger?: HTMLButtonElement) => {
+    const next = [...sources];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    if (trigger) {
+      flushSync(() => onChange(next));
+      // 移动到边界时原方向按钮会禁用，焦点留在同一来源的可用操作上。
+      (trigger.disabled
+        ? trigger.parentElement?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+        : trigger
+      )?.focus();
+    } else onChange(next);
+    setMovedSource(t("sourceMoved", { source: moved, position: to + 1 }));
+  };
 
   const addSource = () => {
     const trimmed = newSource.trim();
@@ -86,10 +115,7 @@ function SourceList({ sources, onChange }: SourceListProps) {
       setOverIndex(null);
       return;
     }
-    const next = [...sources];
-    const [moved] = next.splice(dragIndex, 1);
-    next.splice(overIndex, 0, moved);
-    onChange(next);
+    moveSource(dragIndex, overIndex);
     setDragIndex(null);
     setOverIndex(null);
   };
@@ -100,7 +126,11 @@ function SourceList({ sources, onChange }: SourceListProps) {
         <div
           key={src}
           draggable
-          onDragStart={() => handleDragStart(idx)}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", src);
+            handleDragStart(idx);
+          }}
           onDragOver={(e) => handleDragOver(e, idx)}
           onDrop={handleDrop}
           onDragEnd={() => {
@@ -108,30 +138,67 @@ function SourceList({ sources, onChange }: SourceListProps) {
             setOverIndex(null);
           }}
           className={cn(
-            "flex items-center gap-2 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5 text-xs",
-            overIndex === idx && dragIndex !== idx && "border-amber-500/50 bg-amber-500/5"
+            "flex items-center gap-2 rounded-cf-sm border border-transparent bg-surface-400 px-2 py-1.5 text-xs transition-colors duration-cf-fast",
+            dragIndex === idx && "opacity-50",
+            overIndex === idx && dragIndex !== idx && "border-primary bg-accent ring-1 ring-primary"
           )}
         >
-          <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground/50" />
-          <span className="flex-1 font-mono text-foreground">{src}</span>
+          <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground" />
+          <span className="min-w-0 flex-1 break-all font-mono text-foreground">{src}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            disabled={idx === 0}
+            aria-label={t("moveSourceUp", { source: src })}
+            onClick={(event) => moveSource(idx, idx - 1, event.currentTarget)}
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            disabled={idx === sources.length - 1}
+            aria-label={t("moveSourceDown", { source: src })}
+            onClick={(event) => moveSource(idx, idx + 1, event.currentTarget)}
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </Button>
           <button
             type="button"
+            aria-label={t("removeSource", { source: src })}
             onClick={() => removeSource(idx)}
-            className="text-muted-foreground hover:text-status-error"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-cf-sm text-muted-foreground hover:text-status-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-3 w-3" />
           </button>
         </div>
       ))}
+      <span role="status" className="sr-only">
+        {movedSource}
+      </span>
       <div className="flex gap-1.5">
         <Input
           value={newSource}
           onChange={(e) => setNewSource(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSource())}
+          onKeyDown={(e) =>
+            !e.nativeEvent.isComposing && e.key === "Enter" && (e.preventDefault(), addSource())
+          }
+          aria-label={t("sourcesPlaceholder")}
           placeholder={t("sourcesPlaceholder")}
           className="h-7 font-mono text-xs"
         />
-        <Button type="button" size="sm" variant="outline" onClick={addSource} className="h-7 px-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={addSource}
+          className="h-7 px-2"
+          aria-label={t("addSource")}
+        >
           <Plus className="h-3 w-3" />
         </Button>
       </div>
@@ -163,6 +230,7 @@ function CapabilityPicker({ selected, onChange }: CapabilityPickerProps) {
           <button
             key={def.value}
             type="button"
+            aria-pressed={active}
             onClick={() => toggle(def.value)}
             className={cn(
               "flex items-center gap-1 rounded-cf-sm border px-2 py-1 text-[11px] transition-colors",
@@ -223,7 +291,7 @@ function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialo
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
@@ -236,8 +304,15 @@ function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialo
         mode: initial.mode,
       };
       if (!initial.is_builtin) update.name = name.trim();
-      await updateMutation.mutateAsync({ id: initial.id, data: update });
-      toast.success(t("createSuccess"));
+      updateMutation.mutate(
+        { id: initial.id, data: update },
+        {
+          onSuccess: () => {
+            toast.success(t("updateSuccess"));
+            onClose();
+          },
+        }
+      );
     } else {
       const create: CompensationRuleCreate = {
         name: name.trim(),
@@ -246,10 +321,13 @@ function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialo
         sources,
         mode: "missing_only",
       };
-      await createMutation.mutateAsync(create);
-      toast.success(t("createSuccess"));
+      createMutation.mutate(create, {
+        onSuccess: () => {
+          toast.success(t("createSuccess"));
+          onClose();
+        },
+      });
     }
-    onClose();
   };
 
   return (
@@ -335,9 +413,11 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
   const tUp = useTranslations("upstreams");
   const updateMutation = useUpdateCompensationRule();
 
-  const handleToggle = async (enabled: boolean) => {
-    await updateMutation.mutateAsync({ id: rule.id, data: { enabled } });
-    toast.success(enabled ? t("enableSuccess") : t("disableSuccess"));
+  const handleToggle = (enabled: boolean) => {
+    updateMutation.mutate(
+      { id: rule.id, data: { enabled } },
+      { onSuccess: () => toast.success(enabled ? t("enableSuccess") : t("disableSuccess")) }
+    );
   };
 
   return (
@@ -409,9 +489,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
         <div className="space-y-0.5">
           {rule.sources.map((src, i) => (
             <div key={src} className="flex items-center gap-1.5 text-[11px]">
-              <span className="w-3.5 text-right tabular-nums text-muted-foreground/50">
-                {i + 1}.
-              </span>
+              <span className="w-3.5 text-right tabular-nums text-muted-foreground">{i + 1}.</span>
               <code className="font-mono text-foreground">{src}</code>
             </div>
           ))}
@@ -475,7 +553,7 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
           {t("capabilityMatrix")}
         </span>
-        <p className="mt-0.5 text-[11px] text-muted-foreground/70">{t("capabilityMatrixDesc")}</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{t("capabilityMatrixDesc")}</p>
       </div>
       <Table frame="none" className="text-[11px]">
         <TableHeader>
@@ -548,7 +626,7 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
 export default function HeaderCompensationPage() {
   const t = useTranslations("compensation");
   const tCommon = useTranslations("common");
-  const { data, isLoading } = useCompensationRules();
+  const { data, isLoading, error, isFetching, refetch } = useCompensationRules();
   const deleteMutation = useDeleteCompensationRule();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -610,35 +688,41 @@ export default function HeaderCompensationPage() {
     });
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!deleteTarget) return;
-    await deleteMutation.mutateAsync(deleteTarget.id);
-    toast.success(t("deleteSuccess"));
-    setDeleteTarget(undefined);
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        toast.success(t("deleteSuccess"));
+        setDeleteTarget(undefined);
+      },
+    });
   };
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
-      <PageShell>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-medium tracking-wider text-foreground">
-              {t("management")}
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t("managementDesc")}</p>
-          </div>
-          <Button
-            size="sm"
-            onClick={(event) => openCreate(event.currentTarget)}
-            className="gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("addRule")}
-          </Button>
-        </div>
+      <PageShell maxWidth="7xl">
+        <PageHeader
+          title={t("pageTitle")}
+          actions={
+            <Button
+              size="sm"
+              onClick={(event) => openCreate(event.currentTarget)}
+              className="gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("addRule")}
+            </Button>
+          }
+        />
+        <QueryStatus
+          error={error}
+          fetching={isFetching && !isLoading}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
+        />
 
-        {isLoading ? (
+        {error && !data ? null : isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 2 }).map((_, i) => (
               <div
@@ -651,7 +735,7 @@ export default function HeaderCompensationPage() {
           <div className="flex flex-col items-center justify-center rounded-cf-sm border border-dashed border-divider py-16 text-center">
             <ArrowLeftRight className="mb-3 h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium text-muted-foreground">{t("noRules")}</p>
-            <p className="mt-1 text-xs text-muted-foreground/60">{t("noRulesDesc")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("noRulesDesc")}</p>
           </div>
         ) : (
           <div className="space-y-5">
@@ -661,7 +745,7 @@ export default function HeaderCompensationPage() {
                   <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     {t("builtinRulesTitle")}
                   </h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground/70">{t("builtinRulesDesc")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t("builtinRulesDesc")}</p>
                 </div>
               </div>
               {builtinRules.length === 0 ? (
@@ -683,7 +767,7 @@ export default function HeaderCompensationPage() {
                   <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     {t("customRulesTitle")}
                   </h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground/70">{t("customRulesDesc")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t("customRulesDesc")}</p>
                 </div>
               </div>
               {customRules.length === 0 ? (

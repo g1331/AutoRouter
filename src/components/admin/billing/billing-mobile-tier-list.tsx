@@ -1,4 +1,6 @@
 import { Check, Trash2, X } from "lucide-react";
+import { useId } from "react";
+import { Collapse } from "@/components/ui/collapse";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,7 @@ export function BillingMobileTierList({
   deleteTierRule: ReturnType<typeof useDeleteBillingTierRule>;
   t: BillingTranslate;
 }) {
+  const detailsId = useId();
   const {
     editDraft,
     setDraftField,
@@ -58,11 +61,13 @@ export function BillingMobileTierList({
         type="button"
         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={detailsId}
       >
         <ExpandChevron expanded={isOpen} className="h-3 w-3" />
         {t("priceCatalogTiersCount", { count: modelTiers.length })}
       </button>
-      {isOpen && (
+      <Collapse open={isOpen} id={detailsId}>
         <div className="mt-2 space-y-1.5">
           {modelTiers.map((rule) => {
             const isTierEditing =
@@ -177,7 +182,7 @@ export function BillingMobileTierList({
             );
           })}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

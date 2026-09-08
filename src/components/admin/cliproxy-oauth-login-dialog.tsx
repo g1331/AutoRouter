@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Copy, ExternalLink, Loader2, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -65,38 +65,50 @@ export function CliproxyOAuthLoginDialog({
   const [session, setSession] = useState<{ url: string; state: string } | null>(null);
   const [timedOut, setTimedOut] = useState(false);
   const [callbackUrl, setCallbackUrl] = useState("");
+  const active = useRef(false);
+  const completed = useRef(false);
+  useEffect(() => {
+    active.current = open;
+    return () => {
+      active.current = false;
+    };
+  }, [open, instanceId]);
 
   const initiateMutation = useInitiateCliproxyOAuthLogin();
   const callbackMutation = useSubmitCliproxyOAuthCallback();
   const statusQuery = useCliproxyOAuthStatus(
     instanceId,
     session?.state ?? null,
-    Boolean(session) && !timedOut
+    open && Boolean(session) && !timedOut
   );
   const status = statusQuery.data?.status;
 
   useEffect(() => {
-    if (!session) {
+    if (!open || !session) {
       return;
     }
     const timer = setTimeout(() => setTimedOut(true), CLIPROXY_OAUTH_POLL_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [session]);
+  }, [open, session]);
 
   useEffect(() => {
-    if (status === "ok") {
+    if (open && status === "ok" && !completed.current) {
+      completed.current = true;
       queryClient.invalidateQueries({ queryKey: ["cliproxy", "accounts"] });
       toast.success(t("oauthLoginSuccess"));
       onClose();
     }
-  }, [status, queryClient, onClose, t]);
+  }, [open, status, queryClient, onClose, t]);
 
   const handleStart = async () => {
+    if (initiateMutation.isPending) return;
     setTimedOut(false);
     try {
       const result = await initiateMutation.mutateAsync({ instanceId, provider });
+      if (!active.current) return;
       setSession({ url: result.url, state: result.state });
     } catch (error) {
+      if (!active.current) return;
       toast.error(
         t("oauthInitiateFailed", {
           message: error instanceof Error ? error.message : String(error),
@@ -106,12 +118,14 @@ export function CliproxyOAuthLoginDialog({
   };
 
   const handleRetry = () => {
+    completed.current = false;
     setSession(null);
     setTimedOut(false);
     setCallbackUrl("");
   };
 
   const handleSubmitCallback = async () => {
+    if (callbackMutation.isPending) return;
     if (!callbackUrl.trim()) {
       toast.error(t("oauthManualCallbackEmpty"));
       return;
@@ -122,7 +136,7 @@ export function CliproxyOAuthLoginDialog({
         provider,
         redirectUrl: callbackUrl.trim(),
       });
-      onClose();
+      if (active.current) onClose();
     } catch {
       // 错误已由 mutation 的 onError 提示
     }
@@ -134,9 +148,9 @@ export function CliproxyOAuthLoginDialog({
     }
     try {
       await navigator.clipboard.writeText(session.url);
-      toast.success(t("oauthCopied"));
+      if (active.current) toast.success(t("oauthCopied"), { id: "oauth-copy" });
     } catch {
-      // 剪贴板不可用时静默忽略
+      if (active.current) toast.error(t("oauthCopyFailed"), { id: "oauth-copy" });
     }
   };
 
@@ -156,9 +170,10 @@ export function CliproxyOAuthLoginDialog({
               <p className="type-body-small text-muted-foreground">{t("oauthSelectProvider")}</p>
               <Select
                 value={provider}
+                disabled={initiateMutation.isPending}
                 onValueChange={(value) => setProvider(value as CliproxyProvider)}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("oauthSelectProvider")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -212,6 +227,7 @@ export function CliproxyOAuthLoginDialog({
                       value={callbackUrl}
                       onChange={(event) => setCallbackUrl(event.target.value)}
                       placeholder={t("oauthManualCallbackPlaceholder")}
+                      aria-label={t("oauthManualCallback")}
                       className="font-mono"
                     />
                     <Button

@@ -51,7 +51,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
           data-lpignore={allowPasswordManager ? undefined : "true"}
           data-form-type={allowPasswordManager ? undefined : "other"}
           className={cn(
-            "password-input__field pr-12",
+            "password-input__field pr-12 placeholder:font-sans placeholder:tracking-normal",
             shouldUseTextSecurity &&
               "font-mono text-[16px] leading-none tracking-[0.22em] [-webkit-text-security:disc]",
             className
@@ -64,7 +64,9 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
           size="icon"
           className="absolute right-1.5 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           onClick={() => setIsVisible((value) => !value)}
+          onMouseDown={(event) => event.preventDefault()}
           disabled={disabled}
+          aria-pressed={isVisible}
           aria-label={isVisible ? tCommon("hideSensitiveInput") : tCommon("showSensitiveInput")}
         >
           {isVisible ? (

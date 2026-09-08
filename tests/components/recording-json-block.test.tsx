@@ -145,7 +145,7 @@ describe("RecordingJsonBlock component", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(writeTextMock).toHaveBeenCalledWith(JSON.stringify(value, null, 2));
-    expect(toastSuccess).toHaveBeenCalledWith("common.copied");
+    expect(toastSuccess).toHaveBeenCalledWith("common.copied", { id: "recording-json-copy" });
   });
 
   it("copy button reports failure via toast when clipboard rejects", async () => {
@@ -156,7 +156,7 @@ describe("RecordingJsonBlock component", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(toastError).toHaveBeenCalledWith("common.error");
+    expect(toastError).toHaveBeenCalledWith("common.error", { id: "recording-json-copy" });
   });
 
   it("clicking a branch toggle collapses an already expanded node", () => {

@@ -68,7 +68,10 @@ export function CliproxyAccountDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-96 space-y-3 overflow-y-auto py-2">
+        <div
+          tabIndex={0}
+          className="max-h-96 space-y-3 overflow-y-auto py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <DetailRow label={t("columnProvider")}>
             <Badge variant="info">{account.provider}</Badge>
           </DetailRow>

@@ -96,6 +96,7 @@ export function PortalUsageChart({ data, isLoading, range, onRangeChange }: Port
                 type="button"
                 size="sm"
                 variant={metric === option ? "default" : "outline"}
+                aria-pressed={metric === option}
                 onClick={() => setMetric(option)}
               >
                 {metricLabels[option]}
@@ -113,6 +114,7 @@ export function PortalUsageChart({ data, isLoading, range, onRangeChange }: Port
                 type="button"
                 size="sm"
                 variant={range === option ? "default" : "outline"}
+                aria-pressed={range === option}
                 onClick={() => onRangeChange(option)}
               >
                 {t(`overview.range_${option}`)}
@@ -134,7 +136,7 @@ export function PortalUsageChart({ data, isLoading, range, onRangeChange }: Port
             {tCommon("noData")}
           </div>
         ) : (
-          <div className="h-64 w-full">
+          <div key={`${metric}-${range}`} className="content-enter h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                 <defs>
@@ -167,6 +169,7 @@ export function PortalUsageChart({ data, isLoading, range, onRangeChange }: Port
                   }}
                 />
                 <Area
+                  isAnimationActive={false}
                   type="monotone"
                   dataKey="value"
                   stroke={theme.colors.primary}

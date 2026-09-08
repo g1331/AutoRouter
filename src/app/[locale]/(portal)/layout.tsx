@@ -10,7 +10,12 @@ import { useAuth } from "@/providers/auth-provider";
 
 // Every portal page is a mobile root: the portal navigation is flat, so the
 // mobile header never needs a back button.
-const MOBILE_ROOT_ROUTES = ["/portal"] as const;
+const MOBILE_ROOT_ROUTES = [
+  "/portal",
+  "/portal/keys",
+  "/portal/requests",
+  "/portal/password",
+] as const;
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

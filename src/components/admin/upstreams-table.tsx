@@ -23,6 +23,7 @@ import { StatusLed, type StatusLedTone } from "@/components/ui/status-led";
 import { StateChip } from "@/components/ui/state-chip";
 import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
+import { Collapse } from "@/components/ui/collapse";
 import { Link } from "@/i18n/navigation";
 import { useToggleUpstreamActive, useUpstreamQuota } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
@@ -625,7 +626,7 @@ export function UpstreamsTable({
                             no interactive control is nested inside a button. */}
                         <div
                           className={cn(
-                            "flex w-full items-center gap-3",
+                            "flex w-full flex-wrap items-center gap-3 sm:flex-nowrap",
                             isCompactDensity ? "px-3 py-2" : "px-4 py-2.5"
                           )}
                         >
@@ -636,7 +637,8 @@ export function UpstreamsTable({
                             type="button"
                             onClick={() => toggleRow(upstream.id)}
                             aria-expanded={isExpanded}
-                            className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-opacity duration-cf-fast hover:opacity-90"
+                            aria-controls={`upstream-summary-${upstream.id}`}
+                            className="flex min-w-0 flex-1 basis-full cursor-pointer items-center gap-3 text-left transition-opacity duration-cf-fast hover:opacity-90 sm:basis-auto"
                           >
                             <ChevronDown
                               className={cn(
@@ -735,7 +737,7 @@ export function UpstreamsTable({
 
                           {/* Row actions — stop propagation so clicks do not toggle the row */}
                           <div
-                            className="flex shrink-0 items-center gap-1.5"
+                            className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0"
                             onClick={(event) => event.stopPropagation()}
                             role="presentation"
                           >
@@ -841,7 +843,7 @@ export function UpstreamsTable({
                         </div>
 
                         {/* Expanded detail: the dense information the card used to show */}
-                        {isExpanded && (
+                        <Collapse open={isExpanded} id={`upstream-summary-${upstream.id}`}>
                           <div
                             className={cn(
                               "grid gap-3 bg-surface-300/20",
@@ -997,7 +999,7 @@ export function UpstreamsTable({
                               </div>
                             </section>
                           </div>
-                        )}
+                        </Collapse>
                       </div>
                     );
                   })}

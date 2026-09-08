@@ -179,7 +179,7 @@ describe("LogsPage focus query param", () => {
 
     render(<LogsPage />);
 
-    expect(screen.getByText("logs.management")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "logs.pageTitle" })).toBeInTheDocument();
     expect(screen.queryByText("logs.focusActive")).not.toBeInTheDocument();
   });
 
@@ -245,7 +245,7 @@ describe("LogsPage focus query param", () => {
     expect(screen.getByText("logs.userFilterActive")).toBeInTheDocument();
     expect(screen.getByText("user-42")).toBeInTheDocument();
     // Management header still renders alongside the filter banner.
-    expect(screen.getByText("logs.management")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "logs.pageTitle" })).toBeInTheDocument();
 
     const clearLink = screen.getByRole("link", { name: /logs.userFilterClear/i });
     expect(clearLink).toHaveAttribute("href", "/logs");
@@ -459,7 +459,7 @@ describe("LogsPage server filter mapping", () => {
     expect(lastLogsTableProps?.windowStats).toBeNull();
   });
 
-  it("renders a compact live pulse bar in the management card when the context is available", () => {
+  it("does not duplicate the shell live pulse in the management card", () => {
     useLivePulseContextMock.mockReturnValue({
       snapshot: { requests_per_minute: 12 },
       connectionState: "live",
@@ -467,8 +467,7 @@ describe("LogsPage server filter mapping", () => {
 
     render(<LogsPage />);
 
-    const pulseBar = screen.getByTestId("live-pulse-bar");
-    expect(pulseBar).toHaveAttribute("data-variant", "compact");
+    expect(screen.queryByTestId("live-pulse-bar")).not.toBeInTheDocument();
   });
 
   it("renders no pulse bar when the live pulse context is unavailable", () => {

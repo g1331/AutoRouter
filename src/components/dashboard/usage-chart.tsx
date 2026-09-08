@@ -460,7 +460,7 @@ export function UsageChart({
                 onClick={() => onDisplayModeChange(nextDisplayMode)}
                 aria-label={currentDisplayModeLabel}
                 title={displayModeLabels[nextDisplayMode]}
-                className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--vr-accent-500)_18%,transparent)] transition-all hover:bg-amber-500/20"
+                className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--vr-accent-500)_18%,transparent)] transition-colors hover:bg-amber-500/20"
               >
                 <CurrentDisplayModeIcon className="h-3 w-3" />
                 <span>{currentDisplayModeLabel}</span>
@@ -479,7 +479,7 @@ export function UsageChart({
                       onClick={() => onMetricChange(m)}
                       aria-pressed={metric === m}
                       className={cn(
-                        "rounded-full px-2.5 py-1 type-label-medium transition-all",
+                        "rounded-full px-2.5 py-1 type-label-medium transition-colors",
                         metric === m
                           ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--vr-accent-500)_18%,transparent)]"
                           : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
@@ -494,7 +494,10 @@ export function UsageChart({
           </div>
         </div>
 
-        <div className={cn(chartHeightClass, "w-full min-w-0")}>
+        <div
+          key={`${metric}-${displayMode}`}
+          className={cn(chartHeightClass, "content-enter w-full min-w-0")}
+        >
           {isLoading ? (
             <UsageChartLoading loadingLabel={tCommon("loading")} />
           ) : chartData.length === 0 ? (
@@ -570,6 +573,7 @@ export function UsageChart({
                     排除，避免同一数值出现两条目。 */}
                 {totalSeries && (
                   <Bar
+                    isAnimationActive={false}
                     dataKey={totalSeries.dataKey}
                     name={totalSeries.name}
                     fill={totalSeries.color}
@@ -580,6 +584,7 @@ export function UsageChart({
                 )}
                 {totalSeries && (
                   <Area
+                    isAnimationActive={false}
                     type="monotone"
                     dataKey={totalSeries.dataKey}
                     stroke={totalSeries.color}
@@ -594,6 +599,7 @@ export function UsageChart({
                 {displayMode === "byUpstream" &&
                   seriesDefinitions.map((series) => (
                     <Bar
+                      isAnimationActive={false}
                       key={series.dataKey}
                       dataKey={series.dataKey}
                       name={series.name}

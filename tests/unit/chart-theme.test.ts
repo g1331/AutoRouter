@@ -16,17 +16,17 @@ import {
 // 期望值要一起改，防止图表配色与全站令牌静默漂移。
 describe("getChartTheme", () => {
   it("dark primary matches the dark --vr-accent-500 token", () => {
-    expect(getChartTheme("dark").colors.primary).toBe("#f2a950");
+    expect(getChartTheme("dark").colors.primary).toBe("#f5a261");
   });
 
   it("light primary matches the light --vr-accent-500 token", () => {
-    expect(getChartTheme("light").colors.primary).toBe("#9a6410");
+    expect(getChartTheme("light").colors.primary).toBe("#a04a16");
   });
 
   it("dark tooltip surfaces match the dark surface/border tokens", () => {
     const { tooltip } = getChartTheme("dark").colors;
-    expect(tooltip.background).toBe("#1a1e24");
-    expect(tooltip.border).toBe("#2b323c");
+    expect(tooltip.background).toBe("#25282c");
+    expect(tooltip.border).toBe("#373b42");
   });
 
   it("fonts reference CSS variables instead of literal font stacks", () => {
@@ -42,8 +42,8 @@ describe("getChartTheme", () => {
 
 describe("upstream palette", () => {
   it("leads both palettes with the mode's accent-500", () => {
-    expect(UPSTREAM_COLORS_DARK[0]).toBe("#f2a950");
-    expect(UPSTREAM_COLORS_LIGHT[0]).toBe("#9a6410");
+    expect(UPSTREAM_COLORS_DARK[0]).toBe("#f5a261");
+    expect(UPSTREAM_COLORS_LIGHT[0]).toBe("#a04a16");
   });
 
   it("provides 8 series colors per mode", () => {

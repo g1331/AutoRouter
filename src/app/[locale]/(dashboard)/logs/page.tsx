@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ScrollText, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import {
   DEFAULT_LOGS_SERVER_FILTERS,
@@ -11,13 +11,14 @@ import {
   type LogsFilterOption,
   type LogsServerFilters,
 } from "@/components/admin/logs-table";
-import { LivePulseBar } from "@/components/admin/live-pulse-bar";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
 import { Topbar } from "@/components/admin/topbar";
-import { useLivePulseContext } from "@/providers/live-pulse-provider";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,7 +46,6 @@ interface LogsLoadingSkeletonProps {
   loadingLabel: string;
 }
 
-const LOGS_SECTION_ENTER_CLASS = "animate-log-section-enter motion-reduce:animate-none";
 function resolveLogsSortField(
   field: RequestLogSort["field"] | undefined
 ): LogsServerFilters["sortField"] {
@@ -187,7 +187,6 @@ export default function LogsPage() {
   const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({
     enabled: focusId === null,
   });
-  const pulse = useLivePulseContext();
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
@@ -249,7 +248,7 @@ export default function LogsPage() {
     enabled: !focusId,
   });
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
-  const { data, isLoading, refetch } = useRequestLogs(
+  const { data, isLoading, isFetching, error, refetch } = useRequestLogs(
     focusId ? 1 : page,
     focusId ? 1 : pageSize,
     query,
@@ -280,21 +279,18 @@ export default function LogsPage() {
         : "";
 
   const focusedItems = data?.items ?? [];
-  const focusNotFound = focusId !== null && !isLoading && focusedItems.length === 0;
+  const focusNotFound = focusId !== null && !isLoading && !error && focusedItems.length === 0;
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto min-w-0 w-full max-w-[1560px] space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <PageShell maxWidth="full">
+        <PageHeader title={t("pageTitle")} />
         {focusId ? (
           <Card
             variant="outlined"
-            className={cn(
-              "bg-card",
-              LOGS_SECTION_ENTER_CLASS,
-              focusNotFound && "border-status-warning/40"
-            )}
+            className={cn("bg-card", focusNotFound && "border-status-warning/40")}
           >
             <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
@@ -314,10 +310,7 @@ export default function LogsPage() {
         ) : (
           <>
             {userId && (
-              <Card
-                variant="outlined"
-                className={cn("bg-card border-amber-500/40", LOGS_SECTION_ENTER_CLASS)}
-              >
+              <Card variant="outlined" className={cn("bg-card border-amber-500/40")}>
                 <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 space-y-1">
                     <p className="type-caption text-muted-foreground">{t("userFilterActive")}</p>
@@ -332,14 +325,9 @@ export default function LogsPage() {
                 </CardContent>
               </Card>
             )}
-            <Card variant="outlined" className={cn("bg-card", LOGS_SECTION_ENTER_CLASS)}>
-              <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <Card variant="outlined" className={cn("bg-card")}>
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-amber-500">
-                    <ScrollText className="h-4 w-4" aria-hidden="true" />
-                    <span className="type-label-medium">{t("management")}</span>
-                  </div>
-                  <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
                   <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
                     <Badge
                       variant={
@@ -366,14 +354,6 @@ export default function LogsPage() {
                 </div>
 
                 <div className="flex flex-col items-start gap-3 sm:items-end">
-                  {pulse && (
-                    <LivePulseBar
-                      snapshot={pulse.snapshot}
-                      connectionState={pulse.connectionState}
-                      variant="compact"
-                      className="shrink-0"
-                    />
-                  )}
                   <RefreshIntervalSelect
                     onIntervalChange={handleIntervalChange}
                     onManualRefresh={handleManualRefresh}
@@ -385,13 +365,19 @@ export default function LogsPage() {
           </>
         )}
 
-        {isLoading ? (
-          <div className={LOGS_SECTION_ENTER_CLASS} style={{ animationDelay: "70ms" }}>
+        <QueryStatus
+          error={error}
+          fetching={!isLoading && isFetching}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
+        />
+        {error && !data ? null : isLoading ? (
+          <div>
             <LogsLoadingSkeleton loadingLabel={tCommon("loading")} />
           </div>
         ) : (
           <>
-            <div className={LOGS_SECTION_ENTER_CLASS} style={{ animationDelay: "70ms" }}>
+            <div>
               <LogsTable
                 logs={focusedItems}
                 isLive={
@@ -408,11 +394,7 @@ export default function LogsPage() {
             </div>
 
             {!focusId && data && data.total_pages > 1 && (
-              <Card
-                variant="filled"
-                className={cn("border border-transparent bg-surface-400", LOGS_SECTION_ENTER_CLASS)}
-                style={{ animationDelay: "140ms" }}
-              >
+              <Card variant="filled" className={cn("border border-transparent bg-surface-400")}>
                 <PaginationControls
                   total={data.total}
                   page={page}
@@ -424,7 +406,7 @@ export default function LogsPage() {
             )}
           </>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

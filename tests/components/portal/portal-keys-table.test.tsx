@@ -181,6 +181,6 @@ describe("PortalKeysTable", () => {
       />
     );
 
-    expect(screen.getByText("keys.quotaExceeded")).toBeInTheDocument();
+    expect(screen.getAllByText("keys.quotaExceeded")).toHaveLength(2);
   });
 });

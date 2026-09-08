@@ -30,11 +30,11 @@ const TooltipContent = React.forwardRef<
         // Layout
         "z-50 overflow-hidden p-3",
         // Cassette Futurism styling
-        "rounded-cf-sm border border-amber-500 bg-surface-300",
+        "rounded-cf-sm border border-border bg-surface-300",
         "shadow-cf-glow-subtle",
-        "font-mono text-xs text-amber-500",
+        "text-xs text-foreground",
         // Animations
-        "animate-in fade-in-0 zoom-in-95",
+        "duration-cf-normal ease-cf-standard animate-in fade-in-0 zoom-in-95",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
         "data-[side=bottom]:slide-in-from-top-2",
         "data-[side=left]:slide-in-from-right-2",

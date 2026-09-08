@@ -377,9 +377,9 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                                     }}
                                   />
                                 </FormControl>
-                                <label className="cursor-pointer type-body-medium text-foreground">
+                                <FormLabel className="cursor-pointer type-body-medium text-foreground">
                                   {upstream.name}
-                                </label>
+                                </FormLabel>
                               </FormItem>
                             )}
                           />
