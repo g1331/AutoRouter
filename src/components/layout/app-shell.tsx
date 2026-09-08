@@ -8,6 +8,8 @@ import { usePathname, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
+import { usePageTransition } from "@/hooks/use-page-transition";
+import { CurrentLocation } from "@/components/admin/sidebar";
 
 interface AppShellProps {
   // Sidebar render prop: the shell owns the collapsed state, the route group
@@ -43,8 +45,14 @@ export function AppShell({
   const pathname = usePathname();
   const tCommon = useTranslations("common");
   const { token } = useAuth();
+  usePageTransition(pathname, Boolean(token));
 
   const mainRef = useRef<HTMLElement>(null);
+  const visitedPaths = useRef(new Set<string>());
+
+  useEffect(() => {
+    visitedPaths.current.add(pathname);
+  }, [pathname]);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
@@ -159,12 +167,10 @@ export function AppShell({
     };
   }, []);
 
-  const isMobileRootRoute = mobileRootRoutes.some(
-    (href) => pathname === href || pathname.startsWith(`${href}/`)
-  );
+  const isMobileRootRoute = mobileRootRoutes.some((href) => pathname === href);
 
   const handleMobileBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
+    if (visitedPaths.current.size > 1) {
       router.back();
       return;
     }
@@ -196,8 +202,8 @@ export function AppShell({
         )}
       >
         <header className="sticky top-0 z-20 border-b border-divider bg-surface-200/88 backdrop-blur md:hidden">
-          <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
-            <div className="flex min-w-0 items-center">
+          <div className="flex h-12 items-center gap-2 px-3">
+            <div className="flex min-w-0 shrink-0 items-center">
               {!isMobileRootRoute && (
                 <Button
                   type="button"
@@ -211,17 +217,13 @@ export function AppShell({
                   {tCommon("back")}
                 </Button>
               )}
+              {isMobileRootRoute && <CurrentLocation />}
             </div>
-            {mobileHeaderCenter ?? <span aria-hidden="true" />}
-            <div className="flex min-w-0 items-center justify-end">
-              {mobileHeaderRight ?? <span aria-hidden="true" />}
-            </div>
+            <div className="ml-auto min-w-0 overflow-hidden">{mobileHeaderCenter}</div>
+            <div className="flex shrink-0 items-center justify-end">{mobileHeaderRight}</div>
           </div>
         </header>
-        {/* 进场瀑布：key 随路由变化重放；transform 在子元素自身，不破坏 sticky */}
-        <div key={pathname} className="rise-stagger">
-          {children}
-        </div>
+        <div key={pathname}>{children}</div>
       </main>
     </div>
   );

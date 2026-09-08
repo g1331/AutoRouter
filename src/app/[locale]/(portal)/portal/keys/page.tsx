@@ -2,8 +2,11 @@
 
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Key, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Topbar } from "@/components/admin/topbar";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { PortalKeyDialog } from "@/components/portal/portal-key-dialog";
@@ -30,7 +33,7 @@ export default function PortalKeysPage() {
   const { startMorph, canMorph } = useContainerMorph();
   const morphSourceRef = useRef<HTMLElement | null>(null);
 
-  const { data, isLoading } = usePortalKeys(page, pageSize);
+  const { data, isLoading, error, isFetching, refetch } = usePortalKeys(page, pageSize);
   // 上游可见性决定“空上游列表”该如何解读，取不到时按不可见处理（fail closed）。
   const { data: upstreamOptions } = usePortalUpstreamOptions();
   const upstreamsVisible = upstreamOptions?.upstreams_visible ?? false;
@@ -39,32 +42,35 @@ export default function PortalKeysPage() {
     <>
       <Topbar title={t("keys.pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Key className="h-4 w-4 text-amber-500" aria-hidden="true" />
-            <span className="type-body-medium text-muted-foreground">
-              {t("keys.managementDesc")}
-            </span>
-          </div>
-          <Button
-            type="button"
-            onClick={(event) => {
-              const source = event.currentTarget;
-              morphSourceRef.current = source;
-              startMorph(() => setCreateOpen(true), {
-                source,
-                name: "morph-portal-key-create",
-                mode: "enter",
-              });
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            {tKeys("createKey")}
-          </Button>
-        </div>
+      <PageShell maxWidth="7xl">
+        <PageHeader
+          title={t("keys.pageTitle")}
+          actions={
+            <Button
+              type="button"
+              onClick={(event) => {
+                const source = event.currentTarget;
+                morphSourceRef.current = source;
+                startMorph(() => setCreateOpen(true), {
+                  source,
+                  name: "morph-portal-key-create",
+                  mode: "enter",
+                });
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {tKeys("createKey")}
+            </Button>
+          }
+        />
+        <QueryStatus
+          error={error}
+          fetching={isFetching && !isLoading}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
+        />
 
-        {isLoading ? (
+        {error && !data ? null : isLoading ? (
           <Card
             role="status"
             aria-label={tCommon("loading")}
@@ -112,7 +118,7 @@ export default function PortalKeysPage() {
             )}
           </>
         )}
-      </div>
+      </PageShell>
 
       <PortalKeyDialog
         mode="create"

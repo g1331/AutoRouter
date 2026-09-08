@@ -108,7 +108,7 @@ describe("LogsTable", () => {
       expect(screen.getByText("tableDuration")).toBeInTheDocument();
     });
 
-    it("keeps the interface type header on one line and renders expanded desktop details outside cells", () => {
+    it("keeps the header readable and details spanning the full table without replacing data rows", () => {
       render(
         <LogsTable
           logs={[
@@ -150,7 +150,8 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
 
       const tokenDetails = screen.getByText("tokenDetails");
-      expect(tokenDetails.closest("td")).toBeNull();
+      expect(tokenDetails.closest("td")).toHaveAttribute("colspan", "11");
+      expect(screen.getAllByRole("table")).toHaveLength(1);
     });
 
     it("shrinks the desktop model column when the table container becomes narrow", async () => {
@@ -1872,12 +1873,16 @@ describe("LogsTable", () => {
       expect(screen.getAllByText("thinkingNotExplicitlySpecified")).toHaveLength(2);
     });
 
-    it("applies detail enter animation when expanded content opens", () => {
+    it("connects the expansion trigger to its accessible detail region", () => {
       const { container } = render(<LogsTable logs={[mockLog]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
 
-      expect(container.querySelector(".animate-log-detail-enter")).toBeInTheDocument();
+      const trigger = screen.getByRole("button", { name: "collapseDetails" });
+      const detail = container.querySelector(`[id="${trigger.getAttribute("aria-controls")}"]`);
+      expect(detail).toHaveAttribute("aria-hidden", "false");
+      fireEvent.click(trigger);
+      expect(detail).toHaveAttribute("inert");
     });
 
     it("shows billing breakdown formula under token details when billed", () => {

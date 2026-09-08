@@ -74,11 +74,11 @@ function UserKeysList({ userId }: { userId: string }) {
         keys.map((key) => (
           <div
             key={key.id}
-            className="flex items-center justify-between gap-3 rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2"
+            className="flex flex-col items-start justify-between gap-3 rounded-cf-sm border border-transparent bg-surface-400 px-3 py-2 sm:flex-row sm:items-center"
           >
             <div className="min-w-0 flex-1 space-y-0.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="type-body-medium truncate text-foreground">{key.name}</p>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <p className="type-body-medium break-all text-foreground">{key.name}</p>
                 <Badge variant={key.is_active ? "success" : "neutral"} className="shrink-0">
                   {key.is_active ? tKeys("enabled") : tKeys("disabled")}
                 </Badge>

@@ -134,4 +134,97 @@ describe("useContainerMorph", () => {
     expect(start).not.toHaveBeenCalled();
     expect(source.style.getPropertyValue(NAME_PROP)).toBe("");
   });
+
+  it("快速反向时旧回调不覆盖新意图，旧完成不清除新命名", async () => {
+    const callbacks: Array<() => void> = [];
+    const completions = [createDeferred(), createDeferred()];
+    const skips = [vi.fn(), vi.fn()];
+    let index = 0;
+    (document as DocumentWithViewTransition).startViewTransition = (callback) => {
+      callbacks.push(callback);
+      const current = index++;
+      return {
+        finished: completions[current].promise,
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+        skipTransition: skips[current],
+      };
+    };
+    const { result, unmount } = renderHook(() => useContainerMorph());
+    const source = document.createElement("button");
+    const oldApply = vi.fn();
+    const newApply = vi.fn();
+    act(() => {
+      result.current.startMorph(oldApply, { source, name: "old", mode: "enter" });
+      result.current.startMorph(newApply, { source, name: "new", mode: "exit" });
+      callbacks[0]();
+      callbacks[1]();
+    });
+    expect(oldApply).not.toHaveBeenCalled();
+    expect(newApply).toHaveBeenCalledOnce();
+    expect(skips[0]).toHaveBeenCalledOnce();
+    await act(async () => completions[0].resolve());
+    expect(source.style.getPropertyValue(NAME_PROP)).toBe("new");
+    unmount();
+    expect(skips[1]).toHaveBeenCalledOnce();
+    expect(source.style.getPropertyValue(NAME_PROP)).toBe("");
+    await act(async () => completions[1].resolve());
+  });
+
+  it("动画 API 抛错仍执行操作一次，业务错误不被吞掉", () => {
+    (document as DocumentWithViewTransition).startViewTransition = () => {
+      throw new DOMException("unavailable");
+    };
+    const { result } = renderHook(() => useContainerMorph());
+    const apply = vi.fn();
+    act(() => result.current.startMorph(apply, { name: "test", mode: "enter" }));
+    expect(apply).toHaveBeenCalledOnce();
+    stubViewTransition();
+    expect(() =>
+      result.current.startMorph(
+        () => {
+          throw new Error("business failure");
+        },
+        { name: "test", mode: "enter" }
+      )
+    ).toThrow("business failure");
+  });
+
+  it("源节点移除后仍提交操作，业务回调异步失败会报告且完成后清理", async () => {
+    const failure = new Error("save failed");
+    const report = vi.fn();
+    vi.stubGlobal("reportError", report);
+    const finished = createDeferred();
+    const source = document.createElement("button");
+    document.body.append(source);
+    (document as DocumentWithViewTransition).startViewTransition = (callback) => {
+      source.remove();
+      let updateCallbackDone: Promise<void>;
+      try {
+        callback();
+        updateCallbackDone = Promise.resolve();
+      } catch (error) {
+        updateCallbackDone = Promise.reject(error);
+      }
+      return {
+        ready: Promise.reject(new DOMException("missing source")),
+        updateCallbackDone,
+        finished: finished.promise,
+        skipTransition: vi.fn(),
+      };
+    };
+    const { result } = renderHook(() => useContainerMorph());
+    await act(async () =>
+      result.current.startMorph(
+        () => {
+          throw failure;
+        },
+        { source, name: "missing", mode: "enter" }
+      )
+    );
+    expect(report).toHaveBeenCalledExactlyOnceWith(failure);
+    await act(async () => finished.resolve());
+    expect(source.style.getPropertyValue(NAME_PROP)).toBe("");
+    vi.unstubAllGlobals();
+  });
 });

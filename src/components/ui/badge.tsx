@@ -5,7 +5,7 @@ import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
 const badgeVariants = cva(
   [
-    "inline-flex items-center gap-1.5 rounded-cf-sm border px-2.5 py-1",
+    "inline-flex items-center gap-1.5 whitespace-nowrap rounded-cf-sm border px-2.5 py-1",
     "type-label-medium",
     "transition-colors duration-cf-fast ease-cf-standard",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",

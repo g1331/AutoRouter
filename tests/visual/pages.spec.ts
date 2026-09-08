@@ -8,13 +8,13 @@ import {
   UPSTREAM_DETAIL,
 } from "../support/admin-page-mocks";
 
-// 视觉回归基线：login / dashboard / keys / upstreams 四张 fullPage 快照。
+// 既有桌面视口的视觉回归；完整页面矩阵见 application-matrix.spec.ts。
 // 基线在本地 Windows 生成（快照文件带 -win32 平台后缀）；CI 平台字体渲染
 // 不同会必然 diff，因此该套件不接入 verify.yml，仅作本地改版前后的回归工具。
 // 运行：pnpm test:visual；重建基线：pnpm test:visual --update-snapshots
 
 const SNAPSHOT_OPTIONS = {
-  fullPage: true,
+  fullPage: false,
   animations: "disabled",
 } as const;
 
@@ -25,6 +25,7 @@ async function gotoAndSettle(page: Page, path: string, readySelector: string): P
 
 test.describe("Visual Regression", () => {
   test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-06-10T09:00:00Z"));
     await seedTheme(page, "dark");
   });
 

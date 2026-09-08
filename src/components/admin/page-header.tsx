@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { IconBox } from "@/components/ui/icon-box";
 
 interface PageHeaderProps {
@@ -11,27 +10,28 @@ interface PageHeaderProps {
   actions?: ReactNode;
 }
 
-/**
- * Shared page header (icon tile + label title + muted description) extracted from
- * the hand-written `Card` headers duplicated across the settings/logs pages.
- */
+/** 页面身份与主操作；仅在需要解释业务约束时提供说明。 */
 export function PageHeader({ icon: Icon, title, description, actions }: PageHeaderProps) {
   return (
-    <Card variant="outlined" className="bg-card">
-      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="flex items-center gap-3">
-          {Icon && (
-            <IconBox>
-              <Icon className="h-4 w-4" aria-hidden="true" />
-            </IconBox>
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        {Icon && (
+          <IconBox>
+            <Icon className="h-4 w-4" aria-hidden="true" />
+          </IconBox>
+        )}
+        <div className="min-w-0 space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl break-words">
+            {title}
+          </h1>
+          {description && (
+            <p className="type-body-medium max-w-3xl text-muted-foreground">{description}</p>
           )}
-          <div className="space-y-1">
-            <span className="type-label-medium block text-amber-500">{title}</span>
-            {description && <p className="type-body-medium text-muted-foreground">{description}</p>}
-          </div>
         </div>
-        {actions && <div className="self-start sm:self-auto">{actions}</div>}
-      </CardContent>
-    </Card>
+      </div>
+      {actions && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">{actions}</div>
+      )}
+    </header>
   );
 }

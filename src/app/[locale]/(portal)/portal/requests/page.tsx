@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ScrollText } from "lucide-react";
 
 import {
   DEFAULT_LOGS_SERVER_FILTERS,
@@ -12,6 +11,9 @@ import {
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalRequestLogs } from "@/hooks/use-portal-logs";
@@ -54,10 +56,15 @@ export default function PortalRequestsPage() {
     [tableFilters.sortField, tableFilters.sortOrder]
   );
 
-  const { data, isLoading, isFetching, refetch } = usePortalRequestLogs(page, pageSize, query, {
-    refetchInterval: refreshInterval,
-    sort,
-  });
+  const { data, isLoading, isFetching, error, refetch } = usePortalRequestLogs(
+    page,
+    pageSize,
+    query,
+    {
+      refetchInterval: refreshInterval,
+      sort,
+    }
+  );
 
   const { data: windowStats } = useRequestLogStats("user", query);
 
@@ -65,22 +72,25 @@ export default function PortalRequestsPage() {
     <>
       <Topbar title={t("requests.pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <ScrollText className="h-4 w-4 text-amber-500" aria-hidden="true" />
-            <span className="type-body-medium text-muted-foreground">
-              {t("requests.managementDesc")}
-            </span>
-          </div>
-          <RefreshIntervalSelect
-            onIntervalChange={setRefreshInterval}
-            onManualRefresh={() => void refetch()}
-            isRefreshing={isFetching}
-          />
-        </div>
+      <PageShell maxWidth="full">
+        <PageHeader
+          title={t("requests.pageTitle")}
+          actions={
+            <RefreshIntervalSelect
+              onIntervalChange={setRefreshInterval}
+              onManualRefresh={() => void refetch()}
+              isRefreshing={isFetching}
+            />
+          }
+        />
+        <QueryStatus
+          error={error}
+          fetching={isFetching && !isLoading}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
+        />
 
-        {isLoading ? (
+        {error && !data ? null : isLoading ? (
           <Card
             role="status"
             aria-label={tCommon("loading")}
@@ -115,7 +125,7 @@ export default function PortalRequestsPage() {
             )}
           </>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

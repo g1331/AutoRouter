@@ -66,29 +66,36 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               placeholder={t("logsSearchPlaceholder")}
-              className="w-64"
+              aria-label={t("logsSearchPlaceholder")}
+              className="w-full sm:w-64"
             />
             <Button variant="outline" disabled={isFetching} onClick={() => refetch()}>
-              <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />
+              <RefreshCw
+                className={cn(
+                  "mr-2 h-4 w-4",
+                  isFetching && "animate-spin motion-reduce:animate-none"
+                )}
+              />
               {t("logsRefresh")}
             </Button>
           </div>
         </div>
 
+        {isError && (
+          <div role="alert" className="space-y-2 py-2">
+            <p className="type-body-medium text-destructive">{t("logsLoadFailed")}</p>
+            {errorMessage && (
+              <p className="break-words type-body-small text-muted-foreground">{errorMessage}</p>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-6 w-full" />
             <Skeleton className="h-6 w-full" />
             <Skeleton className="h-6 w-full" />
           </div>
-        ) : isError ? (
-          <div className="space-y-2 py-8 text-center">
-            <p className="type-body-medium text-destructive">{t("logsLoadFailed")}</p>
-            {errorMessage ? (
-              <p className="break-words type-body-small text-muted-foreground">{errorMessage}</p>
-            ) : null}
-          </div>
-        ) : !result || result.lines.length === 0 ? (
+        ) : isError && !result ? null : !result || result.lines.length === 0 ? (
           <p className="py-8 text-center type-body-medium text-muted-foreground">
             {t("logsEmpty")}
           </p>
@@ -97,7 +104,10 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
             {t("logsNoMatches")}
           </p>
         ) : (
-          <div className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3 font-mono">
+          <div
+            tabIndex={0}
+            className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3 font-mono"
+          >
             <ul className="space-y-1 type-body-small">
               {filtered.map((line, index) => (
                 <li

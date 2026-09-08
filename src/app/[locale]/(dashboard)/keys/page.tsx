@@ -2,13 +2,16 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Key, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
 import { KeysTable, type KeyOwnerScope } from "@/components/admin/keys-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
 import { Topbar } from "@/components/admin/topbar";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAPIKeys } from "@/hooks/use-api-keys";
@@ -78,35 +81,42 @@ export default function KeysPage() {
 
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
-  const { data, isLoading, isFetching } = useAPIKeys(page, pageSize, searchQuery, { ownerScope });
+  const { data, isLoading, isFetching, error, refetch } = useAPIKeys(page, pageSize, searchQuery, {
+    ownerScope,
+  });
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Key className="h-4 w-4 text-amber-500" aria-hidden="true" />
-            <span className="type-body-medium text-muted-foreground">{t("managementDesc")}</span>
-          </div>
-          <Button
-            onClick={(event) => {
-              const source = event.currentTarget;
-              createMorphSourceRef.current = source;
-              startMorph(() => setCreateDialogOpen(true), {
-                source,
-                name: "morph-key-form",
-                mode: "enter",
-              });
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            {t("createKey")}
-          </Button>
-        </div>
+      <PageShell maxWidth="7xl">
+        <PageHeader
+          title={t("pageTitle")}
+          actions={
+            <Button
+              onClick={(event) => {
+                const source = event.currentTarget;
+                createMorphSourceRef.current = source;
+                startMorph(() => setCreateDialogOpen(true), {
+                  source,
+                  name: "morph-key-form",
+                  mode: "enter",
+                });
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              {t("createKey")}
+            </Button>
+          }
+        />
 
-        {isLoading ? (
+        <QueryStatus
+          error={error}
+          fetching={!isLoading && isFetching}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
+        />
+        {error && !data ? null : isLoading ? (
           <KeysLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
           // Dim the stale placeholder content while a search/page refetch is
@@ -150,7 +160,7 @@ export default function KeysPage() {
             )}
           </div>
         )}
-      </div>
+      </PageShell>
 
       <RevokeKeyDialog
         apiKey={revokeKey}

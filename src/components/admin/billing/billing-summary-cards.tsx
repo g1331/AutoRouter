@@ -1,6 +1,5 @@
-import { Wallet } from "lucide-react";
-
 import { PageHeader } from "@/components/admin/page-header";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,14 +48,18 @@ export function BillingSummaryCards({
   return (
     <>
       <PageHeader
-        icon={Wallet}
-        title={t("management")}
-        description={t("managementDesc")}
+        title={t("pageTitle")}
         actions={
           <Button onClick={() => syncPrices.mutate()} disabled={syncPrices.isPending}>
             {syncPrices.isPending ? t("syncing") : t("syncNow")}
           </Button>
         }
+      />
+      <QueryStatus
+        error={overview.error}
+        fetching={!overview.isLoading && overview.isFetching}
+        hasData={Boolean(overview.data)}
+        onRetry={() => void overview.refetch()}
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -64,7 +67,7 @@ export function BillingSummaryCards({
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("todayCost")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-              {usd.format(overview.data?.today_cost_usd ?? 0)}
+              {overview.data ? usd.format(overview.data.today_cost_usd) : "—"}
             </p>
           </CardContent>
         </Card>
@@ -72,7 +75,7 @@ export function BillingSummaryCards({
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("monthCost")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-              {usd.format(overview.data?.month_cost_usd ?? 0)}
+              {overview.data ? usd.format(overview.data.month_cost_usd) : "—"}
             </p>
           </CardContent>
         </Card>
@@ -80,7 +83,7 @@ export function BillingSummaryCards({
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("unresolvedModels")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-              {overview.data?.unresolved_model_count ?? 0}
+              {overview.data?.unresolved_model_count ?? "—"}
             </p>
           </CardContent>
         </Card>
@@ -93,7 +96,7 @@ export function BillingSummaryCards({
                   priceSyncTask?.last_status ?? latestSync?.status ?? null
                 )}
               >
-                {latestSyncText}
+                {overview.data || backgroundTasks.data ? latestSyncText : "—"}
               </Badge>
             </div>
             {priceSyncTask?.next_run_at && (

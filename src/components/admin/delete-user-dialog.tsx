@@ -65,7 +65,7 @@ export function DeleteUserDialog({
           <AlertDialogAction
             onClick={handleDelete}
             disabled={mutation.isPending}
-            className="bg-status-error text-white hover:bg-status-error/90"
+            className="bg-status-error text-primary-foreground light:text-white hover:bg-status-error/90"
           >
             {tCommon("delete")}
           </AlertDialogAction>

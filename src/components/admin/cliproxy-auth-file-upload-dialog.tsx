@@ -138,6 +138,7 @@ export function CliproxyAuthFileUploadDialog({
           ) : (
             <Textarea
               rows={10}
+              aria-label={t("uploadAuthFileMethodPaste")}
               placeholder={t("uploadAuthFilePastePlaceholder")}
               value={pasteContent}
               onChange={(event) => setPasteContent(event.target.value)}
@@ -169,6 +170,7 @@ function ModeButton({ active, onClick, children }: ModeButtonProps) {
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         "flex-1 px-3 py-2 type-body-small transition-colors",

@@ -68,7 +68,6 @@ describe("BackgroundSyncTasksPanel", () => {
 
     render(<BackgroundSyncTasksPanel />);
 
-    expect(screen.getByText("panelTitle")).toBeInTheDocument();
     expect(screen.getAllByText("taskUpstreamModelCatalogSync").length).toBeGreaterThan(0);
     expect(screen.getAllByText("taskUpstreamModelCatalogSyncDesc").length).toBeGreaterThan(0);
     expect(screen.getAllByText("status_partial").length).toBeGreaterThan(0);

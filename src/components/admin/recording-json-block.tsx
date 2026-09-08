@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Check, ChevronDown, ChevronRight, Copy, FileJson } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Collapse } from "@/components/ui/collapse";
 import { cn } from "@/lib/utils";
 
 export function isJsonBranch(value: unknown): value is Record<string, unknown> | unknown[] {
@@ -82,6 +83,7 @@ export function JsonTreeNode({
   expandLabel: string;
   collapseLabel: string;
 }) {
+  const contentId = useId();
   const isBranch = isJsonBranch(value);
 
   if (!isBranch) {
@@ -111,6 +113,7 @@ export function JsonTreeNode({
           className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-cf-sm text-muted-foreground transition-colors hover:bg-surface-400 hover:text-foreground"
           aria-label={`${isExpanded ? collapseLabel : expandLabel} ${branchLabel}`}
           aria-expanded={isExpanded}
+          aria-controls={contentId}
         >
           {isExpanded ? (
             <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -130,31 +133,33 @@ export function JsonTreeNode({
         ) : null}
       </div>
 
-      {isExpanded ? (
-        <>
-          {entries.length > 0 ? (
-            <div className="ml-4">
-              {entries.map(([entryLabel, entryValue]) => (
-                <JsonTreeNode
-                  key={`${path}.${entryLabel}`}
-                  label={entryLabel}
-                  value={entryValue}
-                  path={`${path}.${entryLabel}`}
-                  depth={depth + 1}
-                  expandedPaths={expandedPaths}
-                  onToggle={onToggle}
-                  expandLabel={expandLabel}
-                  collapseLabel={collapseLabel}
-                />
-              ))}
+      <Collapse open={isExpanded} id={contentId}>
+        {() => (
+          <>
+            {entries.length > 0 ? (
+              <div className="ml-4">
+                {entries.map(([entryLabel, entryValue]) => (
+                  <JsonTreeNode
+                    key={`${path}.${entryLabel}`}
+                    label={entryLabel}
+                    value={entryValue}
+                    path={`${path}.${entryLabel}`}
+                    depth={depth + 1}
+                    expandedPaths={expandedPaths}
+                    onToggle={onToggle}
+                    expandLabel={expandLabel}
+                    collapseLabel={collapseLabel}
+                  />
+                ))}
+              </div>
+            ) : null}
+            <div className="flex min-w-0 items-center gap-1.5 py-0.5 text-muted-foreground">
+              <span className="w-4 shrink-0" />
+              <span>{closeToken}</span>
             </div>
-          ) : null}
-          <div className="flex min-w-0 items-center gap-1.5 py-0.5 text-muted-foreground">
-            <span className="w-4 shrink-0" />
-            <span>{closeToken}</span>
-          </div>
-        </>
-      ) : null}
+          </>
+        )}
+      </Collapse>
     </div>
   );
 }
@@ -163,7 +168,17 @@ export function RecordingJsonBlock({ value }: { value: unknown }) {
   const tCommon = useTranslations("common");
   const jsonText = useMemo(() => JSON.stringify(value, null, 2), [value]);
   const [expandedPaths, setExpandedPaths] = useState(() => collectExpandedJsonPaths(value, 1));
-  const [copied, setCopied] = useState(false);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+  const copied = copiedText === jsonText;
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const copyRequest = useRef(0);
+  useEffect(
+    () => () => {
+      copyRequest.current++;
+      clearTimeout(copyTimer.current);
+    },
+    [jsonText]
+  );
 
   const handleToggle = (path: string) => {
     setExpandedPaths((current) => {
@@ -178,13 +193,17 @@ export function RecordingJsonBlock({ value }: { value: unknown }) {
   };
 
   const handleCopy = async () => {
+    const request = ++copyRequest.current;
+    clearTimeout(copyTimer.current);
     try {
       await navigator.clipboard.writeText(jsonText);
-      setCopied(true);
-      toast.success(tCommon("copied"));
-      setTimeout(() => setCopied(false), 2000);
+      if (request !== copyRequest.current) return;
+      setCopiedText(jsonText);
+      toast.success(tCommon("copied"), { id: "recording-json-copy" });
+      copyTimer.current = setTimeout(() => setCopiedText(null), 2000);
     } catch {
-      toast.error(tCommon("error"));
+      if (request !== copyRequest.current) return;
+      toast.error(tCommon("error"), { id: "recording-json-copy" });
     }
   };
 

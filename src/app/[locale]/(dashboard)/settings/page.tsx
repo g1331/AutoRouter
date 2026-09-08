@@ -10,7 +10,6 @@ import {
   Moon,
   RefreshCw,
   ShieldAlert,
-  SlidersHorizontal,
   TerminalSquare,
   Users,
   Wallet,
@@ -55,7 +54,7 @@ export default function SettingsPage() {
     {
       icon: Moon,
       title: tTheme("toggle"),
-      description: tTheme("dark"),
+      description: null,
       action: <ThemeToggle />,
     },
   ];
@@ -119,11 +118,7 @@ export default function SettingsPage() {
       <Topbar title={t("settings")} />
 
       <PageShell maxWidth="4xl">
-        <PageHeader
-          icon={SlidersHorizontal}
-          title={t("settings")}
-          description={tCommon("adminConsole")}
-        />
+        <PageHeader title={t("settings")} />
 
         <div className="space-y-4">
           {settingsItems.map((item) => {
@@ -138,7 +133,9 @@ export default function SettingsPage() {
                       </IconBox>
                       <div>
                         <h3 className="type-body-medium text-foreground">{item.title}</h3>
-                        <p className="type-caption text-muted-foreground">{item.description}</p>
+                        {item.description && (
+                          <p className="type-caption text-muted-foreground">{item.description}</p>
+                        )}
                       </div>
                     </div>
                     <div className="self-end sm:self-auto">{item.action}</div>

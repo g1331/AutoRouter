@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, Check, AlertTriangle, CheckCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -26,22 +26,41 @@ interface ShowKeyDialogProps {
  */
 export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
   const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const copyRequest = useRef(0);
+  useEffect(
+    () => () => {
+      copyRequest.current += 1;
+      clearTimeout(timer.current);
+    },
+    [open, apiKey.key_value]
+  );
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
 
   const copyKey = async () => {
+    const request = ++copyRequest.current;
+    clearTimeout(timer.current);
     try {
       await navigator.clipboard.writeText(apiKey.key_value);
+      if (request !== copyRequest.current) return;
       setCopied(true);
-      toast.success(t("keyCopied"));
-      setTimeout(() => setCopied(false), 2000);
+      toast.success(t("keyCopied"), { id: "api-key-copy" });
+      timer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error(tCommon("error"));
+      if (request !== copyRequest.current) return;
+      setCopied(false);
+      toast.error(tCommon("error"), { id: "api-key-copy" });
     }
   };
 
+  const close = () => {
+    setCopied(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
@@ -120,7 +139,7 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button onClick={onClose}>{tCommon("close")}</Button>
+          <Button onClick={close}>{tCommon("close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

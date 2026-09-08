@@ -12,7 +12,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           "flex h-11 w-full rounded-cf-sm border border-input bg-surface-200 px-3.5 py-2",
           "type-body-medium text-foreground",
           "placeholder:text-muted-foreground/85",
-          "transition-all duration-cf-normal ease-cf-standard",
+          "transition-[color,background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard",
           "hover:border-amber-500/45 hover:bg-surface-300/80",
           "focus-visible:outline-none focus-visible:border-amber-500/70",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",

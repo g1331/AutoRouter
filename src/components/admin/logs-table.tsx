@@ -27,6 +27,7 @@ import type {
   TimeRange,
 } from "@/types/api";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapse } from "@/components/ui/collapse";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -188,12 +189,10 @@ const LOGS_ICON_TRANSFORM_CLASS =
   "transition-transform duration-cf-fast ease-cf-standard motion-reduce:transform-none motion-reduce:transition-none";
 const LOGS_INTERACTIVE_RAISE_CLASS =
   "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0";
-const LOGS_SECTION_ENTER_CLASS = "animate-log-section-enter motion-reduce:animate-none";
 const LOGS_CARD_ENTER_CLASS = "animate-log-card-enter motion-reduce:animate-none";
 const LOGS_CARD_EMPHASIS_CLASS = "animate-log-card-emphasis motion-reduce:animate-none";
 const LOGS_ROW_ENTER_CLASS = "animate-log-row-enter motion-reduce:animate-none";
 const LOGS_ROW_EMPHASIS_CLASS = "animate-log-row-emphasis motion-reduce:animate-none";
-const LOGS_DETAIL_ENTER_CLASS = "animate-log-detail-enter motion-reduce:animate-none";
 const LOGS_LIVE_HIGHLIGHT_CLASS = "animate-log-live-highlight motion-reduce:animate-none";
 
 function getLogEntryAnimationDelay(index: number) {
@@ -2295,49 +2294,6 @@ export function LogsTable({
     };
   };
 
-  const desktopSections: Array<{
-    key: string;
-    rows: Array<{
-      log: RequestLog;
-      index: number;
-      derived: ReturnType<typeof getLogDerived>;
-    }>;
-    expanded: {
-      log: RequestLog;
-      derived: ReturnType<typeof getLogDerived>;
-    } | null;
-  }> = [];
-
-  if (!isMobileLayout) {
-    let currentRows: Array<{
-      log: RequestLog;
-      index: number;
-      derived: ReturnType<typeof getLogDerived>;
-    }> = [];
-
-    logs.forEach((log, index) => {
-      const derived = getLogDerived(log);
-      currentRows.push({ log, index, derived });
-
-      if (derived.isExpanded && derived.canExpand) {
-        desktopSections.push({
-          key: `section-${log.id}`,
-          rows: currentRows,
-          expanded: { log, derived },
-        });
-        currentRows = [];
-      }
-    });
-
-    if (currentRows.length > 0) {
-      desktopSections.push({
-        key: `section-tail-${currentRows[0]?.log.id ?? "empty"}`,
-        rows: currentRows,
-        expanded: null,
-      });
-    }
-  }
-
   const desktopFixedColumnWidth =
     DESKTOP_TABLE_BASE_WIDTHS.expand +
     DESKTOP_TABLE_BASE_WIDTHS.time +
@@ -2486,12 +2442,9 @@ export function LogsTable({
   ] as const;
 
   return (
-    <div className={cn("overflow-hidden rounded-cf-md border bg-card", LOGS_SECTION_ENTER_CLASS)}>
+    <div className={cn("overflow-hidden rounded-cf-md border bg-card")}>
       {/* Filter Controls */}
-      <div
-        className={cn("border-b border-divider bg-surface-200 p-4", LOGS_SECTION_ENTER_CLASS)}
-        style={{ animationDelay: "40ms" }}
-      >
+      <div className={cn("border-b border-divider bg-surface-200 p-4")}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -2687,10 +2640,7 @@ export function LogsTable({
       </div>
 
       {windowStats !== undefined && (
-        <div
-          className={cn("border-b bg-card px-4 py-3", LOGS_SECTION_ENTER_CLASS)}
-          style={{ animationDelay: "90ms" }}
-        >
+        <div className={cn("border-b bg-card px-4 py-3")}>
           <p className="type-caption mb-2 text-muted-foreground">{windowStatsLabel}</p>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
             {windowStatTiles.map((tile, index) => (
@@ -2714,12 +2664,7 @@ export function LogsTable({
       )}
 
       {logs.length === 0 ? (
-        <div
-          className={cn(
-            "flex flex-col items-center justify-center py-16 text-center",
-            LOGS_SECTION_ENTER_CLASS
-          )}
-        >
+        <div className={cn("flex flex-col items-center justify-center py-16 text-center")}>
           <div
             className={cn(
               "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-transparent bg-surface-400",
@@ -2944,6 +2889,7 @@ export function LogsTable({
                             LOGS_COLOR_TRANSITION_CLASS
                           )}
                           aria-expanded={isExpanded}
+                          aria-controls={`log-detail-${log.id}`}
                           aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
                         >
                           <span>{isExpanded ? t("collapseDetails") : t("expandDetails")}</span>
@@ -2951,18 +2897,18 @@ export function LogsTable({
                         </button>
                       )}
 
-                      {isExpanded && canExpand && (
-                        <div className={LOGS_DETAIL_ENTER_CLASS}>
-                          {renderExpandedDetails({
+                      <Collapse open={isExpanded && canExpand} id={`log-detail-${log.id}`}>
+                        {() =>
+                          renderExpandedDetails({
                             log,
                             upstreamDisplayName,
                             failoverDurationMs,
                             requestTps,
                             isError,
                             className: "mt-3 border-t border-dashed border-divider pt-3",
-                          })}
-                        </div>
-                      )}
+                          })
+                        }
+                      </Collapse>
                     </div>
                   );
                 })}
@@ -2971,323 +2917,328 @@ export function LogsTable({
           ) : (
             <div ref={setDesktopTableContainerElement} className="overflow-x-auto bg-card">
               <TooltipProvider>
-                {desktopSections.map((section, sectionIndex) => (
-                  <Fragment key={section.key}>
-                    <table
-                      className="w-full table-fixed border-collapse text-sm text-foreground"
-                      style={desktopTableStyle}
-                    >
-                      {sectionIndex === 0 ? (
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-9 px-1.5"></TableHead>
-                            <TableHead
-                              className="w-[148px] px-1.5"
-                              aria-sort={getAriaSort("created_at")}
-                            >
-                              {renderSortableHeadContent("created_at", t("tableTime"))}
-                            </TableHead>
-                            <TableHead className="w-[148px] px-1.5">{t("tableKey")}</TableHead>
-                            <TableHead className="hidden lg:table-cell w-[96px] px-1.5">
-                              {t("tableUpstream")}
-                            </TableHead>
-                            <TableHead className="w-[60px] px-1.5">{t("tableMethod")}</TableHead>
-                            <TableHead className="hidden lg:table-cell w-[84px] px-1.5 text-left whitespace-nowrap">
-                              {t("tableInterfaceType")}
-                            </TableHead>
-                            <TableHead
-                              className="hidden lg:table-cell px-1.5 pl-1"
+                <table
+                  className="w-full table-fixed border-collapse text-sm text-foreground"
+                  style={desktopTableStyle}
+                >
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-9 px-1.5"></TableHead>
+                      <TableHead className="w-[148px] px-1.5" aria-sort={getAriaSort("created_at")}>
+                        {renderSortableHeadContent("created_at", t("tableTime"))}
+                      </TableHead>
+                      <TableHead className="w-[148px] px-1.5">{t("tableKey")}</TableHead>
+                      <TableHead className="hidden lg:table-cell w-[96px] px-1.5">
+                        {t("tableUpstream")}
+                      </TableHead>
+                      <TableHead className="w-[60px] px-1.5">{t("tableMethod")}</TableHead>
+                      <TableHead className="hidden lg:table-cell w-[84px] px-1.5 text-left whitespace-nowrap">
+                        {t("tableInterfaceType")}
+                      </TableHead>
+                      <TableHead
+                        className="hidden lg:table-cell px-1.5 pl-1"
+                        style={desktopModelColumnStyle}
+                      >
+                        {t("tableModel")}
+                      </TableHead>
+                      <TableHead
+                        className="hidden md:table-cell w-[104px] px-1.5"
+                        aria-sort={getAriaSort("total_tokens")}
+                      >
+                        {renderSortableHeadContent("total_tokens", t("tableTokens"))}
+                      </TableHead>
+                      <TableHead
+                        className="w-[84px] px-1.5 text-right"
+                        aria-sort={getAriaSort("cost")}
+                      >
+                        {renderSortableHeadContent("cost", t("tableCost"))}
+                      </TableHead>
+                      <TableHead className="w-[68px] px-1.5">{t("tableStatus")}</TableHead>
+                      <TableHead
+                        className="w-[112px] px-1.5"
+                        aria-sort={getAriaSort("duration_ms")}
+                      >
+                        {renderSortableHeadContent("duration_ms", t("tableDuration"))}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map((log, index) => {
+                      const derived = getLogDerived(log);
+                      const {
+                        isExpanded,
+                        canExpand,
+                        isNew,
+                        isChanged,
+                        isError,
+                        reasoningEffort,
+                        upstreamDisplayName,
+                        requestTps,
+                      } = derived;
+                      const entryAnimationDelay = getLogEntryAnimationDelay(index);
+                      const rowEntryMotionClass =
+                        isNew || isChanged
+                          ? LOGS_ROW_EMPHASIS_CLASS
+                          : hasExpansionInteraction
+                            ? ""
+                            : LOGS_ROW_ENTER_CLASS;
+
+                      return (
+                        <Fragment key={log.id}>
+                          <TableRow
+                            className={cn(
+                              rowEntryMotionClass,
+                              LOGS_COLOR_TRANSITION_CLASS,
+                              isError && "border-l-2 border-l-status-error/45",
+                              (isNew || isChanged) && "bg-status-info-muted/25",
+                              canExpand &&
+                                (isError
+                                  ? "cursor-pointer hover:bg-status-error-muted/15"
+                                  : "cursor-pointer hover:bg-surface-300/50"),
+                              isExpanded && "bg-surface-300/55"
+                            )}
+                            style={{ animationDelay: entryAnimationDelay }}
+                            onClick={() => canExpand && toggleRow(log.id)}
+                          >
+                            <TableCell className="px-1.5 py-1.5">
+                              {canExpand && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleRow(log.id);
+                                  }}
+                                  className={cn(
+                                    "rounded-cf-sm p-1 hover:bg-surface-300",
+                                    LOGS_COLOR_TRANSITION_CLASS
+                                  )}
+                                  aria-expanded={isExpanded}
+                                  aria-controls={`log-detail-${log.id}`}
+                                  aria-label={
+                                    isExpanded ? t("collapseDetails") : t("expandDetails")
+                                  }
+                                >
+                                  <ExpandChevron
+                                    expanded={isExpanded}
+                                    className="text-muted-foreground"
+                                  />
+                                </button>
+                              )}
+                            </TableCell>
+                            <TableCell className="w-[148px] font-mono text-[10px] whitespace-nowrap px-1.5 py-1.5">
+                              {formatLogTimestamp(log.created_at)}
+                            </TableCell>
+                            <TableCell className="w-[148px] px-1.5 py-1.5 text-[10px] min-w-0">
+                              <RequestKeyIdentity
+                                keyName={log.api_key_name}
+                                keyPrefix={log.api_key_prefix}
+                                compact
+                                className="min-w-0 w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell w-[96px] px-1.5 py-1.5 min-w-0 overflow-hidden text-[10px]">
+                              <RoutingDecisionTimeline
+                                routingDecision={log.routing_decision}
+                                upstreamName={upstreamDisplayName}
+                                routingType={log.routing_type}
+                                groupName={log.group_name}
+                                failoverAttempts={log.failover_attempts}
+                                failoverHistory={log.failover_history}
+                                sessionId={log.session_id}
+                                affinityHit={log.affinity_hit}
+                                affinityMigrated={log.affinity_migrated}
+                                affinityBindingState={log.affinity_binding_state}
+                                compact={true}
+                              />
+                            </TableCell>
+                            <TableCell className="w-[60px] px-1.5 py-1">
+                              <div className="flex flex-col items-start gap-0.5">
+                                <code className="rounded-cf-sm border border-transparent bg-surface-400 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
+                                  {log.method || "-"}
+                                </code>
+                                <RequestModeBadge isStream={log.is_stream} compact />
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-1.5 py-1 pr-1 min-w-0">
+                              <InterfaceTypeCell
+                                method={log.method}
+                                path={log.path}
+                                matchedCapability={log.routing_decision?.matched_route_capability}
+                                variant="desktop"
+                              />
+                            </TableCell>
+                            <TableCell
+                              className="hidden font-mono text-[10px] lg:table-cell px-1.5 py-1 pl-1 min-w-0"
                               style={desktopModelColumnStyle}
                             >
-                              {t("tableModel")}
-                            </TableHead>
-                            <TableHead
-                              className="hidden md:table-cell w-[104px] px-1.5"
-                              aria-sort={getAriaSort("total_tokens")}
-                            >
-                              {renderSortableHeadContent("total_tokens", t("tableTokens"))}
-                            </TableHead>
-                            <TableHead
-                              className="w-[84px] px-1.5 text-right"
-                              aria-sort={getAriaSort("cost")}
-                            >
-                              {renderSortableHeadContent("cost", t("tableCost"))}
-                            </TableHead>
-                            <TableHead className="w-[68px] px-1.5">{t("tableStatus")}</TableHead>
-                            <TableHead
-                              className="w-[112px] px-1.5"
-                              aria-sort={getAriaSort("duration_ms")}
-                            >
-                              {renderSortableHeadContent("duration_ms", t("tableDuration"))}
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                      ) : null}
-                      <TableBody>
-                        {section.rows.map(({ log, index, derived }) => {
-                          const {
-                            isExpanded,
-                            canExpand,
-                            isNew,
-                            isChanged,
-                            isError,
-                            reasoningEffort,
-                            upstreamDisplayName,
-                            requestTps,
-                          } = derived;
-                          const entryAnimationDelay = getLogEntryAnimationDelay(index);
-                          const rowEntryMotionClass =
-                            isNew || isChanged
-                              ? LOGS_ROW_EMPHASIS_CLASS
-                              : hasExpansionInteraction
-                                ? ""
-                                : LOGS_ROW_ENTER_CLASS;
-
-                          return (
-                            <TableRow
-                              key={log.id}
-                              className={cn(
-                                rowEntryMotionClass,
-                                LOGS_COLOR_TRANSITION_CLASS,
-                                isError && "border-l-2 border-l-status-error/45",
-                                (isNew || isChanged) && "bg-status-info-muted/25",
-                                canExpand &&
-                                  (isError
-                                    ? "cursor-pointer hover:bg-status-error-muted/15"
-                                    : "cursor-pointer hover:bg-surface-300/50"),
-                                isExpanded && "bg-surface-300/55"
-                              )}
-                              style={{ animationDelay: entryAnimationDelay }}
-                              onClick={() => canExpand && toggleRow(log.id)}
-                            >
-                              <TableCell className="px-1.5 py-1.5">
-                                {canExpand && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleRow(log.id);
-                                    }}
-                                    className={cn(
-                                      "rounded-cf-sm p-1 hover:bg-surface-300",
-                                      LOGS_COLOR_TRANSITION_CLASS
-                                    )}
-                                    aria-label={
-                                      isExpanded ? t("collapseDetails") : t("expandDetails")
-                                    }
-                                  >
-                                    <ExpandChevron
-                                      expanded={isExpanded}
-                                      className="text-muted-foreground"
-                                    />
-                                  </button>
-                                )}
-                              </TableCell>
-                              <TableCell className="w-[148px] font-mono text-[10px] whitespace-nowrap px-1.5 py-1.5">
-                                {formatLogTimestamp(log.created_at)}
-                              </TableCell>
-                              <TableCell className="w-[148px] px-1.5 py-1.5 text-[10px] min-w-0">
-                                <RequestKeyIdentity
-                                  keyName={log.api_key_name}
-                                  keyPrefix={log.api_key_prefix}
-                                  compact
+                              {log.model ? (
+                                <ModelIdentity
+                                  label={log.model}
+                                  reasoningEffort={reasoningEffort}
+                                  requestedServiceTier={log.requested_service_tier}
+                                  effectiveServiceTier={log.effective_service_tier}
+                                  thinkingConfig={log.thinking_config}
+                                  compactBadges
                                   className="min-w-0 w-full"
                                 />
-                              </TableCell>
-                              <TableCell className="hidden lg:table-cell w-[96px] px-1.5 py-1.5 min-w-0 overflow-hidden text-[10px]">
-                                <RoutingDecisionTimeline
-                                  routingDecision={log.routing_decision}
-                                  upstreamName={upstreamDisplayName}
-                                  routingType={log.routing_type}
-                                  groupName={log.group_name}
-                                  failoverAttempts={log.failover_attempts}
-                                  failoverHistory={log.failover_history}
-                                  sessionId={log.session_id}
-                                  affinityHit={log.affinity_hit}
-                                  affinityMigrated={log.affinity_migrated}
-                                  affinityBindingState={log.affinity_binding_state}
-                                  compact={true}
-                                />
-                              </TableCell>
-                              <TableCell className="w-[60px] px-1.5 py-1">
-                                <div className="flex flex-col items-start gap-0.5">
-                                  <code className="rounded-cf-sm border border-transparent bg-surface-400 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
-                                    {log.method || "-"}
-                                  </code>
-                                  <RequestModeBadge isStream={log.is_stream} compact />
-                                </div>
-                              </TableCell>
-                              <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-1.5 py-1 pr-1 min-w-0">
-                                <InterfaceTypeCell
-                                  method={log.method}
-                                  path={log.path}
-                                  matchedCapability={log.routing_decision?.matched_route_capability}
-                                  variant="desktop"
-                                />
-                              </TableCell>
-                              <TableCell
-                                className="hidden font-mono text-[10px] lg:table-cell px-1.5 py-1 pl-1 min-w-0"
-                                style={desktopModelColumnStyle}
-                              >
-                                {log.model ? (
-                                  <ModelIdentity
-                                    label={log.model}
-                                    reasoningEffort={reasoningEffort}
-                                    requestedServiceTier={log.requested_service_tier}
-                                    effectiveServiceTier={log.effective_service_tier}
-                                    thinkingConfig={log.thinking_config}
-                                    compactBadges
-                                    className="min-w-0 w-full"
-                                  />
-                                ) : (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="hidden md:table-cell w-[104px] px-1.5 py-1 min-w-0 overflow-hidden text-[10px]">
-                                <TokenDisplay
-                                  promptTokens={log.prompt_tokens}
-                                  completionTokens={log.completion_tokens}
-                                  totalTokens={log.total_tokens}
-                                  cachedTokens={log.cached_tokens}
-                                  reasoningTokens={log.reasoning_tokens}
-                                  cacheCreationTokens={log.cache_creation_tokens}
-                                  cacheCreation5mTokens={log.cache_creation_5m_tokens}
-                                  cacheCreation1hTokens={log.cache_creation_1h_tokens}
-                                  cacheReadTokens={log.cache_read_tokens}
-                                />
-                              </TableCell>
-                              <TableCell className="w-[84px] px-1.5 py-1 text-right">
-                                <div className="flex flex-col items-end gap-0">
-                                  {shouldShowBillingCost(log) ? (
-                                    <span
-                                      className={cn(
-                                        "font-mono text-[11px] tabular-nums whitespace-nowrap",
-                                        getCostHeatClass(log)
-                                      )}
-                                    >
-                                      {formatBillingCost(log)}
-                                    </span>
-                                  ) : null}
-                                  {log.billing_status === "unbilled" && (
-                                    <p className="mt-1 text-[10px] text-status-warning">
-                                      {log.unbillable_reason
-                                        ? resolveBillingReasonLabel(log.unbillable_reason)
-                                        : t("billingStatusUnbilled")}
-                                    </p>
-                                  )}
-                                  {log.billing_status == null && (
-                                    <p className="mt-1 text-[10px] text-muted-foreground">
-                                      {t("billingStatusPending")}
-                                    </p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="w-[68px] px-1.5 py-1">
-                                <div className="flex flex-col items-start gap-1">
-                                  <Badge
-                                    variant={getStatusBadgeVariant(log.status_code)}
-                                    className={cn(
-                                      "flex min-h-5 min-w-5 items-center justify-center px-1.5 py-0.5 text-[10px] leading-none font-mono tabular-nums whitespace-nowrap",
-                                      isLogInProgress(log) &&
-                                        (isLive
-                                          ? statusTone("info", "faint")
-                                          : "text-muted-foreground")
-                                    )}
-                                    aria-label={
-                                      isLogInProgress(log)
-                                        ? t("displayStatusInProgress")
-                                        : undefined
-                                    }
-                                  >
-                                    {isLogInProgress(log) ? (
-                                      <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:animate-none" />
-                                    ) : (
-                                      log.status_code
-                                    )}
-                                  </Badge>
-                                  {log.failover_attempts > 0 && (
-                                    <Tooltip delayDuration={200}>
-                                      <TooltipTrigger asChild>
-                                        <Badge
-                                          variant="warning"
-                                          className="px-1.5 py-0 text-[10px] leading-4 whitespace-nowrap"
-                                          aria-label={t("rowFailoverTooltip", {
-                                            count: log.failover_attempts,
-                                          })}
-                                        >
-                                          {t("rowFailoverBadge", {
-                                            count: log.failover_attempts,
-                                          })}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="top">
-                                        {t("rowFailoverTooltip", {
-                                          count: log.failover_attempts,
-                                        })}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="w-[112px] px-1.5 py-1 font-mono text-[10px] leading-tight">
-                                <div className="flex flex-col gap-0">
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell w-[104px] px-1.5 py-1 min-w-0 overflow-hidden text-[10px]">
+                              <TokenDisplay
+                                promptTokens={log.prompt_tokens}
+                                completionTokens={log.completion_tokens}
+                                totalTokens={log.total_tokens}
+                                cachedTokens={log.cached_tokens}
+                                reasoningTokens={log.reasoning_tokens}
+                                cacheCreationTokens={log.cache_creation_tokens}
+                                cacheCreation5mTokens={log.cache_creation_5m_tokens}
+                                cacheCreation1hTokens={log.cache_creation_1h_tokens}
+                                cacheReadTokens={log.cache_read_tokens}
+                              />
+                            </TableCell>
+                            <TableCell className="w-[84px] px-1.5 py-1 text-right">
+                              <div className="flex flex-col items-end gap-0">
+                                {shouldShowBillingCost(log) ? (
                                   <span
                                     className={cn(
-                                      "tabular-nums whitespace-nowrap",
-                                      log.duration_ms != null &&
-                                        getDurationPerformanceClass(log.duration_ms)
+                                      "font-mono text-[11px] tabular-nums whitespace-nowrap",
+                                      getCostHeatClass(log)
                                     )}
                                   >
-                                    {formatDuration(log.duration_ms)}
+                                    {formatBillingCost(log)}
                                   </span>
-                                  {(log.ttft_ms != null || requestTps != null) && (
-                                    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0 text-[10px] text-muted-foreground">
-                                      {log.ttft_ms != null && (
-                                        <span className="whitespace-nowrap">
-                                          {t("perfTtft")}{" "}
-                                          <span
-                                            className={cn(
-                                              "tabular-nums",
-                                              getTtftPerformanceClass(log.ttft_ms)
-                                            )}
-                                          >
-                                            {formatTtft(log.ttft_ms)}
-                                          </span>
-                                        </span>
-                                      )}
-                                      {requestTps != null && (
-                                        <span className="whitespace-nowrap">
-                                          {t("perfTps")} {requestTps} tok/s
-                                        </span>
-                                      )}
-                                    </span>
+                                ) : null}
+                                {log.billing_status === "unbilled" && (
+                                  <p className="mt-1 text-[10px] text-status-warning">
+                                    {log.unbillable_reason
+                                      ? resolveBillingReasonLabel(log.unbillable_reason)
+                                      : t("billingStatusUnbilled")}
+                                  </p>
+                                )}
+                                {log.billing_status == null && (
+                                  <p className="mt-1 text-[10px] text-muted-foreground">
+                                    {t("billingStatusPending")}
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="w-[68px] px-1.5 py-1">
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge
+                                  variant={getStatusBadgeVariant(log.status_code)}
+                                  className={cn(
+                                    "flex min-h-5 min-w-5 items-center justify-center px-1.5 py-0.5 text-[10px] leading-none font-mono tabular-nums whitespace-nowrap",
+                                    isLogInProgress(log) &&
+                                      (isLive
+                                        ? statusTone("info", "faint")
+                                        : "text-muted-foreground")
                                   )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </table>
-                    {section.expanded ? (
-                      <div
-                        className={cn(
-                          "border-t border-b border-divider bg-surface-200/35 px-4 py-3",
-                          LOGS_DETAIL_ENTER_CLASS
-                        )}
-                      >
-                        {renderExpandedDetails({
-                          log: section.expanded.log,
-                          upstreamDisplayName: section.expanded.derived.upstreamDisplayName,
-                          failoverDurationMs: section.expanded.derived.failoverDurationMs,
-                          requestTps: section.expanded.derived.requestTps,
-                          isError: section.expanded.derived.isError,
-                          className: "",
-                        })}
-                      </div>
-                    ) : null}
-                  </Fragment>
-                ))}
+                                  aria-label={
+                                    isLogInProgress(log) ? t("displayStatusInProgress") : undefined
+                                  }
+                                >
+                                  {isLogInProgress(log) ? (
+                                    <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:animate-none" />
+                                  ) : (
+                                    log.status_code
+                                  )}
+                                </Badge>
+                                {log.failover_attempts > 0 && (
+                                  <Tooltip delayDuration={200}>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant="warning"
+                                        className="px-1.5 py-0 text-[10px] leading-4 whitespace-nowrap"
+                                        aria-label={t("rowFailoverTooltip", {
+                                          count: log.failover_attempts,
+                                        })}
+                                      >
+                                        {t("rowFailoverBadge", {
+                                          count: log.failover_attempts,
+                                        })}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      {t("rowFailoverTooltip", {
+                                        count: log.failover_attempts,
+                                      })}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="w-[112px] px-1.5 py-1 font-mono text-[10px] leading-tight">
+                              <div className="flex flex-col gap-0">
+                                <span
+                                  className={cn(
+                                    "tabular-nums whitespace-nowrap",
+                                    log.duration_ms != null &&
+                                      getDurationPerformanceClass(log.duration_ms)
+                                  )}
+                                >
+                                  {formatDuration(log.duration_ms)}
+                                </span>
+                                {(log.ttft_ms != null || requestTps != null) && (
+                                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0 text-[10px] text-muted-foreground">
+                                    {log.ttft_ms != null && (
+                                      <span className="whitespace-nowrap">
+                                        {t("perfTtft")}{" "}
+                                        <span
+                                          className={cn(
+                                            "tabular-nums",
+                                            getTtftPerformanceClass(log.ttft_ms)
+                                          )}
+                                        >
+                                          {formatTtft(log.ttft_ms)}
+                                        </span>
+                                      </span>
+                                    )}
+                                    {requestTps != null && (
+                                      <span className="whitespace-nowrap">
+                                        {t("perfTps")} {requestTps} tok/s
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          <TableRow
+                            aria-hidden={!isExpanded}
+                            className="border-0 hover:bg-transparent"
+                          >
+                            <TableCell colSpan={11} className="h-auto p-0">
+                              <Collapse
+                                open={isExpanded && canExpand}
+                                id={`log-detail-${log.id}`}
+                                style={{
+                                  width: desktopTableWidth ?? undefined,
+                                  maxWidth: "100%",
+                                  position: "sticky",
+                                  left: 0,
+                                }}
+                                className="border-b border-divider bg-surface-200/35 px-4 py-3"
+                              >
+                                {() =>
+                                  renderExpandedDetails({
+                                    log,
+                                    upstreamDisplayName,
+                                    failoverDurationMs: derived.failoverDurationMs,
+                                    requestTps,
+                                    isError,
+                                    className: "",
+                                  })
+                                }
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        </Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </table>
               </TooltipProvider>
             </div>
           )}

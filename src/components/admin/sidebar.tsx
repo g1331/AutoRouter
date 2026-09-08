@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useTheme } from "next-themes";
+import { useThemePreference } from "@/hooks/use-theme-preference";
 import {
   Check,
   ChevronLeft,
@@ -153,6 +153,22 @@ const portalNavigation: PortalNavigationItem[] = [
   { href: "/portal/password", icon: KeyRound, labelKey: "changePassword" },
 ];
 
+/** 与导航共用页面名称，避免移动顶栏维护另一套路由文案。 */
+export function CurrentLocation() {
+  const pathname = usePathname();
+  const t = useTranslations();
+  const portalItem = portalNavigation.find((item) => isPathActive(pathname, item.href, item.exact));
+  const adminItem = [...navigation, ...systemNavigation, ...mobileNavigation].find((item) =>
+    isPathActive(pathname, item.href)
+  );
+  const label = portalItem
+    ? t(`portal.nav.${portalItem.labelKey}`)
+    : adminItem
+      ? t(`nav.${adminItem.labelKey}`)
+      : "AutoRouter";
+  return <span className="truncate text-sm font-medium">{label}</span>;
+}
+
 function isPathActive(pathname: string, href: string, exact = false): boolean {
   if (exact) {
     return pathname === href;
@@ -162,7 +178,7 @@ function isPathActive(pathname: string, href: string, exact = false): boolean {
 
 function baseControlItemClass(collapsed: boolean): string {
   return cn(
-    "group flex w-full h-auto font-normal items-center justify-start rounded-cf-sm border border-transparent transition-all duration-cf-normal ease-cf-standard",
+    "group flex w-full h-auto font-normal items-center justify-start rounded-cf-sm border border-transparent transition-colors duration-cf-normal ease-cf-standard",
     "text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground",
     collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
   );
@@ -222,7 +238,7 @@ function LanguageItem({ collapsed }: { collapsed: boolean }) {
 }
 
 function ThemeItem({ collapsed }: { collapsed: boolean }) {
-  const { resolvedTheme, theme, setTheme } = useTheme();
+  const { resolvedTheme, theme, setTheme } = useThemePreference();
   const tTheme = useTranslations("theme");
   const selectedTheme = theme ?? "system";
 
@@ -403,7 +419,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
+                  "group relative flex items-center rounded-cf-sm border text-sm transition-colors duration-cf-normal ease-cf-standard",
                   collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                   active
                     ? "border-transparent bg-surface-400 text-foreground"
@@ -441,7 +457,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
+                      "group relative flex items-center rounded-cf-sm border text-sm transition-colors duration-cf-normal ease-cf-standard",
                       collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                       active
                         ? "border-transparent bg-surface-400 text-foreground"
@@ -506,7 +522,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-14 flex-col items-center justify-center gap-1 rounded-cf-sm border px-1.5 py-1.5",
-                  "text-[11px] transition-all duration-cf-fast ease-cf-standard",
+                  "text-[11px] transition-colors duration-cf-fast ease-cf-standard",
                   active
                     ? "border-transparent bg-surface-400 text-foreground"
                     : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"

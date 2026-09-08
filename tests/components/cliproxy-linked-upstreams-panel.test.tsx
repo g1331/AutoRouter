@@ -42,7 +42,7 @@ describe("CliproxyLinkedUpstreamsPanel", () => {
   it("加载失败展示错误", () => {
     useCliproxyLinkedUpstreamsMock.mockReturnValue({ data: undefined, isError: true });
     render(<CliproxyLinkedUpstreamsPanel instance={instance} />);
-    expect(screen.getByText("linkedUpstreamsLoadFailed")).toBeInTheDocument();
+    expect(screen.getByText("loadFailed")).toBeInTheDocument();
   });
 
   it("有数据时区分池上游与单账号上游", () => {

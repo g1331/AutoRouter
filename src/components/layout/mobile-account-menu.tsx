@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useTheme } from "next-themes";
+import { useThemePreference } from "@/hooks/use-theme-preference";
 import { Check, Globe, LogOut, Menu, Monitor, Moon, Sun } from "lucide-react";
 
 import { locales, localeNames, type Locale } from "@/i18n/config";
@@ -55,7 +55,7 @@ export function MobileAccountMenu() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useThemePreference();
   const selectedTheme = theme ?? "system";
 
   const { logout } = useAuth();

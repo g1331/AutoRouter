@@ -8,14 +8,14 @@ describe("PageHeader", () => {
   it("renders the title and description", () => {
     render(<PageHeader title="Upstreams" description="Manage upstream providers" />);
 
-    expect(screen.getByText("Upstreams")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Upstreams" })).toBeInTheDocument();
     expect(screen.getByText("Manage upstream providers")).toBeInTheDocument();
   });
 
   it("omits the description paragraph when none is provided", () => {
     render(<PageHeader title="Upstreams" />);
 
-    expect(screen.getByText("Upstreams")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Upstreams" })).toBeInTheDocument();
     expect(screen.queryByText("Manage upstream providers")).not.toBeInTheDocument();
   });
 

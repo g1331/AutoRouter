@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Users } from "lucide-react";
 
 import { AssignUserKeysDialog } from "@/components/admin/assign-user-keys-dialog";
 import { BulkUpstreamVisibilityDialog } from "@/components/admin/bulk-upstream-visibility-dialog";
@@ -13,6 +12,9 @@ import { EditUserDialog } from "@/components/admin/edit-user-dialog";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 import { Topbar } from "@/components/admin/topbar";
+import { PageHeader } from "@/components/admin/page-header";
+import { PageShell } from "@/components/admin/page-shell";
+import { QueryStatus } from "@/components/ui/query-status";
 import { UserKeysDialog } from "@/components/admin/user-keys-dialog";
 import { UsersTable } from "@/components/admin/users-table";
 import { UserUpstreamsDialog } from "@/components/admin/user-upstreams-dialog";
@@ -54,7 +56,7 @@ export default function UsersPage() {
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
   const router = useRouter();
-  const { data, isLoading, isFetching } = useUsers(page, pageSize, searchQuery);
+  const { data, isLoading, isFetching, error, refetch } = useUsers(page, pageSize, searchQuery);
   const { principal } = useAuth();
 
   // ADMIN_TOKEN 超级令牌独立于用户表、始终能管理系统，因此豁免“保留最后一个启用
@@ -89,19 +91,24 @@ export default function UsersPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-amber-500" aria-hidden="true" />
-            <span className="type-body-medium text-muted-foreground">{t("managementDesc")}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <BulkUpstreamVisibilityDialog />
-            <CreateUserDialog />
-          </div>
-        </div>
+      <PageShell maxWidth="7xl">
+        <PageHeader
+          title={t("pageTitle")}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <BulkUpstreamVisibilityDialog />
+              <CreateUserDialog />
+            </div>
+          }
+        />
+        <QueryStatus
+          error={error}
+          fetching={isFetching && !isLoading}
+          hasData={Boolean(data)}
+          onRetry={() => void refetch()}
+        />
 
-        {isLoading ? (
+        {error && !data ? null : isLoading ? (
           <div className="py-16 text-center type-body-medium text-muted-foreground" role="status">
             {tCommon("loading")}
           </div>
@@ -144,7 +151,7 @@ export default function UsersPage() {
             )}
           </div>
         )}
-      </div>
+      </PageShell>
 
       {activeUser && (
         <>

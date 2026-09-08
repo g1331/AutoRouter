@@ -249,16 +249,6 @@ export function BackgroundSyncTasksPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-amber-500">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            <span className="type-label-medium">{t("panelTitle")}</span>
-          </div>
-          <p className="text-sm text-muted-foreground">{t("panelDescription")}</p>
-        </div>
-      </div>
-
       <div className="hidden lg:block">
         <Table className="min-w-[1182px] table-fixed" containerClassName="rounded-cf-sm">
           <TableHeader>
@@ -294,10 +284,10 @@ export function BackgroundSyncTasksPanel() {
                 <TableCell className="py-4">
                   <TaskStatusBadge status={task.last_status} />
                 </TableCell>
-                <TableCell className="whitespace-nowrap py-4 tabular-nums">
+                <TableCell className="whitespace-normal py-4 tabular-nums">
                   {formatDate(task.last_finished_at)}
                 </TableCell>
-                <TableCell className="whitespace-nowrap py-4 tabular-nums">
+                <TableCell className="whitespace-normal py-4 tabular-nums">
                   {formatDate(task.next_run_at)}
                 </TableCell>
                 <TableCell className="py-4">

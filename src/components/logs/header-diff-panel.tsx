@@ -1,7 +1,8 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Collapse } from "@/components/ui/collapse";
 import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ function maskHeaderValue(value: string | null): string {
 
 export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps) {
   const t = useTranslations("logs");
+  const contentId = useId();
   const locale = useLocale();
   const [isExpanded, setIsExpanded] = useState(false);
   const [showValues, setShowValues] = useState(false);
@@ -76,6 +78,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
           onClick={() => setIsExpanded((prev) => !prev)}
           className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-transparent px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground bg-surface-400"
           aria-expanded={isExpanded}
+          aria-controls={contentId}
           aria-label={isExpanded ? collapseLabel : expandLabel}
         >
           {isExpanded ? (
@@ -102,7 +105,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
         )}
       </div>
 
-      {isExpanded && (
+      <Collapse open={isExpanded} id={contentId}>
         <div className="overflow-hidden rounded-cf-sm border border-transparent bg-surface-400">
           {headerDiff.dropped.map((item) => (
             <div
@@ -190,7 +193,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
               <div className="px-3 py-2 text-muted-foreground/60">{t("headerDiffNoChanges")}</div>
             )}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

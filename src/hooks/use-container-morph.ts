@@ -67,6 +67,8 @@ export function useContainerMorph() {
 
   // 记录当前临时挂了 view-transition-name 的源元素，确保任何出口都能清理，杜绝 name 泄漏。
   const taggedElementRef = React.useRef<HTMLElement | null>(null);
+  const transitionRef = React.useRef<ViewTransitionLike | null>(null);
+  const generationRef = React.useRef(0);
 
   const clearSourceName = React.useCallback(() => {
     const element = taggedElementRef.current;
@@ -92,8 +94,19 @@ export function useContainerMorph() {
     typeof document !== "undefined" &&
     typeof (document as DocumentWithViewTransition).startViewTransition === "function";
 
+  React.useEffect(() => {
+    if (prefersReducedMotion) {
+      transitionRef.current?.skipTransition();
+      clearSourceName();
+    }
+  }, [prefersReducedMotion, clearSourceName]);
+
   const startMorph = React.useCallback(
     (apply: () => void, options: StartMorphOptions) => {
+      const generation = ++generationRef.current;
+      transitionRef.current?.skipTransition();
+      transitionRef.current = null;
+      clearSourceName();
       const doc = typeof document !== "undefined" ? (document as DocumentWithViewTransition) : null;
 
       // 不支持 View Transitions 或用户偏好减少动态效果：直接同步应用，无动画。
@@ -112,7 +125,10 @@ export function useContainerMorph() {
         clearSourceName();
       }
 
-      const transition = doc.startViewTransition(() => {
+      let applied = false;
+      const update = () => {
+        if (generation !== generationRef.current) return;
+        applied = true;
         flushSync(apply);
         // flushSync 之后、新快照之前，把 name 调整到正确的一端：
         if (mode === "enter") {
@@ -122,17 +138,41 @@ export function useContainerMorph() {
           // 弹窗已卸载（name 随之消失）；把 name 交给源元素作为新快照端点。
           setSourceName(source, name);
         }
-      });
-
-      transition.finished.finally(() => {
+      };
+      try {
+        const transition = doc.startViewTransition(update);
+        transitionRef.current = transition;
+        // ready 在快速反向或节点消失时会拒绝；动画失败不等于业务失败。
+        void transition.ready.catch(() => undefined);
+        void transition.updateCallbackDone.catch((error) => {
+          // 回调中的业务错误仍交给浏览器报告，只有快照能力失败可以降级。
+          if (applied) reportError(error);
+        });
+        const finish = () => {
+          if (generation === generationRef.current) {
+            clearSourceName();
+            transitionRef.current = null;
+          }
+        };
+        void transition.finished.then(finish, finish);
+      } catch (error) {
         clearSourceName();
-      });
+        if (applied) throw error;
+        apply();
+      }
     },
     [clearSourceName, prefersReducedMotion, setSourceName]
   );
 
   // 组件卸载时兜底清理。
-  React.useEffect(() => clearSourceName, [clearSourceName]);
+  React.useEffect(
+    () => () => {
+      generationRef.current += 1;
+      transitionRef.current?.skipTransition();
+      clearSourceName();
+    },
+    [clearSourceName]
+  );
 
   return { startMorph, canMorph } as const;
 }

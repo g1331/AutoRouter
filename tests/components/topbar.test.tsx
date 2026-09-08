@@ -8,10 +8,10 @@ describe("Topbar", () => {
   });
 
   describe("Rendering", () => {
-    it("renders the title in uppercase", () => {
+    it("preserves the localized title", () => {
       render(<Topbar title="Dashboard" />);
 
-      expect(screen.getByText("DASHBOARD")).toBeInTheDocument();
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
     });
 
     it("renders header element", () => {
@@ -27,10 +27,10 @@ describe("Topbar", () => {
       expect(screen.queryByText("ONLINE")).not.toBeInTheDocument();
     });
 
-    it("renders terminal prompt indicator", () => {
+    it("omits decorative terminal labels", () => {
       render(<Topbar title="Test" />);
 
-      expect(screen.getByText(">>", { exact: false })).toBeInTheDocument();
+      expect(screen.queryByText(">>")).not.toBeInTheDocument();
     });
   });
 
@@ -38,20 +38,19 @@ describe("Topbar", () => {
     it("handles lowercase title", () => {
       render(<Topbar title="api keys" />);
 
-      expect(screen.getByText("API KEYS")).toBeInTheDocument();
+      expect(screen.getByText("api keys")).toBeInTheDocument();
     });
 
     it("handles mixed case title", () => {
       render(<Topbar title="UpStreams" />);
 
-      expect(screen.getByText("UPSTREAMS")).toBeInTheDocument();
+      expect(screen.getByText("UpStreams")).toBeInTheDocument();
     });
 
     it("handles empty title", () => {
       render(<Topbar title="" />);
 
-      const heading = screen.getByRole("heading", { level: 1 });
-      expect(heading).toHaveTextContent("");
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     });
   });
 });

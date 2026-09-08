@@ -32,16 +32,16 @@ const PopoverContent = React.forwardRef<
         // 让日期选择器等长内容（月份导航、底部按钮）始终可滚到
         "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto",
         // Cassette Futurism styling
-        "rounded-cf-sm border-2 border-amber-500 bg-surface-300",
+        "rounded-cf-sm border border-border bg-surface-300",
         "shadow-cf-glow-subtle",
-        "font-mono text-sm text-amber-500",
+        "text-sm text-foreground",
         // Animations
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "duration-cf-normal ease-cf-standard data-[state=closed]:duration-cf-fast data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
         "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-        "origin-[--radix-popover-content-transform-origin]",
+        "origin-[var(--radix-popover-content-transform-origin)]",
         // Focus
         "outline-none focus:outline-none",
         className

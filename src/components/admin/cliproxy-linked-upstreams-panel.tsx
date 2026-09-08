@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -25,7 +26,13 @@ interface CliproxyLinkedUpstreamsPanelProps {
  */
 export function CliproxyLinkedUpstreamsPanel({ instance }: CliproxyLinkedUpstreamsPanelProps) {
   const t = useTranslations("cliproxy");
-  const { data: upstreams, isLoading, isError } = useCliproxyLinkedUpstreams(instance.id);
+  const {
+    data: upstreams,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useCliproxyLinkedUpstreams(instance.id);
 
   return (
     <Card variant="outlined">
@@ -35,16 +42,18 @@ export function CliproxyLinkedUpstreamsPanel({ instance }: CliproxyLinkedUpstrea
           <p className="type-body-small text-muted-foreground">{instance.name}</p>
         </div>
 
+        <QueryStatus
+          error={isError}
+          fetching={isFetching && !isLoading}
+          hasData={upstreams !== undefined}
+          onRetry={() => void refetch()}
+        />
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
-        ) : isError ? (
-          <p className="py-8 text-center type-body-medium text-destructive">
-            {t("linkedUpstreamsLoadFailed")}
-          </p>
-        ) : !upstreams || upstreams.length === 0 ? (
+        ) : isError && !upstreams ? null : !upstreams || upstreams.length === 0 ? (
           <p className="py-8 text-center type-body-medium text-muted-foreground">
             {t("linkedUpstreamsEmpty")}
           </p>

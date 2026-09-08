@@ -11,8 +11,7 @@ const FRAME_CLASS: Record<NonNullable<TableProps["frame"]>, string> = {
   // 保留 amber 取值供个别需要强调的表格显式指定，但不再是默认值
   amber: "border border-amber-500/45",
   subtle: "border border-divider",
-  // 默认：不包边，靠 bg-card 的明度差 + 阴影从页面底色里浮起来
-  raised: "border-0 shadow-cf-glow-subtle",
+  raised: "border border-divider shadow-[var(--vr-shadow-xs)]",
   // 真正的「无框」：嵌在卡片里的子表用它，卡片内部不该再投一层阴影
   none: "border-0",
 };
@@ -22,8 +21,9 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
     warnIfForbiddenVisualStyle("Table", containerClassName);
     return (
       <div
+        tabIndex={0}
         className={cn(
-          "relative w-full overflow-x-auto overflow-y-hidden rounded-cf-md bg-card",
+          "relative w-full overflow-x-auto overflow-y-hidden rounded-cf-md bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           FRAME_CLASS[frame],
           containerClassName
         )}
@@ -98,7 +98,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-11 px-4 text-left align-middle",
+      "h-11 whitespace-nowrap px-4 text-left align-middle",
       "type-label-medium text-muted-foreground",
       "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className

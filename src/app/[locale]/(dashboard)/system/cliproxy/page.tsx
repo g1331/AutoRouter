@@ -4,8 +4,11 @@ import { useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
+import { PageShell } from "@/components/admin/page-shell";
+import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryStatus } from "@/components/ui/query-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CliproxyInstancesTable } from "@/components/admin/cliproxy-instances-table";
 import { CliproxyInstanceFormDialog } from "@/components/admin/cliproxy-instance-form-dialog";
@@ -21,7 +24,7 @@ import type { CliproxyInstance } from "@/types/cliproxy";
 
 export default function CliproxyPage() {
   const t = useTranslations("cliproxy");
-  const { data: instances, isLoading, isError } = useCliproxyInstances();
+  const { data: instances, isLoading, isError, isFetching, refetch } = useCliproxyInstances();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editInstance, setEditInstance] = useState<CliproxyInstance | null>(null);
@@ -42,7 +45,8 @@ export default function CliproxyPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-8 lg:py-7 xl:px-10">
+      <PageShell maxWidth="full">
+        <PageHeader title={t("pageTitle")} />
         <Card variant="outlined">
           <CardContent className="space-y-4 p-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -66,17 +70,19 @@ export default function CliproxyPage() {
               </Button>
             </div>
 
+            <QueryStatus
+              error={isError}
+              fetching={isFetching && !isLoading}
+              hasData={instances !== undefined}
+              onRetry={() => void refetch()}
+            />
             {isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : isError ? (
-              <p className="py-8 text-center type-body-medium text-destructive">
-                {t("loadFailed")}
-              </p>
-            ) : !instances || instances.length === 0 ? (
+            ) : isError && !instances ? null : !instances || instances.length === 0 ? (
               <p className="py-8 text-center type-body-medium text-muted-foreground">
                 {t("noInstances")}
               </p>
@@ -109,11 +115,11 @@ export default function CliproxyPage() {
         </Card>
 
         {selectedInstance ? (
-          <>
+          <div key={selectedInstance.id} className="content-enter space-y-6">
             <CliproxyAccountsPanel instance={selectedInstance} />
             <CliproxyLinkedUpstreamsPanel instance={selectedInstance} />
             <CliproxyInstanceLogsPanel instance={selectedInstance} />
-          </>
+          </div>
         ) : instances && instances.length > 0 ? (
           <Card variant="outlined">
             <CardContent className="p-6">
@@ -123,7 +129,7 @@ export default function CliproxyPage() {
             </CardContent>
           </Card>
         ) : null}
-      </div>
+      </PageShell>
 
       {createOpen && (
         <CliproxyInstanceFormDialog

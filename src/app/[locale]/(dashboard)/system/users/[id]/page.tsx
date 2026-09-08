@@ -6,6 +6,9 @@ import { useTranslations } from "next-intl";
 import { Activity, ArrowLeft, CircleDollarSign, Gauge, KeyRound, ScrollText } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
+import { PageHeader } from "@/components/admin/page-header";
+import { PageShell } from "@/components/admin/page-shell";
+import { QueryStatus } from "@/components/ui/query-status";
 import { PortalUsageChart } from "@/components/portal/portal-usage-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,10 +32,26 @@ export default function AdminUserUsagePage() {
   const tPortal = useTranslations("portal");
   const [range, setRange] = useState<PortalUsageRange>("7d");
 
-  const { data: user, isLoading: userLoading, error: userError } = useAdminUser(userId);
+  const {
+    data: user,
+    isLoading: userLoading,
+    error: userError,
+    refetch: refetchUser,
+  } = useAdminUser(userId);
   const userExists = !!user;
-  const { data: overview, isLoading: overviewLoading } = useAdminUserOverview(userId, userExists);
-  const { data: usage, isLoading: usageLoading } = useAdminUserUsage(userId, range, userExists);
+  const {
+    data: overview,
+    isLoading: overviewLoading,
+    error: overviewError,
+    refetch: refetchOverview,
+  } = useAdminUserOverview(userId, userExists);
+  const {
+    data: usage,
+    isLoading: usageLoading,
+    error: usageError,
+    isFetching: usageFetching,
+    refetch: refetchUsage,
+  } = useAdminUserUsage(userId, range, userExists);
 
   const notFound = userError instanceof ApiError && userError.status === 404;
 
@@ -40,13 +59,17 @@ export default function AdminUserUsagePage() {
     <>
       <Topbar title={t("usageDetailTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <PageShell maxWidth="7xl">
         <Button variant="ghost" size="sm" className="w-fit gap-2 text-muted-foreground" asChild>
           <Link href="/system/users">
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             {t("backToUsers")}
           </Link>
         </Button>
+        <PageHeader
+          title={user?.username ?? t("usageDetailTitle")}
+          description={user?.display_name ?? undefined}
+        />
 
         {notFound ? (
           <Card variant="outlined" className="bg-card">
@@ -55,6 +78,8 @@ export default function AdminUserUsagePage() {
               <p className="type-body-medium text-muted-foreground">{t("userNotFoundHint")}</p>
             </CardContent>
           </Card>
+        ) : userError && !user ? (
+          <QueryStatus error={userError} onRetry={() => void refetchUser()} />
         ) : (
           <>
             <Card variant="outlined" className="bg-card">
@@ -64,7 +89,6 @@ export default function AdminUserUsagePage() {
                 ) : (
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="type-title-medium text-foreground">{user?.username}</span>
                       <Badge variant={user?.role === "admin" ? "info" : "neutral"}>
                         {user?.role === "admin" ? t("roleAdmin") : t("roleMember")}
                       </Badge>
@@ -72,7 +96,6 @@ export default function AdminUserUsagePage() {
                         {user?.is_active ? t("active") : t("inactive")}
                       </Badge>
                     </div>
-                    <p className="type-body-small text-muted-foreground">{user?.display_name}</p>
                   </div>
                 )}
                 <Button variant="outline" size="sm" className="gap-2" asChild>
@@ -84,52 +107,67 @@ export default function AdminUserUsagePage() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                icon={Activity}
-                label={tPortal("overview.todayRequests")}
-                value={formatNumber(overview?.today_requests ?? 0)}
-                hint={tPortal("overview.todayRequestsHint")}
-                isLoading={overviewLoading}
-              />
-              <StatCard
-                icon={Gauge}
-                label={tPortal("overview.monthRequests")}
-                value={formatNumber(overview?.month_requests ?? 0)}
-                hint={tPortal("overview.totalRequestsHint", {
-                  total: formatNumber(overview?.total_requests ?? 0),
-                })}
-                isLoading={overviewLoading}
-              />
-              <StatCard
-                icon={CircleDollarSign}
-                label={tPortal("overview.monthCost")}
-                value={formatCost(overview?.month_cost_usd ?? 0)}
-                hint={tPortal("overview.totalCostHint", {
-                  total: formatCost(overview?.total_cost_usd ?? 0),
-                })}
-                isLoading={overviewLoading}
-              />
-              <StatCard
-                icon={KeyRound}
-                label={tPortal("overview.activeKeys")}
-                value={formatNumber(overview?.active_key_count ?? 0)}
-                hint={tPortal("overview.totalKeysHint", {
-                  total: formatNumber(overview?.total_key_count ?? 0),
-                })}
-                isLoading={overviewLoading}
-              />
-            </div>
-
-            <PortalUsageChart
-              data={usage}
-              isLoading={usageLoading}
-              range={range}
-              onRangeChange={setRange}
+            <QueryStatus
+              error={overviewError}
+              hasData={Boolean(overview)}
+              onRetry={() => void refetchOverview()}
             />
+            {!(overviewError && !overview) && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  icon={Activity}
+                  label={tPortal("overview.todayRequests")}
+                  value={formatNumber(overview?.today_requests ?? 0)}
+                  hint={tPortal("overview.todayRequestsHint")}
+                  isLoading={overviewLoading}
+                />
+                <StatCard
+                  icon={Gauge}
+                  label={tPortal("overview.monthRequests")}
+                  value={formatNumber(overview?.month_requests ?? 0)}
+                  hint={tPortal("overview.totalRequestsHint", {
+                    total: formatNumber(overview?.total_requests ?? 0),
+                  })}
+                  isLoading={overviewLoading}
+                />
+                <StatCard
+                  icon={CircleDollarSign}
+                  label={tPortal("overview.monthCost")}
+                  value={formatCost(overview?.month_cost_usd ?? 0)}
+                  hint={tPortal("overview.totalCostHint", {
+                    total: formatCost(overview?.total_cost_usd ?? 0),
+                  })}
+                  isLoading={overviewLoading}
+                />
+                <StatCard
+                  icon={KeyRound}
+                  label={tPortal("overview.activeKeys")}
+                  value={formatNumber(overview?.active_key_count ?? 0)}
+                  hint={tPortal("overview.totalKeysHint", {
+                    total: formatNumber(overview?.total_key_count ?? 0),
+                  })}
+                  isLoading={overviewLoading}
+                />
+              </div>
+            )}
+
+            <QueryStatus
+              error={usageError}
+              fetching={usageFetching && !usageLoading}
+              hasData={Boolean(usage)}
+              onRetry={() => void refetchUsage()}
+            />
+            {!(usageError && !usage) && (
+              <PortalUsageChart
+                data={usage}
+                isLoading={usageLoading}
+                range={range}
+                onRangeChange={setRange}
+              />
+            )}
           </>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

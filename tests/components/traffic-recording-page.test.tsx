@@ -211,7 +211,9 @@ describe("TrafficRecordingPage", () => {
 
     render(<TrafficRecordingPage />);
 
-    expect(screen.getByText("trafficRecording.pageTitle")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "trafficRecording.pageTitle" })
+    ).toBeInTheDocument();
     expect(screen.getByText("trafficRecording.description")).toBeInTheDocument();
     expect(screen.getByLabelText("trafficRecording.modelSearchPlaceholder")).toBeInTheDocument();
     expect(screen.getByLabelText("trafficRecording.apiKeyFilterPlaceholder")).toBeInTheDocument();
@@ -250,7 +252,7 @@ describe("TrafficRecordingPage", () => {
     fireEvent.click(
       screen.getAllByRole("button", { name: "trafficRecording.deleteConfirmAction" })[0]
     );
-    expect(deleteMutate).toHaveBeenCalledWith("recording-1");
+    expect(deleteMutate).toHaveBeenCalledWith("recording-1", { onSuccess: expect.any(Function) });
   });
 
   it("renders 'open source log' link only when request_log_id is present", () => {
