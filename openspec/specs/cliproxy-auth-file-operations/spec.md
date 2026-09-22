@@ -9,8 +9,8 @@ TBD - created by archiving change enhance-cliproxy-management. Update Purpose af
 
 #### Scenario: 上传认证文件
 
-- **WHEN** 调用上传认证文件方法，传入目标实例和 JSON 内容
-- **THEN** 客户端向 CLIProxyAPI 发送 `POST /v0/management/auth-files`，请求体为 JSON 内容
+- **WHEN** 调用上传认证文件方法，传入目标实例、合法文件名和 JSON 内容
+- **THEN** 客户端向 CLIProxyAPI 发送 `POST /v0/management/auth-files?name=<URL 编码的文件名>`，请求体为原始 JSON 内容
 
 #### Scenario: 下载认证文件
 
@@ -48,7 +48,7 @@ TBD - created by archiving change enhance-cliproxy-management. Update Purpose af
 #### Scenario: 上传认证文件
 
 - **WHEN** 管理员向 `POST /api/admin/cliproxy/instances/:id/auth-files` 提交 JSON 内容
-- **THEN** 系统将内容透传至 CLIProxyAPI 上传端点，成功后触发该实例的账号同步并返回同步结果
+- **THEN** 系统读取可选的 `name` 查询参数；未提供时生成唯一 `.json` 文件名，随后将文件名和原始内容传至 CLIProxyAPI 上传端点，成功后触发该实例的账号同步并返回同步结果
 
 #### Scenario: 下载认证文件
 
@@ -59,6 +59,11 @@ TBD - created by archiving change enhance-cliproxy-management. Update Purpose af
 
 - **WHEN** 管理员请求 `DELETE /api/admin/cliproxy/instances/:id/auth-files/:name`
 - **THEN** 系统调用删除服务方法，成功后返回已删除的文件名
+
+#### Scenario: 非法上传文件名
+
+- **WHEN** 上传请求显式提供空白文件名、路径分隔符、控制字符、冒号或非 `.json` 扩展名
+- **THEN** 系统 MUST 返回 400，且不调用上游
 
 #### Scenario: 操作不存在的实例
 
@@ -77,7 +82,7 @@ TBD - created by archiving change enhance-cliproxy-management. Update Purpose af
 #### Scenario: 上传认证文件
 
 - **WHEN** 管理员在上传弹窗中选择 JSON 文件或粘贴 JSON 文本并提交
-- **THEN** 系统调用上传 API，成功后刷新账号列表并提示成功
+- **THEN** 系统调用上传 API；选择文件时 SHALL 传递原文件名，粘贴时不复用先前选中文件的文件名，由服务端生成唯一文件名；成功后刷新账号列表并提示成功
 
 #### Scenario: 上传无效 JSON
 
@@ -98,4 +103,3 @@ TBD - created by archiving change enhance-cliproxy-management. Update Purpose af
 
 - **WHEN** 管理员在确认弹窗中取消
 - **THEN** 不执行删除操作
-
