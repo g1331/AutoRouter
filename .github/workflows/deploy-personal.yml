@@ -127,7 +127,8 @@ jobs:
             fi
 
             docker pull "${IMAGE}"
-            docker compose up -d --remove-orphans
+            # 可选 CLIProxyAPI sidecar 不在主文件中，升级主应用时必须保留。
+            docker compose up -d
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.2.5
