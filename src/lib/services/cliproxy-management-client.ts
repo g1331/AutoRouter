@@ -293,13 +293,14 @@ export async function deleteAuthFile(
  * 上传（创建）一个 auth-file。
  *
  * 请求体为认证文件的完整 JSON 对象，由调用方构造；
- * 上游端点为 `POST /v0/management/auth-files`。
+ * JSON 上传必须通过 `name` 查询参数指定文件名。
  */
 export async function uploadAuthFile(
   target: CliproxyManagementTarget,
-  content: Record<string, unknown>
+  content: Record<string, unknown>,
+  authFileName: string
 ): Promise<void> {
-  await requestManagementApi(target, "/auth-files", {
+  await requestManagementApi(target, `/auth-files?name=${encodeURIComponent(authFileName)}`, {
     method: "POST",
     body: content,
   });

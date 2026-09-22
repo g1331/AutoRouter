@@ -114,10 +114,72 @@ describe("Admin CLIProxyAPI auth-files API", () => {
 
     expect(res.status).toBe(201);
     expect(body.data).toMatchObject({ added: 1, total: 1 });
-    expect(uploadCliproxyAuthFileMock).toHaveBeenCalledWith("instance-1", {
-      token: "abc",
-      provider: "codex",
-    });
+    expect(uploadCliproxyAuthFileMock).toHaveBeenCalledWith(
+      "instance-1",
+      { token: "abc", provider: "codex" },
+      expect.stringMatching(/^auth-[0-9a-f-]{36}\.json$/)
+    );
+  });
+
+  it("上传保留已编码的文件名和原始内容", async () => {
+    const { POST } = await import("@/app/api/admin/cliproxy/instances/[id]/auth-files/route");
+    uploadCliproxyAuthFileMock.mockResolvedValueOnce({ added: 1, total: 1 });
+    const name = "codex 测试&1.JSON";
+    const content = { type: "codex", name: "body-name-is-not-the-filename" };
+    const res = await POST(
+      jsonRequest(
+        `http://localhost/api/admin/cliproxy/instances/instance-1/auth-files?name=${encodeURIComponent(name)}`,
+        "POST",
+        content
+      ),
+      ctx({ id: "instance-1" })
+    );
+    expect(res.status).toBe(201);
+    expect(uploadCliproxyAuthFileMock).toHaveBeenCalledWith("instance-1", content, name);
+  });
+
+  it("无文件名的连续上传生成不同名称，避免覆盖账号", async () => {
+    const { POST } = await import("@/app/api/admin/cliproxy/instances/[id]/auth-files/route");
+    uploadCliproxyAuthFileMock.mockResolvedValue({ added: 1, total: 1 });
+    for (let i = 0; i < 2; i++) {
+      const res = await POST(
+        jsonRequest("http://localhost/api/admin/cliproxy/instances/instance-1/auth-files", "POST", {
+          type: "codex",
+        }),
+        ctx({ id: "instance-1" })
+      );
+      expect(res.status).toBe(201);
+    }
+    const names = uploadCliproxyAuthFileMock.mock.calls.map((call) => call[2]);
+    expect(names[0]).not.toBe(names[1]);
+    for (const name of names) expect(name).toMatch(/^auth-[0-9a-f-]{36}\.json$/);
+  });
+
+  it.each([
+    "",
+    " ",
+    "../auth.json",
+    "folder/auth.json",
+    "folder\\auth.json",
+    "C:auth.json",
+    "auth.txt",
+    ".json",
+    " auth.json",
+    "auth.json ",
+    "auth\u0000.json",
+    "auth\n.json",
+  ])("拒绝非法文件名 %j 且不调用上游", async (name) => {
+    const { POST } = await import("@/app/api/admin/cliproxy/instances/[id]/auth-files/route");
+    const res = await POST(
+      jsonRequest(
+        `http://localhost/api/admin/cliproxy/instances/instance-1/auth-files?name=${encodeURIComponent(name)}`,
+        "POST",
+        { type: "codex" }
+      ),
+      ctx({ id: "instance-1" })
+    );
+    expect(res.status).toBe(400);
+    expect(uploadCliproxyAuthFileMock).not.toHaveBeenCalled();
   });
 
   it("上传时实例不存在返回 404", async () => {

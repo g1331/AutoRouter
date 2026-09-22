@@ -294,10 +294,11 @@ export async function deleteCliproxyAuthAccount(
  */
 export async function uploadCliproxyAuthFile(
   instanceId: string,
-  content: Record<string, unknown>
+  content: Record<string, unknown>,
+  authFileName: string
 ): Promise<CliproxyAuthAccountSyncResult> {
   const target = await resolveManagementTarget(instanceId);
-  await uploadAuthFile(target, content);
+  await uploadAuthFile(target, content, authFileName);
   log.info({ instanceId }, "uploaded CLIProxyAPI auth file");
   return syncCliproxyAuthAccounts(instanceId);
 }

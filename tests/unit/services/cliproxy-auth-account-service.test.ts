@@ -284,11 +284,12 @@ describe("cliproxy-auth-account-service", () => {
     const valuesMock = vi.fn().mockResolvedValueOnce(undefined);
     dbInsertMock.mockReturnValueOnce({ values: valuesMock });
 
-    const result = await uploadCliproxyAuthFile("instance-1", { token: "abc" });
+    const result = await uploadCliproxyAuthFile("instance-1", { token: "abc" }, "codex a.json");
 
     expect(uploadAuthFileMock).toHaveBeenCalledWith(
       { managementUrl: "http://cliproxyapi:8317", managementKey: "mgmt-key" },
-      { token: "abc" }
+      { token: "abc" },
+      "codex a.json"
     );
     expect(result).toMatchObject({ added: 1, total: 1 });
   });

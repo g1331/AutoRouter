@@ -411,6 +411,20 @@ describe("use-cliproxy 认证文件 hooks", () => {
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
   });
 
+  it("useUploadCliproxyAuthFile 编码文件名且不改写认证内容", async () => {
+    mockPost.mockResolvedValueOnce({ data: { added: 1, updated: 0, removed: 0, total: 1 } });
+    const { useUploadCliproxyAuthFile } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useUploadCliproxyAuthFile(), { wrapper });
+    const content = { type: "codex", refresh_token: "fixture" };
+    const name = "codex 测试&1.json";
+    await result.current.mutateAsync({ instanceId: "instance-1", content, authFileName: name });
+    expect(mockPost).toHaveBeenCalledWith(
+      `/admin/cliproxy/instances/instance-1/auth-files?name=${encodeURIComponent(name)}`,
+      content
+    );
+  });
+
   it("useDeleteCliproxyAuthFile 以 DELETE 调用并编码文件名", async () => {
     mockDelete.mockResolvedValueOnce({ data: { name: "codex a.json" } });
     const { useDeleteCliproxyAuthFile } = await import("@/hooks/use-cliproxy");

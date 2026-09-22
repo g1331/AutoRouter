@@ -262,17 +262,19 @@ describe("cliproxy-management-client", () => {
     const fetchMock = stubFetchOnce(new Response("", { status: 200 }));
     const content = { token: "abc123", provider: "codex" };
 
-    await uploadAuthFile(TARGET, content);
+    await uploadAuthFile(TARGET, content, "codex 测试&1.json");
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual(content);
-    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/auth-files");
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `http://cliproxyapi:8317/v0/management/auth-files?name=${encodeURIComponent("codex 测试&1.json")}`
+    );
   });
 
   it("uploadAuthFile 上游返回 4xx 时向上抛出服务异常", async () => {
     stubFetchOnce(new Response("conflict", { status: 409 }));
-    await expect(uploadAuthFile(TARGET, { token: "x" })).rejects.toMatchObject({
+    await expect(uploadAuthFile(TARGET, { token: "x" }, "codex.json")).rejects.toMatchObject({
       kind: "service_error",
     });
   });

@@ -80,6 +80,7 @@ export function CliproxyAuthFileUploadDialog({
       await uploadMutation.mutateAsync({
         instanceId,
         content: parsed as Record<string, unknown>,
+        authFileName: mode === "file" ? (pickedFileName ?? undefined) : undefined,
       });
       handleClose();
     } catch {

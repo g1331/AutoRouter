@@ -1,8 +1,5 @@
-# cliproxy-auth-file-operations Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change enhance-cliproxy-management. Update Purpose after archive.
-## Requirements
 ### Requirement: 管理 API 客户端认证文件操作
 
 系统 SHALL 在 CLIProxyAPI 管理 API 客户端中新增三个方法：上传认证文件、下载认证文件、删除认证文件。三个方法 MUST 复用现有的鉴权、超时和错误处理机制。
@@ -21,25 +18,6 @@ TBD - created by archiving change enhance-cliproxy-management. Update Purpose af
 
 - **WHEN** 调用删除认证文件方法，传入目标实例和账号文件名
 - **THEN** 客户端向 CLIProxyAPI 发送 `DELETE /v0/management/auth-files`，请求体包含 `{ name: <文件名> }`
-
-### Requirement: 认证文件删除服务
-
-系统 SHALL 提供认证文件删除服务方法，先调用 CLIProxyAPI 删除上游文件，成功后删除本地 `cliproxy_auth_accounts` 缓存表中对应的记录。CLIProxyAPI 侧删除失败时 MUST 整体失败，MUST NOT 触及本地缓存。
-
-#### Scenario: 删除成功并清理缓存
-
-- **WHEN** 管理员请求删除某实例下的某个认证文件
-- **THEN** 系统先调用 CLIProxyAPI 删除该文件，成功后从本地缓存表中移除对应记录
-
-#### Scenario: CLIProxyAPI 删除失败
-
-- **WHEN** CLIProxyAPI 删除认证文件请求返回错误
-- **THEN** 系统返回错误，本地缓存保持不变
-
-#### Scenario: 本地无缓存记录
-
-- **WHEN** CLIProxyAPI 删除成功，但本地缓存表中无对应记录
-- **THEN** 系统正常返回成功，不报错
 
 ### Requirement: 认证文件管理 Admin API
 

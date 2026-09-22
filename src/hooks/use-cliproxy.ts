@@ -462,12 +462,15 @@ export function useUploadCliproxyAuthFile() {
     mutationFn: async ({
       instanceId,
       content,
+      authFileName,
     }: {
       instanceId: string;
       content: Record<string, unknown>;
+      authFileName?: string;
     }) => {
+      const query = authFileName === undefined ? "" : `?name=${encodeURIComponent(authFileName)}`;
       const response = await apiClient.post<{ data: CliproxyAuthAccountSyncResult }>(
-        `/admin/cliproxy/instances/${instanceId}/auth-files`,
+        `/admin/cliproxy/instances/${instanceId}/auth-files${query}`,
         content
       );
       return response.data;
