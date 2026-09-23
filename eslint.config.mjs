@@ -1,7 +1,6 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
-import tseslint from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import jsdoc from "eslint-plugin-jsdoc";
 import tsdoc from "eslint-plugin-tsdoc";
@@ -12,9 +11,6 @@ export default defineConfig([
   {
     files: ["src/**/*.{ts,tsx,js,jsx}"],
     name: "custom-rules",
-    plugins: {
-      "@typescript-eslint": tseslint,
-    },
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -81,9 +77,6 @@ export default defineConfig([
   {
     files: ["tests/**/*.{ts,tsx}"],
     name: "test-rules",
-    plugins: {
-      "@typescript-eslint": tseslint,
-    },
     languageOptions: {
       parser: tsParser,
       parserOptions: {
