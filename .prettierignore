@@ -8,6 +8,9 @@ pnpm-lock.yaml
 drizzle
 .claude
 .codex
+.agents/skills/openspec-*/
+.omp/skills/openspec-*/
+.omp/commands/opsx-*.md
 openspec
 docs/.vitepress/dist
 docs/.vitepress/cache

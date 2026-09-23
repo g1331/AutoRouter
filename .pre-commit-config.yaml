@@ -14,10 +14,10 @@ repos:
       - id: check-toml
       - id: check-json
       - id: end-of-file-fixer
-        exclude: (\.claude|\.codex|\.gemini|openspec)/
+        exclude: (^\.agents/skills/openspec-[^/]+/|^\.omp/(skills/openspec-[^/]+/|commands/opsx-[^/]+\.md$)|(\.claude|\.codex|\.gemini|openspec)/)
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: (\.claude|\.codex|\.gemini|openspec)/
+        exclude: (^\.agents/skills/openspec-[^/]+/|^\.omp/(skills/openspec-[^/]+/|commands/opsx-[^/]+\.md$)|(\.claude|\.codex|\.gemini|openspec)/)
 
   # ============================================================
   # TypeScript / Next.js
@@ -29,7 +29,7 @@ repos:
         entry: pnpm exec prettier --check
         language: system
         files: \.(js|jsx|ts|tsx|css|json|md|yml|yaml)$
-        exclude: (node_modules|\.next|drizzle|\.claude|\.codex|\.gemini|openspec)/
+        exclude: (^\.agents/skills/openspec-[^/]+/|^\.omp/(skills/openspec-[^/]+/|commands/opsx-[^/]+\.md$)|(node_modules|\.next|drizzle|\.claude|\.codex|\.gemini|openspec)/)
 
       - id: eslint
         name: eslint
