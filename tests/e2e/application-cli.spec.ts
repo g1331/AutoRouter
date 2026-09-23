@@ -112,3 +112,48 @@ test("account usage failure keeps account management and secondary views availab
   await page.getByRole("tab", { name: "Instance Logs" }).click();
   await expect(page.getByText("2026-06-10 08:00:00 INFO Local fixture ready")).toBeVisible();
 });
+
+test("multiple instances keep account names readable at 1024px", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 844 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  const date = "2026-06-10T16:00:00.000Z";
+  await page.route("**/api/admin/cliproxy/instances", (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          ["instance-audit", "Local CLIProxyAPI", "https://proxy.example.com"],
+          ["instance-b", "Team Proxy", "https://team.example.com"],
+          ["instance-c", "Backup Proxy", "https://backup.example.com"],
+        ].map(([id, name, base_url]) => ({
+          id,
+          name,
+          base_url,
+          management_url: base_url,
+          mode: "external",
+          has_client_api_key: true,
+          has_management_key: true,
+          enabled: true,
+          description: null,
+          created_at: date,
+          updated_at: date,
+        })),
+      },
+    })
+  );
+
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByRole("button", { name: "Team Proxy" })).toBeVisible();
+  const accountName = page
+    .getByRole("row")
+    .filter({ hasText: "audit@example.com" })
+    .getByText("audit.json", { exact: true });
+  await expect(accountName).toBeVisible();
+  const lineCount = await accountName.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects().length;
+  });
+  expect(lineCount).toBe(1);
+  expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(1024);
+});

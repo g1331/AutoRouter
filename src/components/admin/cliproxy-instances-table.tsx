@@ -113,7 +113,12 @@ export function CliproxyInstancesTable({
                       }
                       aria-label={instance.enabled ? t("statusEnabled") : t("statusDisabled")}
                     />
-                    <span className="type-body-small text-muted-foreground">
+                    <span
+                      className={cn(
+                        "type-body-small text-muted-foreground",
+                        instances.length > 1 && "xl:hidden"
+                      )}
+                    >
                       {instance.enabled ? t("statusEnabled") : t("statusDisabled")}
                     </span>
                   </div>

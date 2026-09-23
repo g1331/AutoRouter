@@ -42,6 +42,8 @@ export default function CliproxyPage() {
   const morphSourceRef = useRef<HTMLElement | null>(null);
   const selectedInstance =
     instances?.find((instance) => instance.id === selectedInstanceId) ?? instances?.[0] ?? null;
+  const singleInstance = instances?.length === 1;
+  const narrowWorkspace = (instances?.length ?? 0) <= 1;
 
   const selectInstance = (instance: CliproxyInstance) => {
     setSelectedInstanceId(instance.id);
@@ -58,16 +60,34 @@ export default function CliproxyPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <PageShell maxWidth="full" className="space-y-5">
+      <PageShell maxWidth={narrowWorkspace ? "4xl" : "7xl"} className="space-y-5">
         <PageHeader title={t("pageTitle")} description={t("pageDescription")} />
 
-        <div className="grid min-w-0 overflow-hidden rounded-cf-md border border-divider bg-card shadow-[var(--vr-shadow-xs)] lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <div
+          className={cn(
+            "grid min-w-0 gap-4 xl:items-start",
+            singleInstance ? "xl:grid-cols-1" : "xl:grid-cols-[14rem_minmax(0,1fr)]"
+          )}
+        >
           <aside
-            className="min-w-0 border-b border-divider lg:border-b-0 lg:border-r"
+            className={cn(
+              "min-w-0 overflow-hidden rounded-cf-md border border-divider bg-card shadow-[var(--vr-shadow-xs)]",
+              singleInstance && "xl:flex xl:flex-row-reverse xl:items-center xl:justify-between"
+            )}
             aria-label={t("instancesTitle")}
           >
-            <div className="space-y-3 border-b border-divider px-4 py-4">
-              <div className="flex items-center justify-between gap-2">
+            <div
+              className={cn(
+                "space-y-3 border-b border-divider px-4 py-4",
+                singleInstance && "xl:border-b-0 xl:py-3"
+              )}
+            >
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2",
+                  singleInstance && "xl:sr-only"
+                )}
+              >
                 <h2 className="type-title-medium text-foreground">{t("instancesTitle")}</h2>
                 <span className="type-body-small tabular-nums text-muted-foreground">
                   {instances?.length ?? 0}
@@ -75,7 +95,7 @@ export default function CliproxyPage() {
               </div>
               <Button
                 variant="outline"
-                className="w-full justify-start"
+                className={cn("w-full justify-start", singleInstance && "xl:w-auto")}
                 onClick={(event) => {
                   const source = event.currentTarget;
                   morphSourceRef.current = source;
@@ -91,50 +111,57 @@ export default function CliproxyPage() {
               </Button>
             </div>
 
-            <QueryStatus
-              error={isError}
-              fetching={isFetching && !isLoading}
-              hasData={instances !== undefined}
-              onRetry={() => void refetch()}
-            />
-            {isLoading ? (
-              <div className="space-y-2 p-3">
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
-              </div>
-            ) : isError && !instances ? null : !instances || instances.length === 0 ? (
-              <p className="px-4 py-8 type-body-small text-muted-foreground">{t("noInstances")}</p>
-            ) : (
-              <CliproxyInstancesTable
-                instances={instances}
-                selectedInstanceId={selectedInstance?.id ?? null}
-                onSelect={selectInstance}
-                onEdit={(instance, source) => {
-                  morphSourceRef.current = source;
-                  startMorph(() => setEditInstance(instance), {
-                    source,
-                    name: "morph-cliproxy-instance",
-                    mode: "enter",
-                  });
-                }}
-                onTest={setTestInstance}
-                onCreatePoolUpstream={setPoolUpstreamInstance}
-                onDelete={(instance, source) => {
-                  morphSourceRef.current = source;
-                  startMorph(() => setDeleteInstance(instance), {
-                    source,
-                    name: "morph-cliproxy-instance",
-                    mode: "enter",
-                  });
-                }}
+            <div className={cn("min-w-0", singleInstance && "xl:w-[34rem]")}>
+              <QueryStatus
+                error={isError}
+                fetching={isFetching && !isLoading}
+                hasData={instances !== undefined}
+                onRetry={() => void refetch()}
               />
-            )}
+              {isLoading ? (
+                <div className="space-y-2 p-3">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+              ) : isError && !instances ? null : !instances || instances.length === 0 ? (
+                <p className="px-4 py-8 type-body-small text-muted-foreground">
+                  {t("noInstances")}
+                </p>
+              ) : (
+                <CliproxyInstancesTable
+                  instances={instances}
+                  selectedInstanceId={selectedInstance?.id ?? null}
+                  onSelect={selectInstance}
+                  onEdit={(instance, source) => {
+                    morphSourceRef.current = source;
+                    startMorph(() => setEditInstance(instance), {
+                      source,
+                      name: "morph-cliproxy-instance",
+                      mode: "enter",
+                    });
+                  }}
+                  onTest={setTestInstance}
+                  onCreatePoolUpstream={setPoolUpstreamInstance}
+                  onDelete={(instance, source) => {
+                    morphSourceRef.current = source;
+                    startMorph(() => setDeleteInstance(instance), {
+                      source,
+                      name: "morph-cliproxy-instance",
+                      mode: "enter",
+                    });
+                  }}
+                />
+              )}
+            </div>
           </aside>
 
-          <section className="min-w-0 px-4 py-5 sm:px-6" aria-label={t("workspaceTitle")}>
+          <section
+            className="min-w-0 rounded-cf-md border border-divider bg-card px-4 py-5 shadow-[var(--vr-shadow-xs)] sm:px-6"
+            aria-label={t("workspaceTitle")}
+          >
             {selectedInstance ? (
               <div key={selectedInstance.id} className="min-w-0 space-y-5 content-enter">
-                <header className="space-y-2">
+                <header className={cn("space-y-2", singleInstance && "xl:hidden")}>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="min-w-0 break-words text-xl font-semibold tracking-tight text-foreground">
                       {selectedInstance.name}
