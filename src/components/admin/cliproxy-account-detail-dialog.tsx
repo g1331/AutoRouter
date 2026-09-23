@@ -19,6 +19,7 @@ import type {
   CliproxyAuthAccount,
   CliproxyQuotaObservation,
 } from "@/types/cliproxy";
+import { CliproxySkeleton as Skeleton } from "./cliproxy-skeleton";
 
 interface CliproxyAccountDetailDialogProps {
   instanceId: string;
@@ -47,6 +48,27 @@ function renderTimestamp(value: string | null, placeholder: string): React.React
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function ProviderQuotaSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="cliproxy-provider-quota-skeleton"
+      className="divide-y divide-divider"
+    >
+      {[0, 1].map((index) => (
+        <div key={index} className="space-y-2 py-3 first:pt-0 last:pb-0">
+          <div className="flex items-center justify-between gap-4">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-6 w-20" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -148,7 +170,9 @@ export function CliproxyAccountDetailDialog({
             ) : account.disabled ? (
               <p className="type-body-small text-muted-foreground">{t("providerQuotaDisabled")}</p>
             ) : providerQuotaPending ? (
-              <p className="type-body-small text-muted-foreground">{t("providerQuotaLoading")}</p>
+              <div role="status" aria-label={t("providerQuotaLoading")}>
+                <ProviderQuotaSkeleton />
+              </div>
             ) : providerQuotaError ? (
               <p role="alert" className="type-body-small text-destructive">
                 {t("providerQuotaFailed")}
@@ -193,7 +217,7 @@ export function CliproxyAccountDetailDialog({
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuetext={`${window.remaining_percent}% ${t("providerQuotaRemaining")}`}
-                          className="h-2 overflow-hidden rounded-full bg-surface-400"
+                          className="h-2 overflow-hidden rounded-full bg-foreground/12"
                         >
                           <div
                             className="h-full rounded-full bg-primary transition-[width] duration-cf-normal ease-cf-standard motion-reduce:transition-none"

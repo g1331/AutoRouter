@@ -9,12 +9,13 @@ import { PageHeader } from "@/components/admin/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QueryStatus } from "@/components/ui/query-status";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CliproxySkeleton as Skeleton } from "@/components/admin/cliproxy-skeleton";
 import { CliproxyInstancesTable } from "@/components/admin/cliproxy-instances-table";
 import { CliproxyInstanceFormDialog } from "@/components/admin/cliproxy-instance-form-dialog";
 import { DeleteCliproxyInstanceDialog } from "@/components/admin/delete-cliproxy-instance-dialog";
 import { CliproxyConnectionTestDialog } from "@/components/admin/cliproxy-connection-test-dialog";
 import { CliproxyAccountsPanel } from "@/components/admin/cliproxy-accounts-panel";
+import { CliproxyAccountsSkeleton } from "@/components/admin/cliproxy-accounts-skeleton";
 import { CliproxyPoolUpstreamDialog } from "@/components/admin/cliproxy-pool-upstream-dialog";
 import { CliproxyLinkedUpstreamsPanel } from "@/components/admin/cliproxy-linked-upstreams-panel";
 import { CliproxyInstanceLogsPanel } from "@/components/admin/cliproxy-instance-logs-panel";
@@ -25,6 +26,52 @@ import type { CliproxyInstance } from "@/types/cliproxy";
 
 type WorkspaceView = "accounts" | "upstreams" | "logs";
 const VIEWS: WorkspaceView[] = ["accounts", "upstreams", "logs"];
+
+function CliproxyInstanceSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex min-w-0 items-center gap-3 px-4 py-3">
+      <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1 space-y-2 lg:flex lg:items-center lg:gap-4 lg:space-y-0">
+        <Skeleton className="h-4 w-36 max-w-full" />
+        <Skeleton className="h-3 w-44 max-w-full" />
+      </div>
+      <Skeleton className="hidden h-5 w-20 lg:block" />
+      <Skeleton className="h-5 w-10 shrink-0 rounded-full" />
+      <Skeleton className="h-8 w-8 shrink-0" />
+    </div>
+  );
+}
+
+function CliproxyWorkspaceSkeleton() {
+  return (
+    <div aria-hidden="true" className="min-w-0 space-y-5">
+      <div className="flex gap-5 border-b border-divider pb-3">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-16" />
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-3 w-56 max-w-full" />
+        </div>
+        <div className="flex max-w-full flex-wrap gap-2">
+          <Skeleton className="h-8 w-20" />
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-20" />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-cf-sm bg-surface-300 px-3 py-3">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-64 max-w-full" />
+          <Skeleton className="h-3 w-44 max-w-full" />
+        </div>
+        <Skeleton className="h-8 w-24" />
+      </div>
+      <CliproxyAccountsSkeleton />
+    </div>
+  );
+}
 
 export default function CliproxyPage() {
   const t = useTranslations("cliproxy");
@@ -83,22 +130,25 @@ export default function CliproxyPage() {
         />
 
         <div
+          role={isLoading ? "status" : undefined}
+          aria-label={isLoading ? t("workspaceLoading") : undefined}
+          data-testid={isLoading ? "cliproxy-page-skeleton" : undefined}
           className={cn(
             "grid min-w-0 gap-4 xl:items-start",
-            singleInstance ? "xl:grid-cols-1" : "xl:grid-cols-[14rem_minmax(0,1fr)]"
+            singleInstance || isLoading ? "xl:grid-cols-1" : "xl:grid-cols-[14rem_minmax(0,1fr)]"
           )}
         >
           <aside
             className={cn(
               "min-w-0 overflow-hidden rounded-cf-md border border-divider bg-card shadow-[var(--vr-shadow-xs)]",
-              singleInstance && "xl:col-span-full"
+              (singleInstance || isLoading) && "xl:col-span-full"
             )}
             aria-label={t("instancesTitle")}
           >
             <div
               className={cn(
                 "space-y-3 border-b border-divider px-4 py-4",
-                singleInstance && "hidden"
+                (singleInstance || isLoading) && "hidden"
               )}
             >
               <div
@@ -122,10 +172,7 @@ export default function CliproxyPage() {
                 onRetry={() => void refetch()}
               />
               {isLoading ? (
-                <div className="space-y-2 p-3">
-                  <Skeleton className="h-20 w-full" />
-                  <Skeleton className="h-20 w-full" />
-                </div>
+                <CliproxyInstanceSkeleton />
               ) : isError && !instances ? null : !instances || instances.length === 0 ? (
                 <p className="px-4 py-8 type-body-small text-muted-foreground">
                   {t("noInstances")}
@@ -231,13 +278,11 @@ export default function CliproxyPage() {
                   ) : null}
                 </div>
               </div>
+            ) : isLoading ? (
+              <CliproxyWorkspaceSkeleton />
             ) : (
               <div className="flex min-h-52 items-center justify-center text-center type-body-medium text-muted-foreground">
-                {isLoading
-                  ? t("workspaceLoading")
-                  : isError
-                    ? t("workspaceInstancesFailed")
-                    : t("workspaceNoInstance")}
+                {isError ? t("workspaceInstancesFailed") : t("workspaceNoInstance")}
               </div>
             )}
           </section>
