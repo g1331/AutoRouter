@@ -1557,6 +1557,76 @@ describe("proxy-client", () => {
         })
       );
     });
+
+    it.each([
+      [{ model: " gpt-4 " }, "gpt-4"],
+      [{ response: { model: " gpt-4o " } }, "gpt-4o"],
+      [{ message: { model: " claude-sonnet-4 " } }, "claude-sonnet-4"],
+      [{ model: " ", response: { model: " gpt-4.1 " } }, "gpt-4.1"],
+      [{ model: 42, message: { model: "" } }, null],
+    ])("captures the declared model from successful JSON %j", async (payload, expected) => {
+      const body = JSON.stringify(payload);
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(body, { headers: { "content-type": "application/json" } }));
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+      });
+
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-model");
+      expect(result.responseModel).toBe(expected);
+      expect(new TextDecoder().decode(result.body as Uint8Array)).toBe(body);
+    });
+
+    it("does not collect a declared model from an error response", async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        new Response('{"model":"gpt-3.5"}', {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        })
+      );
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4" }),
+      });
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-error");
+      expect(result.responseModel).toBeNull();
+    });
+
+    it("retains at most two different SSE models while forwarding each event unchanged", async () => {
+      const events = [
+        'data: {"model":"gpt-4","choices":[{"delta":{"content":"one"}}]}\n\n',
+        'event: response.created\ndata: {"response":{"model":"gpt-4"}}\n\n',
+        'event: message_start\ndata: {"message":{"model":" claude-sonnet-4 "}}\n\n',
+        'data: {"model":"gpt-3.5"}\n\n',
+        "data: not-json\n\n",
+        "data: [DONE]\n\n",
+      ];
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode(events[0]!.slice(0, 17)));
+          controller.enqueue(encoder.encode(events[0]!.slice(17) + events.slice(1).join("")));
+          controller.close();
+        },
+      });
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          new Response(body, { headers: { "content-type": "text/event-stream" } })
+        );
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-stream");
+      expect(await new Response(result.body).text()).toBe(events.join(""));
+      expect((await result.streamMetricsPromise)?.responseModels).toEqual([
+        "gpt-4",
+        "claude-sonnet-4",
+      ]);
+    });
     it("reports dispatch after the upstream fetch is invoked", async () => {
       const mockResponse = new Response(JSON.stringify({ id: "dispatch" }), {
         status: 200,

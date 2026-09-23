@@ -40,6 +40,7 @@ export interface StreamMetrics {
   usage: TokenUsage | null;
   effectiveServiceTier?: RequestedServiceTier | null;
   ttftMs?: number;
+  responseModels?: string[];
 }
 
 /**
@@ -193,6 +194,7 @@ export interface ProxyResult {
   isStream: boolean;
   usage?: TokenUsage;
   effectiveServiceTier?: RequestedServiceTier;
+  responseModel?: string | null;
   streamMetricsPromise?: Promise<StreamMetrics>;
   cancelStream?: (reason?: string) => void;
   streamCancellationSignal?: AbortSignal;
@@ -596,6 +598,27 @@ export function extractEffectiveServiceTier(
   return null;
 }
 
+/** Read a model declared by a supported upstream response shape. */
+function extractResponseModel(data: unknown): string | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
+
+  const record = data as Record<string, unknown>;
+  if (typeof record.model === "string" && record.model.trim()) return record.model.trim();
+
+  const response = record.response;
+  if (typeof response === "object" && response !== null && !Array.isArray(response)) {
+    const model = (response as Record<string, unknown>).model;
+    if (typeof model === "string" && model.trim()) return model.trim();
+  }
+
+  const message = record.message;
+  if (typeof message === "object" && message !== null && !Array.isArray(message)) {
+    const model = (message as Record<string, unknown>).model;
+    if (typeof model === "string" && model.trim()) return model.trim();
+  }
+  return null;
+}
+
 /** Extract token usage from response payload. */
 export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
   const normalized = extractNormalizedUsage(data);
@@ -862,6 +885,7 @@ function isContentBearingSSEEventData(dataStr: string, sseEventName?: string): b
 export interface SSETransformerCallbacks {
   onUsage: (usage: TokenUsage) => void;
   onServiceTier?: (serviceTier: RequestedServiceTier) => void;
+  onModel?: (model: string) => void;
   onFirstChunk?: () => void;
 }
 
@@ -916,6 +940,10 @@ export function createSSETransformer(
 
             try {
               const data = JSON.parse(dataStr);
+              const model = extractResponseModel(data);
+              if (model) {
+                callbacks.onModel?.(model);
+              }
               const usage = extractUsage(data);
               if (usage) {
                 callbacks.onUsage(usage);
@@ -1308,6 +1336,7 @@ export async function forwardRequest(
       let usage: TokenUsage | undefined;
       let effectiveServiceTier: RequestedServiceTier | undefined;
       let ttftMs: number | undefined;
+      const responseModels: string[] = [];
       let firstContentReceived = false;
       let resolveFirstContent!: () => void;
       let resolveStreamDone!: () => void;
@@ -1330,6 +1359,16 @@ export async function forwardRequest(
           onServiceTier: (serviceTier) => {
             effectiveServiceTier = serviceTier;
           },
+          onModel: upstreamResponse.ok
+            ? (model) => {
+                if (
+                  responseModels.length === 0 ||
+                  (responseModels.length === 1 && responseModels[0] !== model)
+                ) {
+                  responseModels.push(model);
+                }
+              }
+            : undefined,
           onFirstChunk: () => {
             firstContentReceived = true;
             ttftMs = Date.now() - upstreamSendTime;
@@ -1354,6 +1393,7 @@ export async function forwardRequest(
           usage: usage ?? null,
           effectiveServiceTier: effectiveServiceTier ?? null,
           ttftMs,
+          responseModels: responseModels.length ? responseModels : undefined,
         };
       })();
 
@@ -1392,10 +1432,12 @@ export async function forwardRequest(
       // Try to extract usage from JSON response
       let usage: TokenUsage | undefined;
       let effectiveServiceTier: RequestedServiceTier | undefined;
+      let responseModel: string | null = null;
 
       if (contentType.includes("application/json") && bodyBytes.length > 0) {
         try {
           const data = JSON.parse(new TextDecoder().decode(bodyBytes));
+          if (upstreamResponse.ok) responseModel = extractResponseModel(data);
           effectiveServiceTier = extractEffectiveServiceTier(data) ?? undefined;
           const extracted = extractUsage(data);
           if (extracted) {
@@ -1421,6 +1463,7 @@ export async function forwardRequest(
         isStream: false,
         usage,
         effectiveServiceTier,
+        responseModel,
         headerDiff: requestHeaderDiff,
       };
     }
