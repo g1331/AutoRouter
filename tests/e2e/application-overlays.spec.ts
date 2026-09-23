@@ -118,7 +118,7 @@ for (const [theme, width] of [
           .locator('[role="dialog"], [role="alertdialog"]')
           .filter({ visible: true });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByRole("heading")).toBeVisible();
+        await expect(dialog.getByRole("heading", { level: 2 }).first()).toBeVisible();
         const bounds = await dialog.boundingBox();
         expect(bounds!.x).toBeGreaterThanOrEqual(0);
         expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);

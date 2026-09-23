@@ -85,7 +85,7 @@ export function CliproxyAccountDetailDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle ref={titleRef} tabIndex={-1}>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="focus-visible:shadow-none">
             {t("accountDetailDialogTitle")}
           </DialogTitle>
           <DialogDescription>
