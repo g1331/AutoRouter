@@ -86,7 +86,7 @@ describe("CliproxyAccountsTable", () => {
     expect(screen.getByText("prefixUnset")).toBeInTheDocument();
   });
 
-  it("展示零值请求数和配额观测入口，缺失账号不伪装成零", () => {
+  it("展示零值请求数和供应商额度入口，缺失账号不伪装成零", () => {
     const usage = new Map([
       [
         "codex-a.json",
@@ -115,8 +115,14 @@ describe("CliproxyAccountsTable", () => {
     render(<CliproxyAccountsTable accounts={[baseAccount]} usageByName={usage} {...handlers} />);
     expect(screen.getByText("usageSuccess").parentElement).toHaveTextContent("0");
     expect(screen.getByText("usageFailed").parentElement).toHaveTextContent("0");
-    fireEvent.click(screen.getByText("quotaObserved", { selector: "button" }));
+    fireEvent.click(screen.getAllByText("providerQuotaView", { selector: "button" })[0]);
     expect(handlers.onViewDetail).toHaveBeenCalledOnce();
+  });
+
+  it("不支持的供应商显示明确状态", () => {
+    setup({ provider: "gemini" });
+    expect(screen.getAllByText("providerQuotaUnsupportedShort").length).toBeGreaterThan(0);
+    expect(screen.queryByText("providerQuotaView")).not.toBeInTheDocument();
   });
 
   it("点击模型数按钮调用 onViewModels", () => {

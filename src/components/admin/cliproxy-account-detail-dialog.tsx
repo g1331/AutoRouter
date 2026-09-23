@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useCliproxyProviderQuota } from "@/hooks/use-cliproxy";
 import type {
   CliproxyAccountUsage,
   CliproxyAuthAccount,
@@ -19,6 +21,7 @@ import type {
 } from "@/types/cliproxy";
 
 interface CliproxyAccountDetailDialogProps {
+  instanceId: string;
   account: CliproxyAuthAccount;
   usage?: CliproxyAccountUsage | null;
   usageState?: "loading" | "error" | "stale" | "ready";
@@ -50,6 +53,7 @@ function renderTimestamp(value: string | null, placeholder: string): React.React
  * 展示 OAuth 账号的完整元数据：邮箱、上游状态、前缀、备注、模型数、原始快照、时间戳等。
  */
 export function CliproxyAccountDetailDialog({
+  instanceId,
   account,
   usage,
   usageState = "ready",
@@ -72,6 +76,17 @@ export function CliproxyAccountDetailDialog({
     modelQuotas.some(([, quota]) => Object.keys(quota.signals).length > 0)
   );
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const supportedProvider = /^(codex|openai|claude|anthropic)$/i.test(account.provider);
+  const {
+    data: providerQuota,
+    isPending: providerQuotaPending,
+    isError: providerQuotaError,
+    isFetching: providerQuotaFetching,
+    refetch: refetchProviderQuota,
+  } = useCliproxyProviderQuota(
+    instanceId,
+    supportedProvider && !account.disabled ? account.auth_file_name : null
+  );
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -95,8 +110,113 @@ export function CliproxyAccountDetailDialog({
 
         <div
           tabIndex={0}
-          className="max-h-96 space-y-3 overflow-y-auto py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+          className="max-h-[min(58dvh,34rem)] space-y-3 overflow-y-auto py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         >
+          <section
+            className="space-y-3 border-b border-divider pb-4"
+            aria-label={t("providerQuotaTitle")}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="type-title-small text-foreground">{t("providerQuotaTitle")}</h3>
+                <p className="type-body-small text-muted-foreground">
+                  {t("providerQuotaExplanation")}
+                </p>
+              </div>
+              {supportedProvider && !account.disabled ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={providerQuotaFetching}
+                  onClick={() => void refetchProviderQuota()}
+                >
+                  <RefreshCw
+                    className={
+                      providerQuotaFetching
+                        ? "mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+                        : "mr-2 h-4 w-4"
+                    }
+                  />
+                  {t("providerQuotaRefresh")}
+                </Button>
+              ) : null}
+            </div>
+            {!supportedProvider ? (
+              <p className="type-body-small text-muted-foreground">
+                {t("providerQuotaUnsupported")}
+              </p>
+            ) : account.disabled ? (
+              <p className="type-body-small text-muted-foreground">{t("providerQuotaDisabled")}</p>
+            ) : providerQuotaPending ? (
+              <p className="type-body-small text-muted-foreground">{t("providerQuotaLoading")}</p>
+            ) : providerQuotaError ? (
+              <p role="alert" className="type-body-small text-destructive">
+                {t("providerQuotaFailed")}
+              </p>
+            ) : providerQuota?.status === "unavailable" ? (
+              <p className="type-body-small text-muted-foreground">
+                {providerQuota.reason === "missing_auth_index"
+                  ? t("providerQuotaMissingAuthIndex")
+                  : providerQuota.reason === "upstream_unavailable"
+                    ? t("providerQuotaUpstreamUnavailable")
+                    : t("providerQuotaDisabled")}
+              </p>
+            ) : providerQuota?.status === "unsupported" ? (
+              <p className="type-body-small text-muted-foreground">
+                {t("providerQuotaUnsupported")}
+              </p>
+            ) : providerQuota?.windows.length ? (
+              <>
+                <div className="divide-y divide-divider">
+                  {providerQuota.windows.map((window) => (
+                    <div key={window.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <h4 className="type-label-large text-foreground">
+                          {t(`providerQuotaWindow.${window.id}`)}
+                        </h4>
+                        <p className="flex shrink-0 items-baseline gap-1 tabular-nums text-foreground">
+                          <span className="text-xl font-semibold tracking-tight">
+                            {window.remaining_percent === null
+                              ? t("providerQuotaUnknown")
+                              : `${window.remaining_percent}%`}
+                          </span>
+                          <span className="type-body-small text-muted-foreground">
+                            {t("providerQuotaRemaining")}
+                          </span>
+                        </p>
+                      </div>
+                      {window.remaining_percent !== null ? (
+                        <div
+                          role="progressbar"
+                          aria-label={t(`providerQuotaWindow.${window.id}`)}
+                          aria-valuenow={window.remaining_percent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuetext={`${window.remaining_percent}% ${t("providerQuotaRemaining")}`}
+                          className="h-2 overflow-hidden rounded-full bg-surface-400"
+                        >
+                          <div
+                            className="h-full rounded-full bg-primary transition-[width] duration-cf-normal ease-cf-standard motion-reduce:transition-none"
+                            style={{ width: `${window.remaining_percent}%` }}
+                          />
+                        </div>
+                      ) : null}
+                      <p className="type-body-small text-muted-foreground">
+                        {window.resets_at
+                          ? `${t("providerQuotaResetsAt")}: ${renderTimestamp(window.resets_at, "—")}`
+                          : t("providerQuotaResetUnknown")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="type-body-small text-muted-foreground">
+                  {t("providerQuotaFetchedAt")}: {renderTimestamp(providerQuota.fetched_at, "—")}
+                </p>
+              </>
+            ) : (
+              <p className="type-body-small text-muted-foreground">{t("providerQuotaNoWindows")}</p>
+            )}
+          </section>
           <div className="space-y-2 border-b border-divider pb-3">
             <h3 className="type-title-small text-foreground">{t("usageDetailTitle")}</h3>
             {usageState === "loading" || usageState === "error" ? (

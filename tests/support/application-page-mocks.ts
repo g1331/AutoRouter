@@ -144,6 +144,21 @@ export async function mockApplicationPages(page: Page, member = false) {
         },
       },
     ],
+    [
+      "**/api/admin/cliproxy/instances/instance-audit/auth-accounts/audit.json/provider-quota",
+      {
+        data: {
+          provider: "codex",
+          status: "ready",
+          reason: null,
+          fetched_at: date,
+          windows: [
+            { id: "primary", remaining_percent: 75, resets_at: "2026-06-10T16:00:00Z" },
+            { id: "secondary", remaining_percent: 20, resets_at: "2026-06-17T08:00:00Z" },
+          ],
+        },
+      },
+    ],
     ["**/api/admin/cliproxy/instances/instance-audit/linked-upstreams", { data: [] }],
     [
       "**/api/admin/cliproxy/instances/instance-audit/logs*",
