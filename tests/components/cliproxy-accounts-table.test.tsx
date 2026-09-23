@@ -86,6 +86,39 @@ describe("CliproxyAccountsTable", () => {
     expect(screen.getByText("prefixUnset")).toBeInTheDocument();
   });
 
+  it("展示零值请求数和配额观测入口，缺失账号不伪装成零", () => {
+    const usage = new Map([
+      [
+        "codex-a.json",
+        {
+          auth_file_name: "codex-a.json",
+          success: 0,
+          failed: 0,
+          recent_requests: [],
+          quota: {
+            observed_at: "2026-09-23T02:00:00Z",
+            signals: { "X-Codex-Primary-Used-Percent": "0" },
+          },
+          model_quotas: null,
+        },
+      ],
+    ]);
+    const handlers = {
+      onToggleStatus: vi.fn(),
+      onEditFields: vi.fn(),
+      onMapUpstream: vi.fn(),
+      onViewDetail: vi.fn(),
+      onViewModels: vi.fn(),
+      onDownload: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    render(<CliproxyAccountsTable accounts={[baseAccount]} usageByName={usage} {...handlers} />);
+    expect(screen.getByText("usageSuccess").parentElement).toHaveTextContent("0");
+    expect(screen.getByText("usageFailed").parentElement).toHaveTextContent("0");
+    fireEvent.click(screen.getByText("quotaObserved", { selector: "button" }));
+    expect(handlers.onViewDetail).toHaveBeenCalledOnce();
+  });
+
   it("点击模型数按钮调用 onViewModels", () => {
     const { onViewModels } = setup();
     fireEvent.click(screen.getByText("3"));

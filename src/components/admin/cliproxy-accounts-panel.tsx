@@ -1,15 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { LogIn, RefreshCw, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { QueryStatus } from "@/components/ui/query-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import {
   useCliproxyAuthAccounts,
+  useCliproxyAccountUsage,
   useDownloadCliproxyAuthFile,
   useSetCliproxyAuthAccountStatus,
   useSyncCliproxyAuthAccounts,
@@ -41,6 +41,13 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
     isFetching,
     refetch,
   } = useCliproxyAuthAccounts(instance.id);
+  const {
+    data: usageSnapshot,
+    isLoading: usageLoading,
+    isError: usageError,
+    isFetching: usageFetching,
+    refetch: refetchUsage,
+  } = useCliproxyAccountUsage(instance.id);
   const syncMutation = useSyncCliproxyAuthAccounts();
   const statusMutation = useSetCliproxyAuthAccountStatus();
   const downloadMutation = useDownloadCliproxyAuthFile();
@@ -57,6 +64,17 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
   // 三者互斥（同一时刻只开一个），共用单个 view-transition-name。
   const { startMorph, canMorph } = useContainerMorph();
   const morphSourceRef = useRef<HTMLElement | null>(null);
+  const usageByName = useMemo(
+    () => new Map(usageSnapshot?.accounts.map((usage) => [usage.auth_file_name, usage]) ?? []),
+    [usageSnapshot]
+  );
+  const usageState = usageLoading
+    ? "loading"
+    : usageError
+      ? usageSnapshot
+        ? "stale"
+        : "error"
+      : "ready";
 
   const handleToggleStatus = (account: CliproxyAuthAccount) => {
     statusMutation.mutate({
@@ -74,82 +92,137 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
   };
 
   return (
-    <Card variant="outlined">
-      <CardContent className="space-y-4 p-4 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="type-title-medium text-foreground">{t("accountsTitle")}</h2>
-            <p className="type-body-small text-muted-foreground">{instance.name}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setOauthOpen(true)}>
-              <LogIn className="mr-2 h-4 w-4" />
-              {t("oauthLogin")}
-            </Button>
-            <Button variant="outline" onClick={() => setUploadOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" />
-              {t("uploadAuthFile")}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={syncMutation.isPending}
-              onClick={() => syncMutation.mutate(instance.id)}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {syncMutation.isPending ? t("syncing") : t("syncAccounts")}
-            </Button>
-          </div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="type-title-medium text-foreground">{t("accountsWorkspaceTitle")}</h3>
+          <p className="type-body-small text-muted-foreground">{t("usageScope")}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setOauthOpen(true)}>
+            <LogIn className="mr-2 h-4 w-4" />
+            {t("oauthLogin")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("uploadAuthFile")}
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            <span className="sm:hidden">{t("uploadAuthFileShort")}</span>
+            <span className="hidden sm:inline">{t("uploadAuthFile")}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("syncAccounts")}
+            disabled={syncMutation.isPending}
+            onClick={() => syncMutation.mutate(instance.id)}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {syncMutation.isPending ? (
+              t("syncing")
+            ) : (
+              <>
+                <span className="sm:hidden">{t("syncAccountsShort")}</span>
+                <span className="hidden sm:inline">{t("syncAccounts")}</span>
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
 
-        <QueryStatus
-          error={isError}
-          fetching={isFetching && !isLoading}
-          hasData={accounts !== undefined}
-          onRetry={() => void refetch()}
-        />
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : isError && !accounts ? null : !accounts || accounts.length === 0 ? (
-          <p className="py-8 text-center type-body-medium text-muted-foreground">
-            {t("noAccounts")}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-cf-sm bg-surface-300 px-3 py-3">
+        <div className="min-w-0 space-y-1">
+          <p className="type-body-small text-foreground">{t("usageExplanation")}</p>
+          <p className="type-body-small text-muted-foreground">
+            {usageSnapshot
+              ? `${t("usageFetchedAt")}: ${new Date(usageSnapshot.fetched_at).toLocaleString()}`
+              : usageLoading
+                ? t("usageLoading")
+                : t("usageNotFetched")}
+            {usageSnapshot?.observed_at
+              ? ` · ${t("usageObservedAt")}: ${new Date(usageSnapshot.observed_at).toLocaleString()}`
+              : null}
           </p>
-        ) : (
-          <CliproxyAccountsTable
-            accounts={accounts}
-            onToggleStatus={handleToggleStatus}
-            onEditFields={(account, source) => {
-              morphSourceRef.current = source;
-              startMorph(() => setEditAccount(account), {
-                source,
-                name: "morph-cliproxy-account",
-                mode: "enter",
-              });
-            }}
-            onMapUpstream={setMapAccount}
-            onViewDetail={(account, source) => {
-              morphSourceRef.current = source;
-              startMorph(() => setDetailAccount(account), {
-                source,
-                name: "morph-cliproxy-account",
-                mode: "enter",
-              });
-            }}
-            onViewModels={setModelsAccount}
-            onDownload={handleDownload}
-            onDelete={(account, source) => {
-              morphSourceRef.current = source;
-              startMorph(() => setDeleteAccount(account), {
-                source,
-                name: "morph-cliproxy-account",
-                mode: "enter",
-              });
-            }}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={usageFetching}
+          onClick={() => void refetchUsage()}
+        >
+          <RefreshCw
+            className={
+              usageFetching
+                ? "mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+                : "mr-2 h-4 w-4"
+            }
           />
-        )}
-      </CardContent>
+          {t("refreshUsage")}
+        </Button>
+      </div>
+      {usageError ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 type-body-small text-destructive"
+        >
+          <span>{usageSnapshot ? t("usageRefreshFailedStale") : t("usageLoadFailed")}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetchUsage()}>
+            {t("retryUsage")}
+          </Button>
+        </div>
+      ) : null}
+
+      <QueryStatus
+        error={isError}
+        fetching={isFetching && !isLoading}
+        hasData={accounts !== undefined}
+        onRetry={() => void refetch()}
+      />
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : isError && !accounts ? null : !accounts || accounts.length === 0 ? (
+        <p className="py-8 text-center type-body-medium text-muted-foreground">{t("noAccounts")}</p>
+      ) : (
+        <CliproxyAccountsTable
+          accounts={accounts}
+          usageByName={usageByName}
+          usageState={usageState}
+          onToggleStatus={handleToggleStatus}
+          onEditFields={(account, source) => {
+            morphSourceRef.current = source;
+            startMorph(() => setEditAccount(account), {
+              source,
+              name: "morph-cliproxy-account",
+              mode: "enter",
+            });
+          }}
+          onMapUpstream={setMapAccount}
+          onViewDetail={(account, source) => {
+            morphSourceRef.current = source;
+            startMorph(() => setDetailAccount(account), {
+              source,
+              name: "morph-cliproxy-account",
+              mode: "enter",
+            });
+          }}
+          onViewModels={setModelsAccount}
+          onDownload={handleDownload}
+          onDelete={(account, source) => {
+            morphSourceRef.current = source;
+            startMorph(() => setDeleteAccount(account), {
+              source,
+              name: "morph-cliproxy-account",
+              mode: "enter",
+            });
+          }}
+        />
+      )}
 
       {editAccount && (
         <CliproxyAccountFieldsDialog
@@ -170,6 +243,8 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
       {detailAccount && (
         <CliproxyAccountDetailDialog
           account={detailAccount}
+          usage={usageByName.get(detailAccount.auth_file_name) ?? null}
+          usageState={usageState}
           open
           onClose={() =>
             startMorph(() => setDetailAccount(null), {
@@ -225,6 +300,6 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
         morph={canMorph}
         morphName="morph-cliproxy-account"
       />
-    </Card>
+    </div>
   );
 }

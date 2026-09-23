@@ -212,6 +212,24 @@ describe("use-cliproxy 账号 hooks", () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
+  it("useCliproxyAccountUsage 独立读取实时快照，未选实例时不请求", async () => {
+    const snapshot = { fetched_at: "2026-09-23T02:00:00Z", observed_at: null, accounts: [] };
+    mockGet.mockResolvedValueOnce({ data: snapshot });
+    const { useCliproxyAccountUsage } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useCliproxyAccountUsage("instance-1"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(snapshot);
+    expect(mockGet).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-accounts/usage"
+    );
+
+    mockGet.mockClear();
+    const disabled = createWrapper();
+    renderHook(() => useCliproxyAccountUsage(null), { wrapper: disabled.wrapper });
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
   it("useSyncCliproxyAuthAccounts 同步后提示并刷新", async () => {
     mockPost.mockResolvedValueOnce({
       data: { added: 1, updated: 2, removed: 0, total: 3 },

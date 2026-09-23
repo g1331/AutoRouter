@@ -34,10 +34,7 @@ interface CliproxyInstancesTableProps {
   onDelete: (instance: CliproxyInstance, source: HTMLElement | null) => void;
 }
 
-/**
- * CLIProxyAPI 实例列表表格。点击行选中实例以查看其账号，每行提供启停切换、
- * 连通性检测、编辑、删除等操作。
- */
+/** 实例选择列表，保留每个实例原有的启停与管理操作。 */
 export function CliproxyInstancesTable({
   instances,
   selectedInstanceId,
@@ -49,111 +46,114 @@ export function CliproxyInstancesTable({
 }: CliproxyInstancesTableProps) {
   const t = useTranslations("cliproxy");
   const toggleEnabled = useToggleCliproxyInstanceEnabled();
-
-  // 操作入口在 DropdownMenu（内容经 Portal 挂到 body，closest 取不到行），
-  // 按实例 id 收集行元素，作为编辑/删除弹窗的容器变形源。
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
   const rowSource = (id: string) => rowRefs.current.get(id) ?? null;
 
   return (
-    <Table>
-      <TableHeader>
+    <Table frame="none" className="table-fixed" containerClassName="rounded-none bg-transparent">
+      <TableHeader className="sr-only">
         <TableRow>
           <TableHead>{t("columnName")}</TableHead>
-          <TableHead>{t("columnMode")}</TableHead>
-          <TableHead>{t("columnBaseUrl")}</TableHead>
-          <TableHead>{t("columnStatus")}</TableHead>
-          <TableHead className="w-16 text-right">{t("columnActions")}</TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody className="bg-transparent">
         {instances.map((instance) => (
           <TableRow
             key={instance.id}
             data-morph-source
             ref={(el) => {
-              if (el) {
-                rowRefs.current.set(instance.id, el);
-              } else {
-                rowRefs.current.delete(instance.id);
-              }
+              if (el) rowRefs.current.set(instance.id, el);
+              else rowRefs.current.delete(instance.id);
             }}
             onClick={() => onSelect(instance)}
             data-state={selectedInstanceId === instance.id ? "selected" : undefined}
-            className="cursor-pointer"
+            className="cursor-pointer last:border-b-0"
           >
-            <TableCell className="font-medium">
-              <button
-                type="button"
-                className="rounded-cf-sm text-left hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-pressed={selectedInstanceId === instance.id}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect(instance);
-                }}
-              >
-                {instance.name}
-              </button>
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">
-                {instance.mode === "managed" ? t("modeManaged") : t("modeExternal")}
-              </Badge>
-            </TableCell>
-            <TableCell>
-              <code className="type-body-small font-mono text-muted-foreground">
-                {instance.base_url}
-              </code>
-            </TableCell>
-            <TableCell onClick={(event) => event.stopPropagation()}>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={instance.enabled}
-                  disabled={toggleEnabled.isPending && toggleEnabled.variables?.id === instance.id}
-                  onCheckedChange={(checked) =>
-                    toggleEnabled.mutate({ id: instance.id, enabled: checked })
-                  }
-                  aria-label={instance.enabled ? t("statusEnabled") : t("statusDisabled")}
+            <TableCell className="p-0 align-top">
+              <div className="flex min-w-0 items-start gap-2 px-3 py-3">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                    instance.enabled ? "bg-status-success" : "bg-muted-foreground/50"
+                  )}
                 />
-                <span className="type-body-small text-muted-foreground">
-                  {instance.enabled ? t("statusEnabled") : t("statusDisabled")}
-                </span>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <button
+                    type="button"
+                    className="block max-w-full truncate rounded-cf-sm text-left font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-pressed={selectedInstanceId === instance.id}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect(instance);
+                    }}
+                  >
+                    {instance.name}
+                  </button>
+                  <p
+                    className="hidden truncate type-body-small text-muted-foreground lg:block"
+                    title={instance.base_url}
+                  >
+                    {instance.base_url}
+                  </p>
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Badge variant="secondary" className="hidden lg:inline-flex">
+                      {instance.mode === "managed" ? t("modeManaged") : t("modeExternal")}
+                    </Badge>
+                    <Switch
+                      checked={instance.enabled}
+                      disabled={
+                        toggleEnabled.isPending && toggleEnabled.variables?.id === instance.id
+                      }
+                      onCheckedChange={(checked) =>
+                        toggleEnabled.mutate({ id: instance.id, enabled: checked })
+                      }
+                      aria-label={instance.enabled ? t("statusEnabled") : t("statusDisabled")}
+                    />
+                    <span className="type-body-small text-muted-foreground">
+                      {instance.enabled ? t("statusEnabled") : t("statusDisabled")}
+                    </span>
+                  </div>
+                </div>
+                <div onClick={(event) => event.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={t("columnActions")}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onTest(instance)}>
+                        <PlugZap className="mr-2 h-4 w-4" />
+                        {t("actionTest")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onCreatePoolUpstream(instance)}>
+                        <Boxes className="mr-2 h-4 w-4" />
+                        {t("actionCreatePoolUpstream")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onEdit(instance, rowSource(instance.id))}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        {t("actionEdit")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onDelete(instance, rowSource(instance.id))}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {t("actionDelete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-            </TableCell>
-            <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label={t("columnActions")}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onTest(instance)}>
-                    <PlugZap className="mr-2 h-4 w-4" />
-                    {t("actionTest")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onCreatePoolUpstream(instance)}>
-                    <Boxes className="mr-2 h-4 w-4" />
-                    {t("actionCreatePoolUpstream")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(instance, rowSource(instance.id))}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    {t("actionEdit")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onDelete(instance, rowSource(instance.id))}
-                    className={cn("text-destructive focus:text-destructive")}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {t("actionDelete")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </TableCell>
           </TableRow>
         ))}

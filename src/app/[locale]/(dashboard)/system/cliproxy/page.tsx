@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
 import { PageShell } from "@/components/admin/page-shell";
 import { PageHeader } from "@/components/admin/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { QueryStatus } from "@/components/ui/query-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CliproxyInstancesTable } from "@/components/admin/cliproxy-instances-table";
@@ -20,7 +20,11 @@ import { CliproxyLinkedUpstreamsPanel } from "@/components/admin/cliproxy-linked
 import { CliproxyInstanceLogsPanel } from "@/components/admin/cliproxy-instance-logs-panel";
 import { useCliproxyInstances } from "@/hooks/use-cliproxy";
 import { useContainerMorph } from "@/hooks/use-container-morph";
+import { cn } from "@/lib/utils";
 import type { CliproxyInstance } from "@/types/cliproxy";
+
+type WorkspaceView = "accounts" | "upstreams" | "logs";
+const VIEWS: WorkspaceView[] = ["accounts", "upstreams", "logs"];
 
 export default function CliproxyPage() {
   const t = useTranslations("cliproxy");
@@ -32,29 +36,46 @@ export default function CliproxyPage() {
   const [testInstance, setTestInstance] = useState<CliproxyInstance | null>(null);
   const [poolUpstreamInstance, setPoolUpstreamInstance] = useState<CliproxyInstance | null>(null);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+  const [view, setView] = useState<WorkspaceView>("accounts");
 
-  // 容器变形动画：新建按钮 / 实例行作为源，编辑与删除从同一实例展开、关闭收回。
-  // 同一时刻只开一个实例弹窗，共用单个 view-transition-name。
   const { startMorph, canMorph } = useContainerMorph();
   const morphSourceRef = useRef<HTMLElement | null>(null);
-
   const selectedInstance =
-    instances?.find((instance) => instance.id === selectedInstanceId) ?? null;
+    instances?.find((instance) => instance.id === selectedInstanceId) ?? instances?.[0] ?? null;
+
+  const selectInstance = (instance: CliproxyInstance) => {
+    setSelectedInstanceId(instance.id);
+    setView("accounts");
+  };
+
+  const viewLabel: Record<WorkspaceView, string> = {
+    accounts: t("accountsTitle"),
+    upstreams: t("linkedUpstreamsTitle"),
+    logs: t("logsTitle"),
+  };
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
 
-      <PageShell maxWidth="full">
-        <PageHeader title={t("pageTitle")} />
-        <Card variant="outlined">
-          <CardContent className="space-y-4 p-4 sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
+      <PageShell maxWidth="full" className="space-y-5">
+        <PageHeader title={t("pageTitle")} description={t("pageDescription")} />
+
+        <div className="grid min-w-0 overflow-hidden rounded-cf-md border border-divider bg-card shadow-[var(--vr-shadow-xs)] lg:grid-cols-[18rem_minmax(0,1fr)]">
+          <aside
+            className="min-w-0 border-b border-divider lg:border-b-0 lg:border-r"
+            aria-label={t("instancesTitle")}
+          >
+            <div className="space-y-3 border-b border-divider px-4 py-4">
+              <div className="flex items-center justify-between gap-2">
                 <h2 className="type-title-medium text-foreground">{t("instancesTitle")}</h2>
-                <p className="type-body-small text-muted-foreground">{t("pageDescription")}</p>
+                <span className="type-body-small tabular-nums text-muted-foreground">
+                  {instances?.length ?? 0}
+                </span>
               </div>
               <Button
+                variant="outline"
+                className="w-full justify-start"
                 onClick={(event) => {
                   const source = event.currentTarget;
                   morphSourceRef.current = source;
@@ -77,20 +98,17 @@ export default function CliproxyPage() {
               onRetry={() => void refetch()}
             />
             {isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
+              <div className="space-y-2 p-3">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
               </div>
             ) : isError && !instances ? null : !instances || instances.length === 0 ? (
-              <p className="py-8 text-center type-body-medium text-muted-foreground">
-                {t("noInstances")}
-              </p>
+              <p className="px-4 py-8 type-body-small text-muted-foreground">{t("noInstances")}</p>
             ) : (
               <CliproxyInstancesTable
                 instances={instances}
-                selectedInstanceId={selectedInstanceId}
-                onSelect={(instance) => setSelectedInstanceId(instance.id)}
+                selectedInstanceId={selectedInstance?.id ?? null}
+                onSelect={selectInstance}
                 onEdit={(instance, source) => {
                   morphSourceRef.current = source;
                   startMorph(() => setEditInstance(instance), {
@@ -111,24 +129,89 @@ export default function CliproxyPage() {
                 }}
               />
             )}
-          </CardContent>
-        </Card>
+          </aside>
 
-        {selectedInstance ? (
-          <div key={selectedInstance.id} className="content-enter space-y-6">
-            <CliproxyAccountsPanel instance={selectedInstance} />
-            <CliproxyLinkedUpstreamsPanel instance={selectedInstance} />
-            <CliproxyInstanceLogsPanel instance={selectedInstance} />
-          </div>
-        ) : instances && instances.length > 0 ? (
-          <Card variant="outlined">
-            <CardContent className="p-6">
-              <p className="text-center type-body-medium text-muted-foreground">
-                {t("selectInstanceHint")}
-              </p>
-            </CardContent>
-          </Card>
-        ) : null}
+          <section className="min-w-0 px-4 py-5 sm:px-6" aria-label={t("workspaceTitle")}>
+            {selectedInstance ? (
+              <div key={selectedInstance.id} className="min-w-0 space-y-5 content-enter">
+                <header className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="min-w-0 break-words text-xl font-semibold tracking-tight text-foreground">
+                      {selectedInstance.name}
+                    </h2>
+                    <Badge variant={selectedInstance.enabled ? "success" : "secondary"}>
+                      {selectedInstance.enabled ? t("statusEnabled") : t("statusDisabled")}
+                    </Badge>
+                  </div>
+                  <p className="break-all type-body-small text-muted-foreground">
+                    {selectedInstance.base_url}
+                  </p>
+                </header>
+
+                <div
+                  role="tablist"
+                  aria-label={t("workspaceViews")}
+                  className="flex gap-1 border-b border-divider"
+                >
+                  {VIEWS.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      role="tab"
+                      id={`cliproxy-tab-${item}`}
+                      aria-controls={`cliproxy-panel-${item}`}
+                      aria-selected={view === item}
+                      tabIndex={view === item ? 0 : -1}
+                      onClick={() => setView(item)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                        event.preventDefault();
+                        const direction = event.key === "ArrowRight" ? 1 : -1;
+                        const next =
+                          VIEWS[(VIEWS.indexOf(item) + direction + VIEWS.length) % VIEWS.length];
+                        setView(next);
+                        document.getElementById(`cliproxy-tab-${next}`)?.focus();
+                      }}
+                      className={cn(
+                        "min-w-0 rounded-t-cf-sm border-b-2 px-3 py-2 type-body-small font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4",
+                        view === item
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {viewLabel[item]}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  role="tabpanel"
+                  id={`cliproxy-panel-${view}`}
+                  aria-labelledby={`cliproxy-tab-${view}`}
+                  className="min-w-0"
+                >
+                  {view === "accounts" ? (
+                    <CliproxyAccountsPanel instance={selectedInstance} />
+                  ) : null}
+                  {view === "upstreams" ? (
+                    <CliproxyLinkedUpstreamsPanel instance={selectedInstance} />
+                  ) : null}
+                  {view === "logs" ? (
+                    <CliproxyInstanceLogsPanel instance={selectedInstance} />
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-52 items-center justify-center text-center type-body-medium text-muted-foreground">
+                {isLoading
+                  ? t("workspaceLoading")
+                  : isError
+                    ? t("workspaceInstancesFailed")
+                    : t("workspaceNoInstance")}
+              </div>
+            )}
+          </section>
+        </div>
       </PageShell>
 
       {createOpen && (

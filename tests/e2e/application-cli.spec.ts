@@ -29,9 +29,14 @@ for (const width of [1440, 320]) {
       await page.keyboard.press("Enter");
       await expect(instance).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: "audit@example.com" })).toContainText(
+        "Success 12"
+      );
+      await page.getByRole("tab", { name: "Instance Logs" }).click();
       await expect(
         page.getByText("2026-06-10 08:00:00 INFO Local fixture ready", { exact: true })
       ).toBeVisible();
+      await page.getByRole("tab", { name: "OAuth Accounts" }).click();
       const login = page.getByRole("button", { name: "OAuth Login", exact: true });
       await login.click();
       const dialog = page.getByRole("dialog");
@@ -83,3 +88,27 @@ for (const width of [1440, 320]) {
     });
   }
 }
+
+test("account usage failure keeps account management and secondary views available", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  await page.route("**/api/admin/cliproxy/instances/instance-audit/auth-accounts/usage", (route) =>
+    route.fulfill({ status: 502, json: { error: "upstream unavailable" } })
+  );
+
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Could not load account usage" })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry usage" })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath("usage-failed.png"), animations: "disabled" });
+
+  await page.getByRole("tab", { name: "Linked Upstreams" }).click();
+  await expect(page.getByText("No linked upstreams yet.")).toBeVisible();
+  await page.getByRole("tab", { name: "Instance Logs" }).click();
+  await expect(page.getByText("2026-06-10 08:00:00 INFO Local fixture ready")).toBeVisible();
+});
