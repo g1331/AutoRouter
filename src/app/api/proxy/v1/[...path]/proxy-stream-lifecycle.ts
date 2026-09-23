@@ -872,6 +872,37 @@ export function createStreamResponse(
         Date.now() - context.startTime,
         affinityBindingState
       );
+      const responseModels = metrics.responseModels;
+      if (
+        terminal.result.statusCode >= 200 &&
+        terminal.result.statusCode < 300 &&
+        responseModels?.length
+      ) {
+        const responseModel =
+          responseModels.find(
+            (model) => terminal.resolvedModel && model !== terminal.resolvedModel
+          ) ?? responseModels[0]!;
+        const modelMismatch = Boolean(
+          terminal.resolvedModel && terminal.resolvedModel !== responseModel
+        );
+        logFields.routingDecision = {
+          ...terminal.routingDecision,
+          response_model: responseModel,
+          model_mismatch: modelMismatch,
+        };
+        if (modelMismatch) {
+          log.warn(
+            {
+              requestId: context.requestId,
+              upstreamId: terminal.upstream.id,
+              originalModel: terminal.routingDecision.original_model,
+              resolvedModel: terminal.resolvedModel,
+              responseModel,
+            },
+            "upstream response model differs from requested model"
+          );
+        }
+      }
       const persistedLogId = await persistTerminalRequestLog(context, logFields);
       if (persistedLogId) {
         await context.persistBillingSnapshot({

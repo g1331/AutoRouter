@@ -6,7 +6,7 @@ function seedAdminToken(page: Page): Promise<void> {
   });
 }
 
-async function mockLogsApi(page: Page): Promise<void> {
+async function mockLogsApi(page: Page, includeResponseModels = false): Promise<void> {
   const now = new Date().toISOString();
   const payload = {
     items: [
@@ -66,6 +66,44 @@ async function mockLogsApi(page: Page): Promise<void> {
     page: 1,
     page_size: 20,
   };
+  if (includeResponseModels) {
+    const successBase = {
+      ...payload.items[0]!,
+      upstream_id: "up-rc",
+      upstream_name: "rc",
+      model: "gpt-4",
+      status_code: 200,
+      error_message: null,
+      routing_decision: {
+        ...payload.items[0]!.routing_decision,
+        original_model: "public-alias",
+        resolved_model: "gpt-4",
+        model_redirect_applied: true,
+        actual_upstream_id: "up-rc",
+        did_send_upstream: true,
+        failure_stage: null,
+      },
+    };
+    payload.items.push({
+      ...successBase,
+      id: "log-model-mismatch",
+      routing_decision: {
+        ...successBase.routing_decision,
+        response_model: "gpt-3.5",
+        model_mismatch: true,
+      },
+    });
+    payload.items.push({
+      ...successBase,
+      id: "log-model-match",
+      routing_decision: {
+        ...successBase.routing_decision,
+        response_model: "gpt-4",
+        model_mismatch: false,
+      },
+    });
+    payload.total = 3;
+  }
 
   await page.route("**/api/admin/logs**", async (route) => {
     await route.fulfill({
@@ -82,7 +120,7 @@ async function mockLogsApi(page: Page): Promise<void> {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        total: 1,
+        total: payload.total,
         stream_count: 0,
         slow_count: 0,
         p50_ttft_ms: null,
@@ -174,5 +212,30 @@ test.describe("Logs routing diagnostics", () => {
     await expect(page.getByText("rc", { exact: true })).toBeVisible();
     await expect(page.getByText("w:2", { exact: true })).toBeVisible();
     await expect(page.getByText("Selected", { exact: true })).toHaveCount(0);
+  });
+  test("shows a response model warning on desktop and mobile without flagging matching logs", async ({
+    page,
+  }) => {
+    await seedAdminToken(page);
+    await mockLogsApi(page, true);
+    await mockLogsFilterOptionApis(page);
+    await mockTrafficRecordingsApi(page);
+    await page.goto("/zh-CN/logs");
+
+    const warning = page.getByLabel("预期模型 gpt-4 → 上游返回模型 gpt-3.5");
+    await expect(page.getByRole("table")).toBeVisible();
+    await expect(warning).toHaveCount(1);
+    await expect(page.getByText("模型不符")).toHaveCount(1);
+
+    await page.getByRole("button", { name: "展开详情" }).nth(1).click();
+    await page.getByRole("button", { name: "响应" }).first().click();
+    await expect(page.getByText("预期模型", { exact: true })).toBeVisible();
+    await expect(page.getByText("上游返回模型", { exact: true })).toBeVisible();
+    await expect(page.getByText("gpt-3.5", { exact: true })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(warning).toBeVisible();
+    await expect(page.getByText("模型不符")).toHaveCount(1);
   });
 });
