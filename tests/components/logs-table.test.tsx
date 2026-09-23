@@ -660,6 +660,21 @@ describe("LogsTable", () => {
   });
 
   describe("Status Indicators", () => {
+    const routingDecision: RoutingDecisionLog = {
+      original_model: "public-alias",
+      resolved_model: "gpt-4",
+      model_redirect_applied: true,
+      response_model: "gpt-3.5",
+      model_mismatch: true,
+      provider_type: "openai",
+      routing_type: "direct",
+      candidates: [],
+      excluded: [],
+      candidate_count: 1,
+      final_candidate_count: 1,
+      selected_upstream_id: "upstream-1",
+      selection_strategy: "weighted",
+    };
     const hasClassInAnyTextMatch = (matcher: RegExp, className: string) =>
       screen.getAllByText(matcher).some((el) => {
         let current: Element | null = el;
@@ -739,6 +754,56 @@ describe("LogsTable", () => {
 
       expect(screen.getByLabelText("displayStatusInProgress")).not.toHaveTextContent("-");
       expect(screen.queryByText("displayStatusInProgress")).not.toBeInTheDocument();
+    });
+    it("shows response-model mismatch in desktop status and response details", () => {
+      const { rerender } = render(
+        <LogsTable logs={[{ ...mockLog, routing_decision: routingDecision }]} />
+      );
+
+      expect(screen.getAllByLabelText("rowModelMismatchTooltip")).toHaveLength(1);
+      expect(screen.getAllByText("rowModelMismatchBadge")).toHaveLength(1);
+      fireEvent.click(screen.getAllByRole("button", { name: "expandDetails" })[0]!);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]!);
+      expect(screen.getAllByText("expectedModel").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("upstreamResponseModel").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("gpt-3.5").length).toBeGreaterThan(0);
+
+      rerender(
+        <LogsTable
+          logs={[{ ...mockLog, routing_decision: { ...routingDecision, model_mismatch: false } }]}
+        />
+      );
+      expect(screen.queryByText("rowModelMismatchBadge")).not.toBeInTheDocument();
+
+      rerender(<LogsTable logs={[mockLog]} hideRecordingSection />);
+      expect(screen.queryByText("rowModelMismatchBadge")).not.toBeInTheDocument();
+    });
+
+    it("shows the warning in mobile request summary but not in old member logs", () => {
+      const originalMatchMedia = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: query === "(max-width: 1023px)",
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      })) as typeof window.matchMedia;
+      try {
+        const { rerender } = render(
+          <LogsTable logs={[{ ...mockLog, routing_decision: routingDecision }]} />
+        );
+        expect(screen.queryByRole("table")).not.toBeInTheDocument();
+        expect(screen.getByLabelText("rowModelMismatchTooltip")).toBeInTheDocument();
+        rerender(
+          <LogsTable logs={[{ ...mockLog, routing_decision: null }]} hideRecordingSection />
+        );
+        expect(screen.queryByText("rowModelMismatchBadge")).not.toBeInTheDocument();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
     });
   });
 

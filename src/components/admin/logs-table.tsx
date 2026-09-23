@@ -838,6 +838,32 @@ export function LogsTable({
 
   const isLogInProgress = (log: RequestLog) => log.status_code == null;
 
+  const renderModelMismatchBadge = (log: RequestLog) => {
+    if (log.routing_decision?.model_mismatch !== true) return null;
+
+    const description = t("rowModelMismatchTooltip", {
+      expected: log.routing_decision.resolved_model || "-",
+      actual: log.routing_decision.response_model || "-",
+    });
+    return (
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="warning"
+            className="max-w-full px-1.5 py-0 text-[10px] leading-4"
+            aria-label={description}
+            tabIndex={0}
+          >
+            {t("rowModelMismatchBadge")}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[min(90vw,28rem)] break-all">
+          {description}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
   const renderExpandedDetails = (options: {
     log: RequestLog;
     upstreamDisplayName: string | null;
@@ -1669,11 +1695,13 @@ export function LogsTable({
         summary: responseStepSummary,
         meta: responseStepMeta,
         tone:
-          isError && routingDecision?.failure_stage === "downstream_streaming"
-            ? ("error" as JourneyTone)
-            : ttftMs != null && requestTps == null
-              ? ("warning" as JourneyTone)
-              : ("success" as JourneyTone),
+          routingDecision?.model_mismatch === true
+            ? ("warning" as JourneyTone)
+            : isError && routingDecision?.failure_stage === "downstream_streaming"
+              ? ("error" as JourneyTone)
+              : ttftMs != null && requestTps == null
+                ? ("warning" as JourneyTone)
+                : ("success" as JourneyTone),
         metrics: (
           <>
             {responsePhaseDurationText
@@ -1686,6 +1714,39 @@ export function LogsTable({
         ),
         content: (
           <div className="space-y-2">
+            {routingDecision?.response_model ? (
+              <div
+                className={cn(
+                  "space-y-1 rounded-cf-sm border bg-surface-400 p-2.5 text-[11px]",
+                  routingDecision.model_mismatch === true
+                    ? "border-status-warning/50"
+                    : "border-transparent"
+                )}
+              >
+                <div className="flex min-w-0 flex-wrap gap-x-2">
+                  <span className="text-muted-foreground">{t("expectedModel")}</span>
+                  <span className="min-w-0 break-all font-mono text-foreground">
+                    {routingDecision.resolved_model &&
+                    routingDecision.resolved_model !== "(path-based)"
+                      ? routingDecision.resolved_model
+                      : "-"}
+                  </span>
+                </div>
+                <div className="flex min-w-0 flex-wrap gap-x-2">
+                  <span className="text-muted-foreground">{t("upstreamResponseModel")}</span>
+                  <span
+                    className={cn(
+                      "min-w-0 break-all font-mono",
+                      routingDecision.model_mismatch === true
+                        ? "text-status-warning"
+                        : "text-foreground"
+                    )}
+                  >
+                    {routingDecision.response_model}
+                  </span>
+                </div>
+              </div>
+            ) : null}
             {ttftMs != null ? (
               <div className="space-y-2 rounded-cf-sm border border-transparent bg-surface-400 p-2.5">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-[11px]">
@@ -2825,6 +2886,7 @@ export function LogsTable({
                                 {t("rowFailoverBadge", { count: log.failover_attempts })}
                               </Badge>
                             )}
+                            {renderModelMismatchBadge(log)}
                           </div>
                           <div
                             className={cn(
@@ -3167,6 +3229,7 @@ export function LogsTable({
                                     </TooltipContent>
                                   </Tooltip>
                                 )}
+                                {renderModelMismatchBadge(log)}
                               </div>
                             </TableCell>
                             <TableCell className="w-[112px] px-1.5 py-1 font-mono text-[10px] leading-tight">
