@@ -1,8 +1,10 @@
 # admin-console-layout-v2 Specification
 
 ## Purpose
-TBD - created by archiving change frontend-visual-rebuild. Update Purpose after archive.
+规定管理后台和成员门户共用壳层的响应式布局、导航层级与页面结构，使不同角色在桌面和移动设备上都能辨认当前位置、到达可用入口并完成详情页返回。
+
 ## Requirements
+
 ### Requirement: 管理台壳层必须提供统一的响应式布局结构
 系统 MUST 为桌面端与移动端提供统一语义的壳层结构，包含导航区、页面主区域与安全间距处理。桌面端 MUST 使用固定侧边导航，移动端 MUST 使用底部导航并保留安全区。
 
@@ -18,15 +20,23 @@ TBD - created by archiving change frontend-visual-rebuild. Update Purpose after 
 - **THEN** 该导航项 SHALL 显示明确的当前态视觉反馈且可被快速识别
 
 ### Requirement: 页面结构必须遵循统一区块模板
-系统 MUST 为核心页面提供统一结构模板，包括标题区、主操作区、主要内容区与状态反馈区，且允许在不破坏骨架的前提下做页面级扩展。标题区 MUST 复用统一的页面头部原语（`PageHeader`：图标 + 标题 + 描述 + 操作槽），页面外层容器 MUST 复用统一的页面骨架原语（`PageShell`：受控最大宽度与内边距），MUST NOT 让各页各自手写等价的头卡与外层骨架，非标骨架页（如 header-compensation）MUST 归一到共享原语。
+
+系统 MUST 为所有登录后页面提供共享的标题、主操作、内容与状态反馈结构，并按概览、密集列表、长配置和短表单选择受控宽度与密度。相同语义的页面头部与外层容器 MUST 复用共享结构，MUST NOT 各自维护等价骨架。标题 MUST 明确标识当前页面或对象；图标与业务说明按实际需要出现，MUST NOT 强制使用头部卡片、重复标题或填充性描述。页面扩展 MUST 保持可识别的标题与操作层级。
 
 #### Scenario: 核心页面保持一致骨架
-- **WHEN** 用户在 Dashboard、Keys、Upstreams、Logs、Settings 之间切换
-- **THEN** 页面 SHALL 维持一致的区块顺序与视觉层级
+
+- **WHEN** 用户在概览、密钥、上游、日志与设置之间切换
+- **THEN** 页面维持一致的标题和操作语义，同时为密集列表与短表单提供适宜的内容宽度
 
 #### Scenario: 页面头部与骨架复用共享原语
-- **WHEN** 任意管理台页面渲染标题区与外层容器
-- **THEN** 该页 SHALL 复用 `PageHeader` 与 `PageShell` 原语，SHALL NOT 出现手写的等价头卡或 `mx-auto max-w-* space-y-* px-* py-*` 非标骨架
+
+- **WHEN** 任意管理台或成员页面渲染标题区与外层容器
+- **THEN** 该页使用共享结构表达间距、宽度与标题操作关系，不另行实现等价头卡或骨架
+
+#### Scenario: 无需副标题的页面
+
+- **WHEN** 页面标题和操作已经充分表达用途
+- **THEN** 页面省略说明，不出现用于介绍视觉设计或填满版面的副标题
 
 ### Requirement: 壳层不得残留旧视觉语言样式
 系统 MUST 清除壳层相关组件中旧视觉语言的表现性类与特效，避免新旧风格混杂。
@@ -56,22 +66,22 @@ TBD - created by archiving change frontend-visual-rebuild. Update Purpose after 
 
 ### Requirement: 壳层必须按角色渲染管理后台与自助门户两套导航
 
-系统 MUST 复用同一套壳层布局组件，按当前身份角色渲染不同的导航集合。`admin` 与 `ADMIN_TOKEN` 身份渲染管理后台导航（仪表盘、API 密钥、上游、日志、系统分组）。`member` 身份渲染自助门户导航（个人概览、我的请求、我的密钥）。两套导航 MUST 保持一致的视觉层级与当前态反馈。
+系统 MUST 复用同一套壳层布局，按当前角色呈现导航集合。`admin` 与 `ADMIN_TOKEN` 身份 MUST 可访问仪表盘、排行榜、密钥、上游、日志、全部已实现系统页面与设置入口。`member` 身份 MUST 呈现个人概览、我的请求、我的密钥和修改密码四个入口。两套导航 MUST 保持一致的层级、当前态与响应式规则；展示差异 MUST NOT 改变服务端权限。
 
 #### Scenario: 管理员渲染管理后台导航
 
 - **WHEN** `admin` 或 `ADMIN_TOKEN` 身份进入界面
-- **THEN** 侧边导航显示管理后台的完整导航集合
+- **THEN** 全部管理页面可经导航或系统入口到达，排行榜和系统子页面不被遗漏
 
 #### Scenario: 普通用户渲染门户导航
 
 - **WHEN** `member` 身份进入界面
-- **THEN** 侧边导航仅显示自助门户的个人概览、我的请求、我的密钥三项
+- **THEN** 导航仅提供个人概览、我的请求、我的密钥和修改密码，不提供管理入口
 
 #### Scenario: 两套导航共享壳层结构
 
-- **WHEN** 在管理后台或自助门户之间按角色切换渲染
-- **THEN** 壳层保持一致的布局骨架、激活态与响应式行为
+- **WHEN** 管理后台或成员区按角色渲染
+- **THEN** 壳层具有一致的布局、当前态与响应式行为，角色专属信息只在对应区域显示
 
 ### Requirement: 设置页必须提供完整的系统管理入口
 系统设置页 MUST 提供指向全部系统级管理子页面的入口。当管理后台存在用户管理与 CLIProxy 管理子页面时，设置页 MUST 包含二者的入口，MUST NOT 遗漏任何已实现的系统管理子页面入口。
@@ -80,3 +90,16 @@ TBD - created by archiving change frontend-visual-rebuild. Update Purpose after 
 - **WHEN** 管理员进入系统设置页
 - **THEN** 页面 SHALL 展示用户管理与 CLIProxy 管理的入口，管理员 SHALL 可从设置页直接进入这两个子页面
 
+### Requirement: 移动端必须明确当前位置与返回关系
+
+系统 MUST 在移动端显示当前页面或对象身份，保留底部导航安全区；详情页 MUST 提供明确的返回入口，主操作与弹窗按钮 MUST NOT 被固定导航遮挡。返回行为 MUST 维持现有合理的历史恢复与无历史时的父级回退。
+
+#### Scenario: 手机进入成员页面
+
+- **WHEN** 成员打开概览、请求、密钥或密码页
+- **THEN** 页面显示可见的当前页面标题和对应导航当前态，不出现只有空顶栏而缺少页面身份的布局
+
+#### Scenario: 直接打开对象详情
+
+- **WHEN** 用户从外部链接直接进入密钥、上游或用户用量详情且没有应用内历史
+- **THEN** 用户能识别对象并通过返回入口到达相应列表，不依赖浏览器历史存在

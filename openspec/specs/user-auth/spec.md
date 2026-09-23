@@ -1,8 +1,10 @@
 # user-auth Specification
 
 ## Purpose
-TBD - created by archiving change multi-user-system. Update Purpose after archive.
+规定账户与管理员令牌的登录、身份确认及退出行为，使用户能够进入与自身角色相符的页面，并在认证失败或受限时获得真实、可理解的反馈。
+
 ## Requirements
+
 ### Requirement: 用户名密码登录
 
 系统 SHALL 提供 `POST /api/auth/login` 端点，接收用户名与密码，校验通过后签发携带用户标识与角色的 JWT 并随用户基本信息一并返回。校验流程 MUST 依次确认用户存在、账号处于启用状态、密码经 bcrypt 比对一致。任一环节失败 MUST 返回认证失败错误，且 MUST NOT 泄露具体失败原因是用户名不存在还是密码错误。密码明文 MUST NOT 写入数据库或日志。JWT payload MUST 只包含 `userId` 与 `role`，MUST NOT 包含用户名等可避免暴露的信息。
@@ -130,3 +132,21 @@ TBD - created by archiving change multi-user-system. Update Purpose after archiv
 - **WHEN** 用户访问登录界面
 - **THEN** 仅提供本地用户名密码登录与管理员令牌登录，无第三方登录选项
 
+### Requirement: 登录界面必须直接可用且状态真实
+
+系统 MUST 在登录页面就绪后直接提供本地账号与管理员令牌登录，MUST NOT 等待装饰性启动序列才启用输入或提交。系统 MUST NOT 将计时播放的文字或固定标签显示为服务检测结果，包括无依据的 CPU、网络、安全模块就绪状态。有效提交期间的加载、实际认证失败、网络失败与限流 MUST 给出真实反馈；账号与令牌模式切换、密码管理器、既有安全重定向和角色分流 MUST 保持可用。具体错误 MUST 遵守现有认证失败信息不泄露账号存在性的契约。
+
+#### Scenario: 页面就绪即可登录
+
+- **WHEN** 未认证用户打开登录页且表单已就绪
+- **THEN** 用户立即可以输入凭据并提交，不需要等待模拟系统检查或动画结束
+
+#### Scenario: 请求失败不显示虚构成功
+
+- **WHEN** 登录请求发生网络失败、认证失败或限流
+- **THEN** 界面按真实结果显示反馈，不同时显示未检测的网络在线、认证通道就绪或其他成功状态
+
+#### Scenario: 两种登录方式保持角色分流
+
+- **WHEN** 账号或管理员令牌登录成功
+- **THEN** 成员进入成员区，管理员进入后台，已有有效且授权允许的返回目标继续生效

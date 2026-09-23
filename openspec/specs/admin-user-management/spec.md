@@ -1,8 +1,10 @@
 # admin-user-management Specification
 
 ## Purpose
-TBD - created by archiving change multi-user-system. Update Purpose after archive.
+规定管理员对用户账户、角色、状态、密钥归属和上游授权的管理能力，使成员权限可被清楚配置和收回，并保护系统免于失去最后一个可用管理员。
+
 ## Requirements
+
 ### Requirement: 管理员用户 CRUD
 
 系统 SHALL 提供 `/api/admin/users` 路由组，允许具备管理员权限的身份创建、查询、更新和删除用户。创建用户时 MUST 接收用户名、初始密码、显示名和角色，密码在持久化前 MUST 经 bcrypt 哈希并满足密码最小强度。更新操作 SHALL 支持修改显示名、角色、激活状态、用户名，并支持重置密码；修改用户名 MUST 复用用户名唯一性与归一化校验。该路由组 MUST 拒绝 `member` 用户访问，响应 MUST NOT 包含密码哈希。
@@ -118,3 +120,30 @@ TBD - created by archiving change multi-user-system. Update Purpose after archiv
 - **WHEN** 用户管理页面在简体中文或英文 locale 下渲染
 - **THEN** 页面所有文案均有对应翻译，无缺失的占位键
 
+### Requirement: 按用户查看与管理名下密钥
+
+用户管理页 SHALL 提供按人密钥视图：管理员可从用户行进入，查看该用户名下全部密钥（名称、前缀、启停与管理员锁定状态、额度状态），并可跳转到密钥详情页执行完整管理操作。分配密钥对话框的候选列表 MUST 只包含无归属密钥，MUST NOT 提供把已归属他人的密钥直接改配给另一用户的入口。
+
+#### Scenario: 查看用户名下密钥
+
+- **WHEN** 管理员在用户列表对某用户打开“查看密钥”
+- **THEN** 展示该用户名下全部密钥及其状态，可跳转密钥详情页管理
+
+#### Scenario: 分配候选只含无归属密钥
+
+- **WHEN** 管理员打开分配密钥对话框
+- **THEN** 候选列表只包含无归属密钥，已归属密钥不可选
+
+### Requirement: 管理用户的上游可见性
+
+用户管理页 SHALL 允许管理员查看并修改用户的上游可见性。编辑用户对话框 MUST 提供单用户可见性开关；用户管理页 MUST 提供批量入口，可对全体成员一次性设为可见或隐藏。上游可见性默认隐藏。批量或单用户切换为隐藏时，MUST 触发对应用户名下密钥的重对齐（见 `member-upstream-visibility` 能力）。
+
+#### Scenario: 编辑用户切换可见性
+
+- **WHEN** 管理员在编辑用户对话框打开或关闭“上游可见”开关并保存
+- **THEN** 该用户的上游可见性被更新，切到隐藏时其名下密钥被重对齐到授权全集
+
+#### Scenario: 批量隐藏全体成员
+
+- **WHEN** 管理员从用户管理页对全体成员批量设为隐藏
+- **THEN** 全体成员上游可见性置为隐藏，各自名下密钥被重对齐，界面反馈受影响用户数
