@@ -31,3 +31,8 @@ rules:
 context: |
   语言：中文（简体）
   所有产出物必须用简体中文撰写。
+  AutoRouter 是单一 Next.js 16 全栈 AI API 网关；管理 UI、API Routes 和 /api/proxy/v1/* 代理入口运行在同一应用中。
+  使用 React 19、TypeScript、Drizzle ORM；生产默认 PostgreSQL，本地沙箱可用 SQLite。修改数据库结构时须同步 schema-pg.ts 与 schema-sqlite.ts。
+  管理界面使用 next-intl，维护 zh-CN 与 en 两套文案；相关功能和代理请求语义以 AGENTS.md、CONTEXT.md 及现有 specs 为准。
+  代码变更须补充对应测试，并按影响范围运行 Vitest、Playwright、lint、格式、类型或迁移一致性检查。
+  提交遵循 Conventional Commits 和仓库 pre-commit 质量门禁；每个已完成的 OpenSpec 任务阶段应提交。
