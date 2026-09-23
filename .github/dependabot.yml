@@ -32,15 +32,18 @@ updates:
       - javascript
     open-pull-requests-limit: 10
     versioning-strategy: increase
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-patch
     groups:
-      npm-minor:
+      npm-patch:
         applies-to: version-updates
         patterns:
           - "*"
         exclude-patterns:
           - next
         update-types:
-          - minor
           - patch
 
   - package-ecosystem: docker
@@ -53,3 +56,8 @@ updates:
       - dependencies
       - docker
     open-pull-requests-limit: 5
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
