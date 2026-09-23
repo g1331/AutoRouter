@@ -116,6 +116,42 @@ test("single CLIProxy instance uses the desktop workspace width without a tinted
   );
 });
 
+for (const [width, theme] of [
+  [1440, "light"],
+  [320, "light"],
+  [1440, "dark"],
+] as const) {
+  test(`provider quota is visible from the account row at ${width}px in ${theme}`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await seedTheme(page, theme);
+    await mockApplicationPages(page);
+    await page.goto("/en/system/cliproxy");
+    await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "View quota" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("Provider quota", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("75%", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("20%", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("progressbar", { name: "Primary window" })).toHaveAttribute(
+      "aria-valuenow",
+      "75"
+    );
+    await expect(dialog.getByText("Request usage", { exact: true }).first()).toBeVisible();
+    expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(width);
+    const result = await new AxeBuilder({ page })
+      .include('[role="dialog"]')
+      .withTags(["wcag2a", "wcag2aa"])
+      .analyze();
+    expect(result.violations.map(({ id }) => id)).toEqual([]);
+    await page.screenshot({
+      path: info.outputPath(`provider-quota-${theme}-${width}.png`),
+      animations: "disabled",
+    });
+  });
+}
+
 test("account usage failure keeps account management and secondary views available", async ({
   page,
 }, info) => {

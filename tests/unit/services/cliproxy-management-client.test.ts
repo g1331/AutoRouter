@@ -7,6 +7,7 @@ vi.mock("@/lib/utils/logger", () => ({
 import {
   listAuthFiles,
   getAuthFilesSnapshot,
+  requestProviderQuota,
   getAuthFileModels,
   patchAuthFileStatus,
   patchAuthFileFields,
@@ -73,6 +74,38 @@ describe("cliproxy-management-client", () => {
     const snapshot = await getAuthFilesSnapshot(TARGET);
     expect(snapshot.observed_at).toBe("2026-09-23T02:00:00Z");
     expect(snapshot.files[0]).toMatchObject({ name: "codex-a.json", success: 0, failed: 2 });
+  });
+
+  it("Codex 额度查询只向固定地址发送选中账号索引", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ status_code: 200, body: "{}" }), { status: 200 })
+    );
+    await requestProviderQuota(TARGET, "codex", "auth-index-1", "account-1");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/api-call");
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({
+      auth_index: "auth-index-1",
+      method: "GET",
+      url: "https://chatgpt.com/backend-api/wham/usage",
+      header: {
+        Authorization: "Bearer $TOKEN$",
+        "Chatgpt-Account-Id": "account-1",
+      },
+    });
+  });
+
+  it("Claude 额度查询使用官方 OAuth usage 地址", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ status_code: 200, body: "{}" }), { status: 200 })
+    );
+    await requestProviderQuota(TARGET, "anthropic", "auth-index-2", null);
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.url).toBe("https://api.anthropic.com/api/oauth/usage");
+    expect(body.header).toMatchObject({
+      Authorization: "Bearer $TOKEN$",
+      "anthropic-beta": "oauth-2025-04-20",
+    });
+    expect(body.header).not.toHaveProperty("Chatgpt-Account-Id");
   });
 
   it("getAuthFileModels 对账号名 URL 编码并解析 models", async () => {

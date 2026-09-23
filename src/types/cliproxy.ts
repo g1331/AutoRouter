@@ -133,6 +133,21 @@ export interface CliproxyAccountUsageSnapshot {
   accounts: CliproxyAccountUsage[];
 }
 
+/** 由供应商实时返回的单个额度窗口；与 CLIProxyAPI 进程内请求统计无关。 */
+export interface CliproxyProviderQuotaWindow {
+  id: string;
+  remaining_percent: number | null;
+  resets_at: string | null;
+}
+
+export interface CliproxyProviderQuota {
+  provider: "codex" | "anthropic" | null;
+  status: "ready" | "unsupported" | "unavailable";
+  reason: "disabled" | "upstream_unavailable" | "missing_auth_index" | null;
+  fetched_at: string;
+  windows: CliproxyProviderQuotaWindow[];
+}
+
 /** 账号字段更新请求体。 */
 export interface CliproxyAuthAccountFieldsUpdate {
   prefix?: string;

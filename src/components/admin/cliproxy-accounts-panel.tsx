@@ -242,6 +242,7 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
       )}
       {detailAccount && (
         <CliproxyAccountDetailDialog
+          instanceId={instance.id}
           account={detailAccount}
           usage={usageByName.get(detailAccount.auth_file_name) ?? null}
           usageState={usageState}

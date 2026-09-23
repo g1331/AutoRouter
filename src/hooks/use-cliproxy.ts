@@ -9,6 +9,7 @@ import type {
   CliproxyConnectionTestResult,
   CliproxyAuthAccount,
   CliproxyAccountUsageSnapshot,
+  CliproxyProviderQuota,
   CliproxyAuthAccountFieldsUpdate,
   CliproxyAuthAccountSyncResult,
   CliproxyProvider,
@@ -172,6 +173,26 @@ export function useCliproxyAccountUsage(instanceId: string | null) {
     },
     enabled: Boolean(instanceId),
     staleTime: 15_000,
+  });
+}
+
+/** 仅在打开单账号详情时读取供应商返回的剩余额度。 */
+export function useCliproxyProviderQuota(instanceId: string, authFileName: string | null) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["cliproxy", "provider-quota", instanceId, authFileName],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: CliproxyProviderQuota }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts/${encodeURIComponent(
+          authFileName ?? ""
+        )}/provider-quota`
+      );
+      return response.data;
+    },
+    enabled: Boolean(instanceId && authFileName),
+    staleTime: 15_000,
+    retry: false,
   });
 }
 

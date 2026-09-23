@@ -97,7 +97,7 @@ export function CliproxyAccountsTable({
           </TableHead>
           <TableHead className="w-[31%] px-2 sm:w-[21%] sm:px-4">{t("columnRequests")}</TableHead>
           <TableHead className="hidden lg:table-cell lg:w-[25%]">
-            {t("columnQuotaObservation")}
+            {t("providerQuotaTitle")}
           </TableHead>
           <TableHead className="w-[15%] px-1 text-right sm:w-[8%] sm:px-4">
             {t("columnActions")}
@@ -107,13 +107,23 @@ export function CliproxyAccountsTable({
       <TableBody>
         {accounts.map((account) => {
           const usage = usageByName?.get(account.auth_file_name);
-          const hasQuota = Boolean(
-            (usage?.quota && Object.keys(usage.quota.signals).length > 0) ||
-            (usage?.model_quotas &&
-              Object.values(usage.model_quotas).some(
-                (quota) => Object.keys(quota.signals).length > 0
-              ))
-          );
+          const supportsProviderQuota = /^(codex|openai|claude|anthropic)$/i.test(account.provider);
+          const quotaEntry =
+            supportsProviderQuota && !account.disabled ? (
+              <button
+                type="button"
+                onClick={() => onViewDetail(account, rowSource(account.id))}
+                className="type-body-small font-medium text-primary underline-offset-2 hover:underline"
+              >
+                {t("providerQuotaView")}
+              </button>
+            ) : (
+              <span className="type-body-small text-muted-foreground">
+                {t(
+                  account.disabled ? "providerQuotaDisabledShort" : "providerQuotaUnsupportedShort"
+                )}
+              </span>
+            );
           return (
             <TableRow
               key={account.id}
@@ -154,27 +164,9 @@ export function CliproxyAccountsTable({
               </TableCell>
               <TableCell className="px-2 py-3 align-top sm:px-4">
                 <RequestCounts usage={usage} state={usageState} />
-                {(usageState === "ready" || usageState === "stale") && hasQuota ? (
-                  <span className="mt-1 block type-body-small text-muted-foreground lg:hidden">
-                    {t("quotaObserved")}
-                  </span>
-                ) : null}
+                <div className="mt-1 lg:hidden">{quotaEntry}</div>
               </TableCell>
-              <TableCell className="hidden py-3 align-top lg:table-cell">
-                {(usageState === "ready" || usageState === "stale") && hasQuota ? (
-                  <button
-                    type="button"
-                    onClick={() => onViewDetail(account, rowSource(account.id))}
-                    className="type-body-small text-primary underline-offset-2 hover:underline"
-                  >
-                    {t("quotaObserved")}
-                  </button>
-                ) : (
-                  <span className="type-body-small text-muted-foreground">
-                    {t("quotaNotObserved")}
-                  </span>
-                )}
-              </TableCell>
+              <TableCell className="hidden py-3 align-top lg:table-cell">{quotaEntry}</TableCell>
               <TableCell className="px-1 py-2 text-right align-top sm:px-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

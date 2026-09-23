@@ -71,6 +71,11 @@ export interface CliproxyAuthFilesSnapshot {
   files: CliproxyAuthFileEntry[];
 }
 
+export interface CliproxyProviderQuotaApiCallResult {
+  status_code: number;
+  body: string;
+}
+
 /** 发起 OAuth 登录返回的授权信息。 */
 export interface CliproxyAuthUrlResult {
   url: string;
@@ -253,6 +258,45 @@ export async function getAuthFilesSnapshot(
     observed_at: result.observed_at,
     files: Array.isArray(result.files) ? result.files : [],
   };
+}
+
+/** 只允许向已知供应商额度地址发起 GET；Token 由 CLIProxyAPI 在管理端替换。 */
+export async function requestProviderQuota(
+  target: CliproxyManagementTarget,
+  provider: "codex" | "anthropic",
+  authIndex: string,
+  accountId: string | null
+): Promise<CliproxyProviderQuotaApiCallResult> {
+  const isCodex = provider === "codex";
+  const header: Record<string, string> = isCodex
+    ? {
+        Authorization: "Bearer $TOKEN$",
+        "Content-Type": "application/json",
+        "User-Agent": "codex-tui/0.149.1 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11",
+      }
+    : {
+        Authorization: "Bearer $TOKEN$",
+        "Content-Type": "application/json",
+        "anthropic-beta": "oauth-2025-04-20",
+      };
+  if (isCodex && accountId) header["Chatgpt-Account-Id"] = accountId;
+
+  return requestManagementApi<CliproxyProviderQuotaApiCallResult>(
+    target,
+    "/api-call",
+    {
+      method: "POST",
+      body: {
+        auth_index: authIndex,
+        method: "GET",
+        url: isCodex
+          ? "https://chatgpt.com/backend-api/wham/usage"
+          : "https://api.anthropic.com/api/oauth/usage",
+        header,
+      },
+    },
+    30
+  );
 }
 
 /** 查询某个 auth-file 的可用模型列表。 */
