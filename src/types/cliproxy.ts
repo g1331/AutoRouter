@@ -103,6 +103,36 @@ export interface CliproxyAuthAccount {
   updated_at: string;
 }
 
+/** CLIProxyAPI 当前进程对一个账号记录的近期十分钟请求分桶。 */
+export interface CliproxyRecentRequestBucket {
+  time: string;
+  success: number;
+  failed: number;
+}
+
+/** 上游请求中被动采集的配额信号，并非供应商账号剩余额度。 */
+export interface CliproxyQuotaObservation {
+  observed_at: string | null;
+  signals: Record<string, string>;
+}
+
+/** 一个认证账号在本次 CLIProxyAPI `auth-files` 快照中的用量。 */
+export interface CliproxyAccountUsage {
+  auth_file_name: string;
+  success: number | null;
+  failed: number | null;
+  recent_requests: CliproxyRecentRequestBucket[] | null;
+  quota: CliproxyQuotaObservation | null;
+  model_quotas: Record<string, CliproxyQuotaObservation> | null;
+}
+
+/** 独立于账号目录缓存的实时只读用量响应。 */
+export interface CliproxyAccountUsageSnapshot {
+  fetched_at: string;
+  observed_at: string | null;
+  accounts: CliproxyAccountUsage[];
+}
+
 /** 账号字段更新请求体。 */
 export interface CliproxyAuthAccountFieldsUpdate {
   prefix?: string;

@@ -65,6 +65,12 @@ export interface CliproxyAuthFileEntry {
   [key: string]: unknown;
 }
 
+/** auth-files 的响应快照；`observed_at` 在旧版或磁盘回退路径中可能缺失。 */
+export interface CliproxyAuthFilesSnapshot {
+  observed_at?: unknown;
+  files: CliproxyAuthFileEntry[];
+}
+
 /** 发起 OAuth 登录返回的授权信息。 */
 export interface CliproxyAuthUrlResult {
   url: string;
@@ -231,12 +237,22 @@ async function requestManagementApi<T>(
 export async function listAuthFiles(
   target: CliproxyManagementTarget
 ): Promise<CliproxyAuthFileEntry[]> {
-  const result = await requestManagementApi<{ files?: CliproxyAuthFileEntry[] }>(
+  return (await getAuthFilesSnapshot(target)).files;
+}
+
+/** 读取带观测时间的 auth-files 快照，供账号用量视图使用。 */
+export async function getAuthFilesSnapshot(
+  target: CliproxyManagementTarget
+): Promise<CliproxyAuthFilesSnapshot> {
+  const result = await requestManagementApi<Partial<CliproxyAuthFilesSnapshot>>(
     target,
     "/auth-files",
     { method: "GET" }
   );
-  return Array.isArray(result.files) ? result.files : [];
+  return {
+    observed_at: result.observed_at,
+    files: Array.isArray(result.files) ? result.files : [],
+  };
 }
 
 /** 查询某个 auth-file 的可用模型列表。 */
