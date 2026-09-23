@@ -1,7 +1,6 @@
 name: Dependabot Fix Lockfile
 
-# Automatically fix pnpm-lock.yaml when Dependabot updates package.json
-# This is needed because Dependabot doesn't properly handle pnpm workspaces
+# Update pnpm-lock.yaml when Dependabot changes package.json without updating the lockfile.
 
 on:
   pull_request:
@@ -37,11 +36,8 @@ jobs:
 
       - name: Regenerate pnpm-lock.yaml
         run: |
-          # Remove existing lockfile to force regeneration
-          rm -f pnpm-lock.yaml
-          # Install dependencies (this regenerates the lockfile)
-          pnpm install --no-frozen-lockfile
-          echo "Lockfile regenerated successfully"
+          # Preserve existing resolutions outside the changed dependency graph.
+          pnpm install --lockfile-only --no-frozen-lockfile
 
       - name: Check for changes
         id: changes
