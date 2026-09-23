@@ -5,9 +5,12 @@ const downloadMutate = vi.fn();
 const statusMutate = vi.fn();
 const syncMutate = vi.fn();
 const useCliproxyAuthAccountsMock = vi.fn();
+const useCliproxyAccountUsageMock = vi.fn();
+const refetchUsage = vi.fn();
 
 vi.mock("@/hooks/use-cliproxy", () => ({
   useCliproxyAuthAccounts: (...args: unknown[]) => useCliproxyAuthAccountsMock(...args),
+  useCliproxyAccountUsage: (...args: unknown[]) => useCliproxyAccountUsageMock(...args),
   useSyncCliproxyAuthAccounts: () => ({ mutate: syncMutate, isPending: false }),
   useSetCliproxyAuthAccountStatus: () => ({ mutate: statusMutate, isPending: false }),
   useDownloadCliproxyAuthFile: () => ({ mutate: downloadMutate, isPending: false }),
@@ -22,6 +25,7 @@ vi.mock("@/components/admin/cliproxy-accounts-table", () => ({
     const firstAccount = (props.accounts as Array<unknown>)[0];
     return (
       <div data-testid="accounts-table">
+        <span data-testid="usage-state">{String(props.usageState)}</span>
         <button onClick={() => (props.onDownload as (a: unknown) => void)(firstAccount)}>
           trigger-download
         </button>
@@ -116,6 +120,13 @@ describe("CliproxyAccountsPanel 集成行为", () => {
       isLoading: false,
       isError: false,
     });
+    useCliproxyAccountUsageMock.mockReturnValue({
+      data: { fetched_at: "2026-09-23T02:00:00Z", observed_at: null, accounts: [] },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: refetchUsage,
+    });
   });
 
   it("加载中时展示骨架占位", () => {
@@ -162,6 +173,37 @@ describe("CliproxyAccountsPanel 集成行为", () => {
     render(<CliproxyAccountsPanel instance={instance} />);
     fireEvent.click(screen.getByText("syncAccounts"));
     expect(syncMutate).toHaveBeenCalledWith("instance-1");
+  });
+
+  it("用量接口失败时保留账号列表并可独立重试", () => {
+    useCliproxyAccountUsageMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      isFetching: false,
+      refetch: refetchUsage,
+    });
+    render(<CliproxyAccountsPanel instance={instance} />);
+    expect(screen.getByTestId("accounts-table")).toBeInTheDocument();
+    expect(screen.getByTestId("usage-state")).toHaveTextContent("error");
+    expect(screen.getByRole("alert")).toHaveTextContent("usageLoadFailed");
+    fireEvent.click(screen.getByText("retryUsage"));
+    expect(refetchUsage).toHaveBeenCalledOnce();
+  });
+
+  it("已有快照刷新失败时标记用量陈旧并允许刷新", () => {
+    useCliproxyAccountUsageMock.mockReturnValue({
+      data: { fetched_at: "2026-09-23T02:00:00Z", observed_at: null, accounts: [] },
+      isLoading: false,
+      isError: true,
+      isFetching: false,
+      refetch: refetchUsage,
+    });
+    render(<CliproxyAccountsPanel instance={instance} />);
+    expect(screen.getByTestId("usage-state")).toHaveTextContent("stale");
+    expect(screen.getByRole("alert")).toHaveTextContent("usageRefreshFailedStale");
+    fireEvent.click(screen.getByText("refreshUsage"));
+    expect(refetchUsage).toHaveBeenCalledOnce();
   });
 
   it("点击 OAuth 登录按钮打开登录弹窗，关闭弹窗回到收起态", () => {

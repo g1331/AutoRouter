@@ -6,6 +6,7 @@ vi.mock("@/lib/utils/logger", () => ({
 
 import {
   listAuthFiles,
+  getAuthFilesSnapshot,
   getAuthFileModels,
   patchAuthFileStatus,
   patchAuthFileFields,
@@ -57,6 +58,21 @@ describe("cliproxy-management-client", () => {
   it("listAuthFiles 响应缺少 files 字段时返回空数组", async () => {
     stubFetchOnce(new Response(JSON.stringify({}), { status: 200 }));
     expect(await listAuthFiles(TARGET)).toEqual([]);
+  });
+
+  it("getAuthFilesSnapshot 保留上游观测时间和用量字段", async () => {
+    stubFetchOnce(
+      new Response(
+        JSON.stringify({
+          observed_at: "2026-09-23T02:00:00Z",
+          files: [{ name: "codex-a.json", success: 0, failed: 2, recent_requests: [] }],
+        }),
+        { status: 200 }
+      )
+    );
+    const snapshot = await getAuthFilesSnapshot(TARGET);
+    expect(snapshot.observed_at).toBe("2026-09-23T02:00:00Z");
+    expect(snapshot.files[0]).toMatchObject({ name: "codex-a.json", success: 0, failed: 2 });
   });
 
   it("getAuthFileModels 对账号名 URL 编码并解析 models", async () => {

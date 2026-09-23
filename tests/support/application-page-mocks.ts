@@ -119,6 +119,31 @@ export async function mockApplicationPages(page: Page, member = false) {
         ],
       },
     ],
+    [
+      "**/api/admin/cliproxy/instances/instance-audit/auth-accounts/usage",
+      {
+        data: {
+          fetched_at: date,
+          observed_at: date,
+          accounts: [
+            {
+              auth_file_name: "audit.json",
+              success: 12,
+              failed: 1,
+              recent_requests: [
+                { time: "07:40-07:50", success: 4, failed: 0 },
+                { time: "07:50-08:00", success: 3, failed: 1 },
+              ],
+              quota: {
+                observed_at: date,
+                signals: { "X-Codex-Primary-Used-Percent": "25" },
+              },
+              model_quotas: null,
+            },
+          ],
+        },
+      },
+    ],
     ["**/api/admin/cliproxy/instances/instance-audit/linked-upstreams", { data: [] }],
     [
       "**/api/admin/cliproxy/instances/instance-audit/logs*",

@@ -8,6 +8,7 @@ import type {
   CliproxyInstanceUpdate,
   CliproxyConnectionTestResult,
   CliproxyAuthAccount,
+  CliproxyAccountUsageSnapshot,
   CliproxyAuthAccountFieldsUpdate,
   CliproxyAuthAccountSyncResult,
   CliproxyProvider,
@@ -157,6 +158,23 @@ export function useCliproxyAuthAccounts(instanceId: string | null) {
   });
 }
 
+/** 实时读取 CLIProxyAPI 账号级用量，与本地账号目录缓存独立。 */
+export function useCliproxyAccountUsage(instanceId: string | null) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["cliproxy", "account-usage", instanceId],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: CliproxyAccountUsageSnapshot }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts/usage`
+      );
+      return response.data;
+    },
+    enabled: Boolean(instanceId),
+    staleTime: 15_000,
+  });
+}
+
 /** 从 CLIProxyAPI 同步指定实例的 OAuth 账号。 */
 export function useSyncCliproxyAuthAccounts() {
   const { apiClient } = useAuth();
@@ -172,6 +190,7 @@ export function useSyncCliproxyAuthAccounts() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["cliproxy", "accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["cliproxy", "account-usage"] });
       toast.success(
         t("accountSyncSuccess", {
           added: result.added,

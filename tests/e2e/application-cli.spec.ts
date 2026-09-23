@@ -28,10 +28,21 @@ for (const width of [1440, 320]) {
       await instance.focus();
       await page.keyboard.press("Enter");
       await expect(instance).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        page
+          .getByRole("row")
+          .filter({ hasText: "Local CLIProxyAPI" })
+          .getByText("https://proxy.example.com", { exact: true })
+      ).toBeVisible();
       await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: "audit@example.com" })).toContainText(
+        "Success 12"
+      );
+      await page.getByRole("tab", { name: "Instance Logs" }).click();
       await expect(
         page.getByText("2026-06-10 08:00:00 INFO Local fixture ready", { exact: true })
       ).toBeVisible();
+      await page.getByRole("tab", { name: "OAuth Accounts" }).click();
       const login = page.getByRole("button", { name: "OAuth Login", exact: true });
       await login.click();
       const dialog = page.getByRole("dialog");
@@ -83,3 +94,93 @@ for (const width of [1440, 320]) {
     });
   }
 }
+
+test("single CLIProxy instance uses the desktop workspace width without a tinted selection", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+
+  const shell = await page.locator(".app-page").boundingBox();
+  const workspace = await page.locator(".app-page section[aria-label]").boundingBox();
+  expect(shell).not.toBeNull();
+  expect(workspace).not.toBeNull();
+  expect(workspace!.width / shell!.width).toBeGreaterThan(0.9);
+  expect(workspace!.y).toBeLessThan(280);
+  await expect(page.locator(".app-page aside tbody tr")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+});
+
+test("account usage failure keeps account management and secondary views available", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  await page.route("**/api/admin/cliproxy/instances/instance-audit/auth-accounts/usage", (route) =>
+    route.fulfill({ status: 502, json: { error: "upstream unavailable" } })
+  );
+
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Could not load account usage" })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry usage" })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath("usage-failed.png"), animations: "disabled" });
+
+  await page.getByRole("tab", { name: "Linked Upstreams" }).click();
+  await expect(page.getByText("No linked upstreams yet.")).toBeVisible();
+  await page.getByRole("tab", { name: "Instance Logs" }).click();
+  await expect(page.getByText("2026-06-10 08:00:00 INFO Local fixture ready")).toBeVisible();
+});
+
+test("multiple instances keep account names readable at 1024px", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 844 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  const date = "2026-06-10T16:00:00.000Z";
+  await page.route("**/api/admin/cliproxy/instances", (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          ["instance-audit", "Local CLIProxyAPI", "https://proxy.example.com"],
+          ["instance-b", "Team Proxy", "https://team.example.com"],
+          ["instance-c", "Backup Proxy", "https://backup.example.com"],
+        ].map(([id, name, base_url]) => ({
+          id,
+          name,
+          base_url,
+          management_url: base_url,
+          mode: "external",
+          has_client_api_key: true,
+          has_management_key: true,
+          enabled: true,
+          description: null,
+          created_at: date,
+          updated_at: date,
+        })),
+      },
+    })
+  );
+
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByRole("button", { name: "Team Proxy" })).toBeVisible();
+  const accountName = page
+    .getByRole("row")
+    .filter({ hasText: "audit@example.com" })
+    .getByText("audit.json", { exact: true });
+  await expect(accountName).toBeVisible();
+  const lineCount = await accountName.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects().length;
+  });
+  expect(lineCount).toBe(1);
+  expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(1024);
+});

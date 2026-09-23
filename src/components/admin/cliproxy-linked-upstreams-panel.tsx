@@ -2,7 +2,6 @@
 
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { QueryStatus } from "@/components/ui/query-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,73 +34,71 @@ export function CliproxyLinkedUpstreamsPanel({ instance }: CliproxyLinkedUpstrea
   } = useCliproxyLinkedUpstreams(instance.id);
 
   return (
-    <Card variant="outlined">
-      <CardContent className="space-y-4 p-4 sm:p-6">
-        <div className="min-w-0">
-          <h2 className="type-title-medium text-foreground">{t("linkedUpstreamsTitle")}</h2>
-          <p className="type-body-small text-muted-foreground">{instance.name}</p>
-        </div>
+    <section className="space-y-4">
+      <div className="min-w-0">
+        <h2 className="type-title-medium text-foreground">{t("linkedUpstreamsTitle")}</h2>
+        <p className="type-body-small text-muted-foreground">{instance.name}</p>
+      </div>
 
-        <QueryStatus
-          error={isError}
-          fetching={isFetching && !isLoading}
-          hasData={upstreams !== undefined}
-          onRetry={() => void refetch()}
-        />
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : isError && !upstreams ? null : !upstreams || upstreams.length === 0 ? (
-          <p className="py-8 text-center type-body-medium text-muted-foreground">
-            {t("linkedUpstreamsEmpty")}
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("columnUpstreamName")}</TableHead>
-                <TableHead>{t("columnProvider")}</TableHead>
-                <TableHead>{t("columnUpstreamKind")}</TableHead>
-                <TableHead>{t("columnLinkedAccount")}</TableHead>
-                <TableHead>{t("columnStatus")}</TableHead>
+      <QueryStatus
+        error={isError}
+        fetching={isFetching && !isLoading}
+        hasData={upstreams !== undefined}
+        onRetry={() => void refetch()}
+      />
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : isError && !upstreams ? null : !upstreams || upstreams.length === 0 ? (
+        <p className="py-8 text-center type-body-medium text-muted-foreground">
+          {t("linkedUpstreamsEmpty")}
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("columnUpstreamName")}</TableHead>
+              <TableHead>{t("columnProvider")}</TableHead>
+              <TableHead>{t("columnUpstreamKind")}</TableHead>
+              <TableHead>{t("columnLinkedAccount")}</TableHead>
+              <TableHead>{t("columnStatus")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {upstreams.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="font-medium">{row.name}</TableCell>
+                <TableCell>
+                  {row.provider ? (
+                    <Badge variant="info">{row.provider}</Badge>
+                  ) : (
+                    <Badge variant="secondary">{t("linkedUpstreamProviderUnknown")}</Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={row.kind === "pool" ? "secondary" : "info"}>
+                    {row.kind === "pool" ? t("kindPool") : t("kindSingle")}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {row.auth_file_name ? (
+                    <code className="type-body-small font-mono">{row.auth_file_name}</code>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={row.is_active ? "success" : "secondary"}>
+                    {row.is_active ? t("statusEnabled") : t("statusDisabled")}
+                  </Badge>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {upstreams.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-medium">{row.name}</TableCell>
-                  <TableCell>
-                    {row.provider ? (
-                      <Badge variant="info">{row.provider}</Badge>
-                    ) : (
-                      <Badge variant="secondary">{t("linkedUpstreamProviderUnknown")}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={row.kind === "pool" ? "secondary" : "info"}>
-                      {row.kind === "pool" ? t("kindPool") : t("kindSingle")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {row.auth_file_name ? (
-                      <code className="type-body-small font-mono">{row.auth_file_name}</code>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={row.is_active ? "success" : "secondary"}>
-                      {row.is_active ? t("statusEnabled") : t("statusDisabled")}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
   );
 }

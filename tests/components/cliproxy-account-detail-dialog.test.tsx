@@ -6,7 +6,7 @@ vi.mock("next-intl", () => ({
 }));
 
 import { CliproxyAccountDetailDialog } from "@/components/admin/cliproxy-account-detail-dialog";
-import type { CliproxyAuthAccount } from "@/types/cliproxy";
+import type { CliproxyAccountUsage, CliproxyAuthAccount } from "@/types/cliproxy";
 
 const account: CliproxyAuthAccount = {
   id: "acc-1",
@@ -57,5 +57,26 @@ describe("CliproxyAccountDetailDialog", () => {
     render(<CliproxyAccountDetailDialog account={minimal} open onClose={vi.fn()} />);
     // 占位符出现多次，至少一次
     expect(screen.getAllByText("accountDetailEmpty").length).toBeGreaterThan(0);
+  });
+
+  it("区分近期请求与配额观测，展示模型级信号", () => {
+    const usage: CliproxyAccountUsage = {
+      auth_file_name: "codex-a.json",
+      success: 0,
+      failed: 2,
+      recent_requests: [{ time: "10:00-10:10", success: 0, failed: 1 }],
+      quota: {
+        observed_at: "2026-09-23T02:00:00Z",
+        signals: { "X-Codex-Primary-Used-Percent": "25" },
+      },
+      model_quotas: {
+        "gpt-6": { observed_at: null, signals: { "X-Codex-Primary-Used-Percent": "75" } },
+      },
+    };
+    render(<CliproxyAccountDetailDialog account={account} usage={usage} open onClose={vi.fn()} />);
+    expect(screen.getByText("10:00-10:10")).toBeInTheDocument();
+    expect(screen.getByText("usageQuotaCaveat")).toBeInTheDocument();
+    expect(screen.getByText("25")).toBeInTheDocument();
+    expect(screen.getByText("usageModelQuotas")).toBeInTheDocument();
   });
 });

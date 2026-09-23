@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CLIPROXY_LOGS_DEFAULT_LIMIT, useCliproxyInstanceLogs } from "@/hooks/use-cliproxy";
@@ -54,73 +53,69 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
   }, [result, keyword]);
 
   return (
-    <Card variant="outlined">
-      <CardContent className="space-y-4 p-4 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="type-title-medium text-foreground">{t("logsTitle")}</h2>
-            <p className="type-body-small text-muted-foreground">{instance.name}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder={t("logsSearchPlaceholder")}
-              aria-label={t("logsSearchPlaceholder")}
-              className="w-full sm:w-64"
-            />
-            <Button variant="outline" disabled={isFetching} onClick={() => refetch()}>
-              <RefreshCw
-                className={cn(
-                  "mr-2 h-4 w-4",
-                  isFetching && "animate-spin motion-reduce:animate-none"
-                )}
-              />
-              {t("logsRefresh")}
-            </Button>
-          </div>
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="type-title-medium text-foreground">{t("logsTitle")}</h2>
+          <p className="type-body-small text-muted-foreground">{instance.name}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder={t("logsSearchPlaceholder")}
+            aria-label={t("logsSearchPlaceholder")}
+            className="w-full sm:w-64"
+          />
+          <Button variant="outline" disabled={isFetching} onClick={() => refetch()}>
+            <RefreshCw
+              className={cn(
+                "mr-2 h-4 w-4",
+                isFetching && "animate-spin motion-reduce:animate-none"
+              )}
+            />
+            {t("logsRefresh")}
+          </Button>
+        </div>
+      </div>
 
-        {isError && (
-          <div role="alert" className="space-y-2 py-2">
-            <p className="type-body-medium text-destructive">{t("logsLoadFailed")}</p>
-            {errorMessage && (
-              <p className="break-words type-body-small text-muted-foreground">{errorMessage}</p>
-            )}
-          </div>
-        )}
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-full" />
-          </div>
-        ) : isError && !result ? null : !result || result.lines.length === 0 ? (
-          <p className="py-8 text-center type-body-medium text-muted-foreground">
-            {t("logsEmpty")}
-          </p>
-        ) : filtered.length === 0 ? (
-          <p className="py-8 text-center type-body-medium text-muted-foreground">
-            {t("logsNoMatches")}
-          </p>
-        ) : (
-          <div
-            tabIndex={0}
-            className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3 font-mono"
-          >
-            <ul className="space-y-1 type-body-small">
-              {filtered.map((line, index) => (
-                <li
-                  key={`${index}-${line.slice(0, 32)}`}
-                  className={cn("break-words", classifyLineLevel(line))}
-                >
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {isError && (
+        <div role="alert" className="space-y-2 py-2">
+          <p className="type-body-medium text-destructive">{t("logsLoadFailed")}</p>
+          {errorMessage && (
+            <p className="break-words type-body-small text-muted-foreground">{errorMessage}</p>
+          )}
+        </div>
+      )}
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-full" />
+        </div>
+      ) : isError && !result ? null : !result || result.lines.length === 0 ? (
+        <p className="py-8 text-center type-body-medium text-muted-foreground">{t("logsEmpty")}</p>
+      ) : filtered.length === 0 ? (
+        <p className="py-8 text-center type-body-medium text-muted-foreground">
+          {t("logsNoMatches")}
+        </p>
+      ) : (
+        <div
+          tabIndex={0}
+          className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-transparent bg-surface-400 p-3 font-mono"
+        >
+          <ul className="space-y-1 type-body-small">
+            {filtered.map((line, index) => (
+              <li
+                key={`${index}-${line.slice(0, 32)}`}
+                className={cn("break-words", classifyLineLevel(line))}
+              >
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
