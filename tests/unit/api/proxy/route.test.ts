@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
+import { createLogger } from "@/lib/utils/logger";
 
 const { mockApiKeyQuotaTracker, mockResolveBillingModelPrice } = vi.hoisted(() => ({
   mockApiKeyQuotaTracker: {
@@ -695,6 +696,7 @@ describe("proxy route upstream selection", () => {
     const { executeProxyRequest } =
       await import("@/app/api/proxy/v1/[...path]/proxy-request-lifecycle");
     const upstream = DEFAULT_ACTIVE_UPSTREAMS[0];
+    const warn = vi.mocked(createLogger("proxy-non-stream-lifecycle").warn);
     const responseBody = { id: "lifecycle-success", object: "chat.completion" };
     const lifecycleEvents: string[] = [];
 
@@ -755,6 +757,7 @@ describe("proxy route upstream selection", () => {
           "x-upstream": "yes",
         }),
         body: new TextEncoder().encode(JSON.stringify(responseBody)),
+        responseModel: "gpt-3.5",
         isStream: false,
         usage: {
           promptTokens: 3,
@@ -785,6 +788,29 @@ describe("proxy route upstream selection", () => {
     expect(response.headers.get("content-type")).toBe("application/json");
     expect(response.headers.get("x-upstream")).toBe("yes");
     await expect(response.json()).resolves.toEqual(responseBody);
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        model: "gpt-5.2",
+        routingDecision: expect.objectContaining({
+          response_model: "gpt-3.5",
+          model_mismatch: true,
+        }),
+      })
+    );
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        upstreamId: upstream.id,
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        responseModel: "gpt-3.5",
+        requestId: expect.any(String),
+      }),
+      "upstream response model differs from requested model"
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "gpt-5.2" })
+    );
     expect(selectFromProviderType).toHaveBeenCalledTimes(1);
     expect(forwardRequest).toHaveBeenCalledTimes(1);
     expect(updateRequestLog).toHaveBeenCalledWith(
@@ -1814,6 +1840,7 @@ describe("proxy route upstream selection", () => {
       body: new Uint8Array(),
       isStream: false,
       usage: null,
+      responseModel: "gpt-4",
     });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
@@ -1857,6 +1884,10 @@ describe("proxy route upstream selection", () => {
         reasoningEffort: "high",
       })
     );
+    expect(vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1]?.routingDecision).toEqual(
+      expect.objectContaining({ response_model: "gpt-4", model_mismatch: false })
+    );
+    expect(vi.mocked(createLogger("proxy-non-stream-lifecycle").warn)).not.toHaveBeenCalled();
   });
 
   it("should prefer codex cli upstreams when codex cli headers are present", async () => {
@@ -8347,6 +8378,7 @@ describe("proxy route upstream selection", () => {
       body: new TextEncoder().encode(JSON.stringify({ id: "alias-response" })),
       isStream: false,
       usage: null,
+      responseModel: "internal-model",
     });
 
     const response = await executeProxyRequest(
@@ -8396,6 +8428,9 @@ describe("proxy route upstream selection", () => {
           model_redirect_applied: true,
         }),
       })
+    );
+    expect(vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1]?.routingDecision).toEqual(
+      expect.objectContaining({ response_model: "internal-model", model_mismatch: false })
     );
   });
 

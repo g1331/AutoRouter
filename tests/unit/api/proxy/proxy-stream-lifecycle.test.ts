@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import type { RoutingDecisionLog } from "@/types/api";
 import type { StreamMetrics } from "@/lib/services/proxy-client";
+import { createLogger } from "@/lib/utils/logger";
 
 const mocks = vi.hoisted(() => ({
   logRequest: vi.fn(async () => ({ id: "log-1" })),
@@ -285,6 +286,64 @@ describe("createStreamResponse", () => {
     expect(mocks.recordApiKeyTokenUsage).toHaveBeenCalledWith("key-1", 12, 10_000);
     expect(mocks.recordApiKeyTokenUsage).toHaveBeenCalledTimes(1);
   });
+
+  it("logs the first differing response model once after successful delivery", async () => {
+    const context = makeContext(new AbortController().signal);
+    const terminal = makeTerminal(makeFiniteStream(["data: hello\n\n", "data: [DONE]\n\n"]));
+    terminal.routingDecision = { ...ROUTING_DECISION, original_model: "public-alias" };
+    terminal.result.streamMetricsPromise = Promise.resolve({
+      usage: null,
+      responseModels: ["gpt-4.1", "gpt-3.5"],
+    });
+    const warn = vi.mocked(createLogger("proxy-stream-lifecycle").warn);
+
+    const response = createStreamResponse(context, terminal);
+    expect(await response.text()).toBe("data: hello\n\ndata: [DONE]\n\n");
+    await expect.poll(() => mocks.persistBillingSnapshot.mock.calls.length).toBe(1);
+    expect(mocks.updateRequestLog).toHaveBeenCalledWith(
+      "log-1",
+      expect.objectContaining({
+        model: "gpt-4.1",
+        routingDecision: expect.objectContaining({
+          original_model: "public-alias",
+          response_model: "gpt-3.5",
+          model_mismatch: true,
+        }),
+      })
+    );
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      {
+        requestId: "request-1",
+        upstreamId: UPSTREAM.id,
+        originalModel: "public-alias",
+        resolvedModel: "gpt-4.1",
+        responseModel: "gpt-3.5",
+      },
+      "upstream response model differs from requested model"
+    );
+    expect(mocks.persistBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "gpt-4.1" })
+    );
+  });
+
+  it("does not warn when the successful stream declares the resolved alias model", async () => {
+    const terminal = makeTerminal(makeFiniteStream(["data: ok\n\n"]));
+    terminal.routingDecision = { ...ROUTING_DECISION, original_model: "public-alias" };
+    terminal.result.streamMetricsPromise = Promise.resolve({
+      usage: null,
+      responseModels: ["gpt-4.1"],
+    });
+    const warn = vi.mocked(createLogger("proxy-stream-lifecycle").warn);
+
+    expect(
+      await createStreamResponse(makeContext(new AbortController().signal), terminal).text()
+    ).toBe("data: ok\n\n");
+    await expect.poll(() => mocks.updateRequestLog.mock.calls.length).toBe(1);
+    expect(mocks.updateRequestLog.mock.calls[0]?.[1].routingDecision).toEqual(
+      expect.objectContaining({ response_model: "gpt-4.1", model_mismatch: false })
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
   it("settles runtime stream failure when metrics finish before failure evidence", async () => {
     const failure = Promise.withResolvers<{
       type: "failure";
@@ -302,6 +361,7 @@ describe("createStreamResponse", () => {
       usage: null,
       effectiveServiceTier: null,
       ttftMs: 42,
+      responseModels: ["gpt-3.5"],
     });
     terminal.result.streamSettlementPromise = failure.promise;
 
@@ -339,6 +399,10 @@ describe("createStreamResponse", () => {
     );
     expect(mocks.persistBillingSnapshot).toHaveBeenCalledTimes(1);
     expect(mocks.updateRequestLog).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.updateRequestLog.mock.calls[0]?.[1].routingDecision?.model_mismatch
+    ).toBeUndefined();
+    expect(vi.mocked(createLogger("proxy-stream-lifecycle").warn)).not.toHaveBeenCalled();
   });
   it("waits for downstream completion before settling stream success", async () => {
     const metrics = Promise.withResolvers<StreamMetrics>();

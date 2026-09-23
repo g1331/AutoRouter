@@ -723,6 +723,8 @@ export interface RoutingDecisionLog {
   original_model: string;
   resolved_model: string;
   model_redirect_applied: boolean;
+  response_model?: string | null;
+  model_mismatch?: boolean;
 
   // Routing decision
   provider_type: string | null;
