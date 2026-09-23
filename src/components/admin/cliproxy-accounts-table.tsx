@@ -92,10 +92,14 @@ export function CliproxyAccountsTable({
     <Table frame="subtle" className="table-fixed" containerClassName="rounded-cf-sm">
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[54%] px-2 sm:w-auto sm:px-4">{t("columnAccountFile")}</TableHead>
-          <TableHead className="w-[31%] px-2 sm:w-36 sm:px-4">{t("columnRequests")}</TableHead>
-          <TableHead className="hidden w-32 lg:table-cell">{t("columnQuotaObservation")}</TableHead>
-          <TableHead className="w-[15%] px-1 text-right sm:w-16 sm:px-4">
+          <TableHead className="w-[54%] px-2 sm:w-[46%] sm:px-4">
+            {t("columnAccountFile")}
+          </TableHead>
+          <TableHead className="w-[31%] px-2 sm:w-[21%] sm:px-4">{t("columnRequests")}</TableHead>
+          <TableHead className="hidden lg:table-cell lg:w-[25%]">
+            {t("columnQuotaObservation")}
+          </TableHead>
+          <TableHead className="w-[15%] px-1 text-right sm:w-[8%] sm:px-4">
             {t("columnActions")}
           </TableHead>
         </TableRow>

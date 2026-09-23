@@ -48,6 +48,7 @@ export function CliproxyInstancesTable({
   const toggleEnabled = useToggleCliproxyInstanceEnabled();
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
   const rowSource = (id: string) => rowRefs.current.get(id) ?? null;
+  const singleInstance = instances.length === 1;
 
   return (
     <Table frame="none" className="table-fixed" containerClassName="rounded-none bg-transparent">
@@ -66,11 +67,18 @@ export function CliproxyInstancesTable({
               else rowRefs.current.delete(instance.id);
             }}
             onClick={() => onSelect(instance)}
-            data-state={selectedInstanceId === instance.id ? "selected" : undefined}
-            className="cursor-pointer last:border-b-0"
+            data-state={
+              !singleInstance && selectedInstanceId === instance.id ? "selected" : undefined
+            }
+            className="cursor-pointer last:border-b-0 data-[state=selected]:!bg-transparent data-[state=selected]:[&>td]:border-l-2 data-[state=selected]:[&>td]:border-primary"
           >
             <TableCell className="p-0 align-top">
-              <div className="flex min-w-0 items-start gap-2 px-3 py-3">
+              <div
+                className={cn(
+                  "flex min-w-0 items-start gap-2 px-3 py-3",
+                  singleInstance && "lg:items-center lg:gap-3 lg:px-4 lg:py-2.5"
+                )}
+              >
                 <span
                   aria-hidden="true"
                   className={cn(
@@ -78,7 +86,12 @@ export function CliproxyInstancesTable({
                     instance.enabled ? "bg-status-success" : "bg-muted-foreground/50"
                   )}
                 />
-                <div className="min-w-0 flex-1 space-y-2">
+                <div
+                  className={cn(
+                    "min-w-0 flex-1 space-y-2",
+                    singleInstance && "lg:flex lg:items-center lg:gap-4 lg:space-y-0"
+                  )}
+                >
                   <button
                     type="button"
                     className="block max-w-full truncate rounded-cf-sm text-left font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -91,13 +104,19 @@ export function CliproxyInstancesTable({
                     {instance.name}
                   </button>
                   <p
-                    className="hidden truncate type-body-small text-muted-foreground lg:block"
+                    className={cn(
+                      "truncate type-body-small text-muted-foreground",
+                      singleInstance ? "lg:min-w-0 lg:max-w-[40%]" : "hidden lg:block"
+                    )}
                     title={instance.base_url}
                   >
                     {instance.base_url}
                   </p>
                   <div
-                    className="flex flex-wrap items-center gap-2"
+                    className={cn(
+                      "flex flex-wrap items-center gap-2",
+                      singleInstance && "lg:ml-auto lg:shrink-0"
+                    )}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <Badge variant="secondary" className="hidden lg:inline-flex">

@@ -28,6 +28,12 @@ for (const width of [1440, 320]) {
       await instance.focus();
       await page.keyboard.press("Enter");
       await expect(instance).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        page
+          .getByRole("row")
+          .filter({ hasText: "Local CLIProxyAPI" })
+          .getByText("https://proxy.example.com", { exact: true })
+      ).toBeVisible();
       await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
       await expect(page.getByRole("row").filter({ hasText: "audit@example.com" })).toContainText(
         "Success 12"
@@ -88,6 +94,27 @@ for (const width of [1440, 320]) {
     });
   }
 }
+
+test("single CLIProxy instance uses the desktop workspace width without a tinted selection", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+
+  const shell = await page.locator(".app-page").boundingBox();
+  const workspace = await page.locator(".app-page section[aria-label]").boundingBox();
+  expect(shell).not.toBeNull();
+  expect(workspace).not.toBeNull();
+  expect(workspace!.width / shell!.width).toBeGreaterThan(0.9);
+  expect(workspace!.y).toBeLessThan(280);
+  await expect(page.locator(".app-page aside tbody tr")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)"
+  );
+});
 
 test("account usage failure keeps account management and secondary views available", async ({
   page,

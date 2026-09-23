@@ -43,7 +43,6 @@ export default function CliproxyPage() {
   const selectedInstance =
     instances?.find((instance) => instance.id === selectedInstanceId) ?? instances?.[0] ?? null;
   const singleInstance = instances?.length === 1;
-  const narrowWorkspace = (instances?.length ?? 0) <= 1;
 
   const selectInstance = (instance: CliproxyInstance) => {
     setSelectedInstanceId(instance.id);
@@ -60,8 +59,28 @@ export default function CliproxyPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <PageShell maxWidth={narrowWorkspace ? "4xl" : "7xl"} className="space-y-5">
-        <PageHeader title={t("pageTitle")} description={t("pageDescription")} />
+      <PageShell maxWidth="full" className="space-y-4 py-5 lg:space-y-5 lg:py-6">
+        <PageHeader
+          title={t("pageTitle")}
+          description={t("pageDescription")}
+          actions={
+            <Button
+              variant="outline"
+              onClick={(event) => {
+                const source = event.currentTarget;
+                morphSourceRef.current = source;
+                startMorph(() => setCreateOpen(true), {
+                  source,
+                  name: "morph-cliproxy-instance",
+                  mode: "enter",
+                });
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {t("addInstance")}
+            </Button>
+          }
+        />
 
         <div
           className={cn(
@@ -72,14 +91,14 @@ export default function CliproxyPage() {
           <aside
             className={cn(
               "min-w-0 overflow-hidden rounded-cf-md border border-divider bg-card shadow-[var(--vr-shadow-xs)]",
-              singleInstance && "xl:flex xl:flex-row-reverse xl:items-center xl:justify-between"
+              singleInstance && "xl:col-span-full"
             )}
             aria-label={t("instancesTitle")}
           >
             <div
               className={cn(
                 "space-y-3 border-b border-divider px-4 py-4",
-                singleInstance && "xl:border-b-0 xl:py-3"
+                singleInstance && "hidden"
               )}
             >
               <div
@@ -93,25 +112,9 @@ export default function CliproxyPage() {
                   {instances?.length ?? 0}
                 </span>
               </div>
-              <Button
-                variant="outline"
-                className={cn("w-full justify-start", singleInstance && "xl:w-auto")}
-                onClick={(event) => {
-                  const source = event.currentTarget;
-                  morphSourceRef.current = source;
-                  startMorph(() => setCreateOpen(true), {
-                    source,
-                    name: "morph-cliproxy-instance",
-                    mode: "enter",
-                  });
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t("addInstance")}
-              </Button>
             </div>
 
-            <div className={cn("min-w-0", singleInstance && "xl:w-[34rem]")}>
+            <div className="min-w-0">
               <QueryStatus
                 error={isError}
                 fetching={isFetching && !isLoading}
@@ -161,7 +164,7 @@ export default function CliproxyPage() {
           >
             {selectedInstance ? (
               <div key={selectedInstance.id} className="min-w-0 space-y-5 content-enter">
-                <header className={cn("space-y-2", singleInstance && "xl:hidden")}>
+                <header className={cn("space-y-2", singleInstance && "hidden")}>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="min-w-0 break-words text-xl font-semibold tracking-tight text-foreground">
                       {selectedInstance.name}
