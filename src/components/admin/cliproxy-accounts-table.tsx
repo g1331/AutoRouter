@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { CliproxyAccountUsage, CliproxyAuthAccount } from "@/types/cliproxy";
+import { CliproxySkeleton as Skeleton } from "./cliproxy-skeleton";
 
 interface CliproxyAccountsTableProps {
   accounts: CliproxyAuthAccount[];
@@ -53,7 +54,12 @@ function RequestCounts({
 }) {
   const t = useTranslations("cliproxy");
   if (state === "loading")
-    return <span className="text-muted-foreground">{t("usageLoading")}</span>;
+    return (
+      <div role="status" aria-label={t("usageLoading")} className="space-y-2">
+        <Skeleton aria-hidden="true" className="h-3 w-16 max-w-full" />
+        <Skeleton aria-hidden="true" className="h-3 w-14 max-w-full" />
+      </div>
+    );
   if (state === "error")
     return <span className="text-muted-foreground">{t("usageUnavailable")}</span>;
   if (!usage || (usage.success === null && usage.failed === null)) {

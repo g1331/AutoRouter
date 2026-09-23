@@ -121,6 +121,82 @@ for (const [width, theme] of [
   [320, "light"],
   [1440, "dark"],
 ] as const) {
+  test(`CLI loading skeleton follows the current workspace at ${width}px in ${theme}`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await seedTheme(page, theme);
+    await mockApplicationPages(page);
+    let releaseInstances!: () => void;
+    const instancesReady = new Promise<void>((resolve) => {
+      releaseInstances = resolve;
+    });
+    await page.route("**/api/admin/cliproxy/instances", async (route) => {
+      await instancesReady;
+      await route.fallback();
+    });
+
+    await page.goto("/en/system/cliproxy");
+    const skeleton = page.getByTestId("cliproxy-page-skeleton");
+    await expect(skeleton).toBeVisible();
+    await expect(skeleton.getByTestId("cliproxy-accounts-skeleton")).toBeVisible();
+    expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: info.outputPath(`loading-${theme}-${width}.png`),
+      animations: "disabled",
+    });
+    releaseInstances();
+    await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+    await expect(skeleton).toBeHidden();
+  });
+}
+
+test("account and provider quota loading use matching skeletons", async ({ page }, info) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await seedTheme(page, "light");
+  await mockApplicationPages(page);
+  let releaseAccounts!: () => void;
+  const accountsReady = new Promise<void>((resolve) => {
+    releaseAccounts = resolve;
+  });
+  await page.route(
+    "**/api/admin/cliproxy/instances/instance-audit/auth-accounts",
+    async (route) => {
+      await accountsReady;
+      await route.fallback();
+    }
+  );
+
+  await page.goto("/en/system/cliproxy");
+  await expect(page.getByTestId("cliproxy-accounts-skeleton")).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("accounts-loading-320.png"),
+    animations: "disabled",
+  });
+  releaseAccounts();
+  await expect(page.getByText("audit@example.com", { exact: true })).toBeVisible();
+
+  let releaseQuota!: () => void;
+  const quotaReady = new Promise<void>((resolve) => {
+    releaseQuota = resolve;
+  });
+  await page.route("**/provider-quota", async (route) => {
+    await quotaReady;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "View quota" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByTestId("cliproxy-provider-quota-skeleton")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("quota-loading-320.png"), animations: "disabled" });
+  releaseQuota();
+  await expect(dialog.getByText("75%", { exact: true })).toBeVisible();
+});
+
+for (const [width, theme] of [
+  [1440, "light"],
+  [320, "light"],
+  [1440, "dark"],
+] as const) {
   test(`provider quota is visible from the account row at ${width}px in ${theme}`, async ({
     page,
   }, info) => {

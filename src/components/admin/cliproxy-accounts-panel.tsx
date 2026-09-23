@@ -5,7 +5,6 @@ import { LogIn, RefreshCw, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { QueryStatus } from "@/components/ui/query-status";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import {
   useCliproxyAuthAccounts,
@@ -16,6 +15,7 @@ import {
 } from "@/hooks/use-cliproxy";
 import type { CliproxyAuthAccount, CliproxyInstance } from "@/types/cliproxy";
 import { CliproxyAccountsTable } from "./cliproxy-accounts-table";
+import { CliproxyAccountsSkeleton } from "./cliproxy-accounts-skeleton";
 import { CliproxyAccountFieldsDialog } from "./cliproxy-account-fields-dialog";
 import { CliproxyAccountModelsDialog } from "./cliproxy-account-models-dialog";
 import { CliproxyAccountDetailDialog } from "./cliproxy-account-detail-dialog";
@@ -182,9 +182,8 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
         onRetry={() => void refetch()}
       />
       {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
+        <div role="status" aria-label={t("workspaceLoading")}>
+          <CliproxyAccountsSkeleton />
         </div>
       ) : isError && !accounts ? null : !accounts || accounts.length === 0 ? (
         <p className="py-8 text-center type-body-medium text-muted-foreground">{t("noAccounts")}</p>
