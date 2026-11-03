@@ -1,203 +1,165 @@
 {
-  "hero": {
+  "landing": {
     "nav": {
+      "live": "实况",
+      "connect": "接入",
+      "features": "能力",
+      "docs": "文档",
       "login": "登录",
-      "docs": "文档"
+      "github": "GitHub"
     },
-    "badge": "自托管 AI API 网关",
-    "headline": "统一调度你的 <hi>AI API 流量</hi>",
-    "subheadline": "API Key 分发、多上游路由、负载均衡与熔断、按请求计费——在一个自托管控制台里管好所有 AI 流量。",
-    "ctaPrimary": "开始使用",
-    "ctaSecondary": "查看文档",
-    "scene": {
-      "caption": "路由示意 · 非实时数据",
-      "description": "立体粒子网关承载请求流，依次进入能力匹配、上游选择、准入限制、计费、权限与故障恢复六个场景。"
+    "hero": {
+      "eyebrow": "自托管 AI API 网关",
+      "release": "开源 · {version}",
+      "line1": "统一调度你的",
+      "line2": "AI API 流量",
+      "description": "一个地址接入所有模型服务。密钥分发、多上游路由、故障自动切换、按请求计费，全部交给网关。",
+      "primary": "登录控制台",
+      "secondary": "查看文档",
+      "demoHint": "下面是一段 16 秒的循环演示：看网关如何在上游出故障时自动接管。点底部的步骤可以跳着看。"
     },
-    "flowLabels": {
-      "hero": {
-        "input": "请求",
-        "operation": "AutoRouter",
-        "output": "上游服务"
+    "console": {
+      "title": "路由实况",
+      "topologyTitle": "请求路由拓扑",
+      "demo": "演示数据",
+      "logs": "请求日志",
+      "loopNote": "演示每 {seconds} 秒循环一次。",
+      "kpi": {
+        "rpm": "请求 / 分钟",
+        "success": "成功率",
+        "latency": "延迟中位数",
+        "breakers": "熔断中"
       },
-      "integration": {
-        "input": "客户端",
-        "operation": "网关入口",
-        "output": "上游服务"
+      "tags": {
+        "retry": "重试",
+        "probe": "试探"
       },
-      "routing": {
-        "input": "请求",
-        "operation": "模型匹配",
-        "output": "目标上游"
+      "events": {
+        "open": "熔断打开 · {name}",
+        "half": "半开试探 · {name}",
+        "closed": "熔断关闭 · {name}"
       },
-      "balancing": {
-        "input": "请求",
-        "operation": "按权重分发",
-        "output": "上游池"
-      },
-      "quota": {
-        "input": "请求",
-        "operation": "并发限制",
-        "output": "准入请求"
-      },
-      "billing": {
-        "input": "用量",
-        "operation": "价格规则",
-        "output": "请求费用"
-      },
-      "keys": {
-        "input": "API Key",
-        "operation": "权限范围",
-        "output": "授权上游"
-      },
-      "failover": {
-        "input": "请求",
-        "operation": "故障路径",
-        "output": "备选上游"
+      "phases": {
+        "steady": {
+          "title": "正常分流",
+          "desc": "请求按 6:4 的权重分给两个主力上游，备用上游在一旁待命。"
+        },
+        "errors": {
+          "title": "上游出错",
+          "desc": "anthropic-main 开始返回错误。失败的请求被网关自动重试到 openai-primary，调用方拿到的仍是正常结果。"
+        },
+        "tripped": {
+          "title": "自动熔断",
+          "desc": "错误超过阈值，网关暂停向 anthropic-main 转发，备用的 azure-openai 立刻接手它的那份流量。"
+        },
+        "probing": {
+          "title": "试探恢复",
+          "desc": "冷却一段时间后，网关只放极少量请求过去，试探 anthropic-main 是否已经恢复。"
+        },
+        "recovered": {
+          "title": "恢复如初",
+          "desc": "试探请求全部成功，熔断关闭，流量回到原来的分配。整个过程调用方不用做任何改动。"
+        }
       }
     },
-    "terminal": {
-      "title": "改一个入口，接入统一调度",
-      "exampleNote": "接入示例：请替换域名、API Key 与模型。",
-      "caption": "改一行 base URL 指向网关，路由、负载均衡与计费由 AutoRouter 接管。"
+    "clients": {
+      "label": "兼容你已经在用的 SDK 与工具"
+    },
+    "connect": {
+      "label": "接入",
+      "title": "改一个地址，接入就完成了",
+      "description": "兼容 OpenAI、Anthropic 与 Gemini 的接口格式。现有代码只需换掉 Base URL 和 API Key。",
+      "baseUrl": "本网关的 Base URL",
+      "baseUrlHint": "各家 SDK 共用这个地址，末尾的 /v1 需要保留。",
+      "points": {
+        "protocols": {
+          "title": "协议原样兼容",
+          "desc": "OpenAI、Anthropic、Gemini 三种格式直接转发，请求体不用改。"
+        },
+        "streaming": {
+          "title": "流式实时透传",
+          "desc": "SSE 流式响应边收边转，不必等整段生成完。"
+        },
+        "keys": {
+          "title": "Key 随取随用",
+          "desc": "管理员在控制台签发；成员登录后也能在个人门户自助创建。"
+        }
+      },
+      "example": "示例代码",
+      "exampleNote": "把 sk-auto-... 换成你的 API Key 就能运行。",
+      "copy": "复制{target}",
+      "copied": "已复制"
     },
     "features": {
-      "title": "核心能力",
-      "subtitle": "为多上游、高可用的 AI 流量分发而构建",
+      "label": "能力",
+      "title": "网关在背后替你做的事",
+      "description": "每个请求经过网关都会走完这些环节，规则在控制台里点几下就能配好。",
       "routing": {
         "title": "按能力路由",
-        "desc": "依据请求路径与模型自动识别能力，将流量精准分发到匹配的上游。"
+        "desc": "看请求路径就知道该交给谁：Chat、Responses、Messages、Gemini 各走各的上游。"
       },
       "balancing": {
-        "title": "负载均衡与熔断",
-        "desc": "按优先级与权重均衡分发，自动熔断异常上游并故障转移到下一候选。"
+        "title": "负载均衡",
+        "desc": "按优先级分层、同层按权重分配；主力层不可用时，备用层随时顶上。"
       },
       "quota": {
-        "title": "配额与并发控制",
-        "desc": "以密钥消费配额、上游并发与排队准入限制，保护服务稳定。"
+        "title": "配额与并发",
+        "desc": "限制每把 Key 的消费额度，以及每个上游同时处理和排队的请求数，扛住突发流量。"
       },
       "billing": {
         "title": "按请求计费",
-        "desc": "基于同步的模型价格、覆盖与倍率，为每次请求生成计费快照。"
+        "desc": "按同步的模型价格、价格覆盖和上游倍率算出每次请求的费用，并留存计费快照。"
       },
       "keys": {
         "title": "API Key 分发",
-        "desc": "签发并管理客户端密钥，按授权上游与有效期精细控制访问范围。"
+        "desc": "每个客户端一把独立的 Key，限定能用的上游、有效期和额度。"
       },
       "failover": {
         "title": "故障转移与会话亲和",
-        "desc": "请求失败时无缝切换候选上游，并可将同一会话固定到既定上游。"
+        "desc": "请求失败时自动换下一个候选上游重试；同一段对话可以固定在同一个上游，保持上下文一致。"
+      },
+      "visual": {
+        "standby": "待命",
+        "requests": "{count} 次",
+        "concurrency": "并发",
+        "queue": "排队",
+        "spend": "本月消费",
+        "input": "输入",
+        "output": "输出",
+        "multiplier": "上游倍率",
+        "total": "本次费用",
+        "upstreams": "授权上游",
+        "expiry": "有效期",
+        "expiryValue": "剩余 {days} 天",
+        "budget": "消费额度",
+        "allow": "放行",
+        "turn": "第 {n} 轮",
+        "pinned": "会话固定",
+        "failed": "失败",
+        "retried": "已转移"
       }
     },
-    "chapters": {
-      "routing": {
-        "eyebrow": "识别请求所需能力",
-        "label": "请求端点与对应能力",
-        "chat": "Chat Completions",
-        "responses": "Responses",
-        "messages": "Messages",
-        "takeaway": "端点确定能力类型，模型进一步收窄匹配的上游范围。"
+    "start": {
+      "label": "开始",
+      "title": "接上它，剩下的交给网关",
+      "description": "管理员配置上游、签发 Key，开发者把 Base URL 指过来，就这么简单。",
+      "primary": "登录控制台",
+      "secondary": "阅读部署文档",
+      "upstream": {
+        "title": "配置上游",
+        "desc": "在控制台添加模型服务"
       },
-      "balancing": {
-        "eyebrow": "有序选择上游",
-        "label": "上游选择策略",
-        "priority": {
-          "title": "优先级决定层级",
-          "desc": "优先从仍有可用候选的最高优先级层中选择。"
-        },
-        "weight": {
-          "title": "权重决定分配",
-          "desc": "同一优先级内，按相对权重分配请求。"
-        },
-        "health": {
-          "title": "健康状态决定可用性",
-          "desc": "通过熔断状态，将不可用候选移出选择范围。"
-        },
-        "takeaway": "优先级与权重指导选择，熔断状态决定哪些候选可以参与。"
+      "key": {
+        "title": "获取 API Key",
+        "desc": "管理员签发或门户自助创建"
       },
-      "quota": {
-        "eyebrow": "在入口明确边界",
-        "label": "请求准入约束",
-        "spending": {
-          "title": "消费额度 · 预算边界",
-          "desc": "准入新请求前，检查密钥配置的消费配额。"
-        },
-        "concurrency": {
-          "title": "并发请求 · 执行边界",
-          "desc": "限制同一上游在同一时刻执行中的请求数量。"
-        },
-        "queue": {
-          "title": "排队准入 · 等待边界",
-          "desc": "请求需要等待空闲容量时，按排队准入限制处理。"
-        },
-        "takeaway": "预算、执行中的请求与等待中的请求，分别受独立的准入约束。"
-      },
-      "billing": {
-        "eyebrow": "让每次计费有据可查",
-        "label": "请求计费的价格来源",
-        "usage": "用量",
-        "price": "适用价格",
-        "snapshot": "请求计费快照",
-        "base": {
-          "title": "基础价格",
-          "desc": "同步的模型价格，为各类用量提供基础单价。"
-        },
-        "override": {
-          "title": "价格覆盖",
-          "desc": "配置价格覆盖时，替换对应的基础单价。"
-        },
-        "multiplier": {
-          "title": "上游倍率",
-          "desc": "按上游计费倍率调整适用价格计算出的用量费用。"
-        },
-        "takeaway": "按用量类别分别计算，再将本次计费依据保留为请求快照。"
-      },
-      "keys": {
-        "eyebrow": "界定可选范围",
-        "label": "密钥范围、授权上游与模型能力的交集",
-        "scope": {
-          "title": "密钥范围",
-          "desc": "从客户端密钥的访问范围与有效期开始检查。"
-        },
-        "upstreams": {
-          "title": "授权上游",
-          "desc": "只保留该密钥获准访问的上游。"
-        },
-        "capability": {
-          "title": "模型能力",
-          "desc": "进一步匹配请求所需的模型与能力。"
-        },
-        "takeaway": "三者交集形成允许参与路由的候选集，不代表每个候选都当前可用。"
-      },
-      "failover": {
-        "eyebrow": "在策略内恢复请求",
-        "label": "可重试故障的候选恢复路径",
-        "failure": {
-          "title": "请求失败",
-          "desc": "故障符合重试条件时，进入恢复流程。"
-        },
-        "exclude": {
-          "title": "排除失败候选",
-          "desc": "将该上游从本次请求的剩余选项中移除。"
-        },
-        "retry": {
-          "title": "重试下一可用上游",
-          "desc": "在重试策略允许的范围内，选择其他合格候选。"
-        },
-        "takeaway": "没有候选可用时，返回明确错误；并非所有故障都会重试。"
+      "request": {
+        "title": "发起请求",
+        "desc": "Base URL 指向本网关"
       }
     },
-    "bookends": {
-      "eyebrow": "从请求到响应",
-      "protocols": "兼容接口",
-      "closing": "你的上游。你的规则。",
-      "setup": "配置上游",
-      "issueKey": "创建 API Key",
-      "send": "发起请求"
-    },
-    "cta": {
-      "title": "准备好接入了吗？",
-      "desc": "登录控制台，几分钟内完成密钥签发与上游配置。",
-      "button": "进入控制台"
+    "footer": {
+      "tagline": "开源的自托管 AI API 网关"
     }
   },
   "common": {

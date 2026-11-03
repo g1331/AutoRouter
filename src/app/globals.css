@@ -287,19 +287,6 @@
   }
 }
 
-/* 落地页：CTA 涟漪水波纹 */
-@keyframes vr-ripple {
-  from {
-    transform: scale(0);
-    opacity: 0.5;
-  }
-
-  to {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
 /* 控制台进场瀑布：区块依次淡入上移（配合 animation-delay 递增使用） */
 @keyframes vr-rise {
   from {
@@ -626,11 +613,6 @@ html.theme-switching * {
 
   .animate-led-breathe {
     animation: vr-led-breathe 2.2s var(--vr-easing-standard) infinite;
-  }
-
-  /* CTA 涟漪保留独立生命周期；落地页 reduced-motion 显式关闭。 */
-  .animate-ripple {
-    animation: vr-ripple 620ms var(--vr-easing-sharp) forwards;
   }
 }
 

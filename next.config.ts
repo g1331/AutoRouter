@@ -7,6 +7,8 @@ const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? `${packageJson.version
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // 开发环境：允许通过 127.0.0.1 访问（如 SSH 端口转发），否则 dev 脚本被拦截、页面无法水合。
+  allowedDevOrigins: ["127.0.0.1"],
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion,
   },
