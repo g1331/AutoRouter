@@ -1,152 +1,119 @@
-"use client";
-
+import type { ComponentType } from "react";
 import { useTranslations } from "next-intl";
-import styles from "./landing.module.css";
+import {
+  Activity,
+  Gauge,
+  KeyRound,
+  LayoutGrid,
+  ReceiptText,
+  RefreshCcw,
+  Route,
+  type LucideIcon,
+} from "lucide-react";
 
-const FEATURES = ["routing", "balancing", "quota", "billing", "keys", "failover"] as const;
+import { cn } from "@/lib/utils";
+import { IconBox } from "@/components/ui/icon-box";
 
-/** 六个独立章节以不同的信息结构解释同一条请求的调度过程。 */
+import { Reveal } from "./effects/reveal";
+import { SpotlightCard } from "./effects/spotlight-card";
+import {
+  BalancingVisual,
+  BillingVisual,
+  FailoverVisual,
+  KeysVisual,
+  QuotaVisual,
+  RoutingVisual,
+} from "./feature-visuals";
+
+type FeatureKey = "routing" | "balancing" | "quota" | "billing" | "keys" | "failover";
+type FeatureTone = "amber" | "success" | "warning" | "info" | "error";
+
+/** 不等宽的格子：路由与故障转移占宽格，其余三列并排。 */
+const FEATURES: {
+  key: FeatureKey;
+  icon: LucideIcon;
+  tone: FeatureTone;
+  span: string;
+  Visual: ComponentType;
+}[] = [
+  { key: "routing", icon: Route, tone: "amber", span: "lg:col-span-4", Visual: RoutingVisual },
+  { key: "keys", icon: KeyRound, tone: "info", span: "lg:col-span-2", Visual: KeysVisual },
+  {
+    key: "balancing",
+    icon: Activity,
+    tone: "success",
+    span: "lg:col-span-2",
+    Visual: BalancingVisual,
+  },
+  { key: "quota", icon: Gauge, tone: "warning", span: "lg:col-span-2", Visual: QuotaVisual },
+  {
+    key: "billing",
+    icon: ReceiptText,
+    tone: "amber",
+    span: "lg:col-span-2",
+    Visual: BillingVisual,
+  },
+  {
+    key: "failover",
+    icon: RefreshCcw,
+    tone: "error",
+    span: "lg:col-span-6",
+    Visual: FailoverVisual,
+  },
+];
+
 export function FeatureSection() {
-  const t = useTranslations("hero");
+  const t = useTranslations("landing.features");
+
   return (
-    <section className={styles.capabilities}>
-      <div className={`${styles.capabilitiesHeader} ${styles.container}`}>
-        <h2 className={`${styles.sectionTitle} font-display`}>
-          <span className={styles.textBacking}>{t("features.title")}</span>
-        </h2>
-        <p className={styles.featuresIntro}>
-          <span className={styles.textBacking}>{t("features.subtitle")}</span>
-        </p>
-      </div>
-      <ol className={styles.features}>
-        {FEATURES.map((key, index) => (
-          <li
-            key={key}
-            id={`capability-${key}`}
-            className={styles.chapter}
-            data-chapter={key}
-            data-scene-step={`capability-${key}`}
+    <section id="features" aria-labelledby="landing-features-title" className="scroll-mt-24">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <p className="type-label inline-flex items-center gap-2 text-amber-600 dark:text-amber-500">
+            <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("label")}
+          </p>
+          <h2
+            id="landing-features-title"
+            className="mt-3 font-display text-3xl font-semibold leading-tight tracking-[-0.015em] text-foreground sm:text-4xl"
           >
-            <div className={styles.chapterInner}>
-              <div className={styles.chapterMeta} data-scene-panel>
-                <span className={styles.chapterIndex} aria-hidden="true">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span className={styles.chapterEyebrow}>{t(`chapters.${key}.eyebrow`)}</span>
-              </div>
-              <header className={styles.chapterHeader} data-scene-panel>
-                <h3 className="font-display">{t(`features.${key}.title`)}</h3>
-                <p>{t(`features.${key}.desc`)}</p>
-              </header>
-              <div className={styles.chapterStage}>
-                <div className={styles.featureAnchor} data-scene-anchor={`capability-${key}`}>
-                  <div
-                    className={`${styles.flowRail} font-mono`}
-                    role="group"
-                    aria-label={t("scene.caption")}
-                  >
-                    <span>{t(`flowLabels.${key}.input`)}</span>
-                    <span>{t(`flowLabels.${key}.operation`)}</span>
-                    <span>{t(`flowLabels.${key}.output`)}</span>
+            {t("title")}
+          </h2>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">{t("description")}</p>
+        </Reveal>
+
+        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          {FEATURES.map(({ key, icon: Icon, tone, span, Visual }, index) => (
+            <li
+              key={key}
+              className={cn(
+                "min-w-0",
+                span,
+                (key === "routing" || key === "failover") && "sm:col-span-2"
+              )}
+            >
+              <Reveal delay={(index % 3) * 90} className="h-full">
+                <SpotlightCard className="flex h-full flex-col gap-4 rounded-cf-md border border-border/70 bg-surface-200/80 p-5 transition-colors duration-500 hover:border-border">
+                  <div className="flex items-start gap-3">
+                    <IconBox size="md" tone={tone}>
+                      <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                    </IconBox>
+                    <div className="min-w-0">
+                      <h3 className="type-title-medium text-foreground">{t(`${key}.title`)}</h3>
+                      <p className="type-body-small mt-1 text-muted-foreground">
+                        {t(`${key}.desc`)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className={styles.chapterDetails} data-scene-panel>
-                {key === "routing" && (
-                  <dl className={styles.protocolMap} aria-label={t("chapters.routing.label")}>
-                    {(
-                      [
-                        ["chat", "/v1/chat/completions"],
-                        ["responses", "/v1/responses"],
-                        ["messages", "/v1/messages"],
-                      ] as const
-                    ).map(([protocol, path]) => (
-                      <div className={styles.protocolRow} key={protocol}>
-                        <dt>
-                          <code>{path}</code>
-                        </dt>
-                        <dd>{t(`chapters.routing.${protocol}`)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {key === "balancing" && (
-                  <ol className={styles.policyStack} aria-label={t("chapters.balancing.label")}>
-                    {(["health", "priority", "weight"] as const).map((rule, ruleIndex) => (
-                      <li className={styles.policyRule} key={rule}>
-                        <span aria-hidden="true">{String(ruleIndex + 1).padStart(2, "0")}</span>
-                        <div>
-                          <h4>{t(`chapters.balancing.${rule}.title`)}</h4>
-                          <p>{t(`chapters.balancing.${rule}.desc`)}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-                {key === "quota" && (
-                  <dl className={styles.quotaBands} aria-label={t("chapters.quota.label")}>
-                    {(["spending", "concurrency", "queue"] as const).map((rule) => (
-                      <div className={styles.quotaBand} key={rule}>
-                        <dt>{t(`chapters.quota.${rule}.title`)}</dt>
-                        <dd>{t(`chapters.quota.${rule}.desc`)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {key === "billing" && (
-                  <div className={styles.ledger}>
-                    <p className={styles.ledgerEquation}>
-                      <span>{t("chapters.billing.usage")}</span>
-                      <span>×</span>
-                      <span>{t("chapters.billing.price")}</span>
-                      <span>×</span>
-                      <span>{t("chapters.billing.multiplier.title")}</span>
-                      <span>→</span>
-                      <strong>{t("chapters.billing.snapshot")}</strong>
-                    </p>
-                    <dl aria-label={t("chapters.billing.label")}>
-                      {(["base", "override", "multiplier"] as const).map((rule) => (
-                        <div className={styles.ledgerRow} key={rule}>
-                          <dt>{t(`chapters.billing.${rule}.title`)}</dt>
-                          <dd>{t(`chapters.billing.${rule}.desc`)}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                  <div className="mt-auto">
+                    <Visual />
                   </div>
-                )}
-                {key === "keys" && (
-                  <dl className={styles.permissionList} aria-label={t("chapters.keys.label")}>
-                    {(["scope", "upstreams", "capability"] as const).map((rule, ruleIndex) => (
-                      <div className={styles.permissionRule} key={rule}>
-                        <dt>
-                          {ruleIndex > 0 && <span aria-hidden="true">∩ </span>}
-                          {t(`chapters.keys.${rule}.title`)}
-                        </dt>
-                        <dd>{t(`chapters.keys.${rule}.desc`)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {key === "failover" && (
-                  <ol className={styles.recoverySequence} aria-label={t("chapters.failover.label")}>
-                    {(["failure", "exclude", "retry"] as const).map((step, stepIndex) => (
-                      <li className={styles.recoveryStep} key={step}>
-                        <span aria-hidden="true">{String(stepIndex + 1).padStart(2, "0")}</span>
-                        <h4>{t(`chapters.failover.${step}.title`)}</h4>
-                        <p>{t(`chapters.failover.${step}.desc`)}</p>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-              <footer className={styles.chapterFooter} data-scene-panel>
-                <p>{t(`chapters.${key}.takeaway`)}</p>
-                <p className={styles.chapterNote}>{t("scene.caption")}</p>
-              </footer>
-            </div>
-          </li>
-        ))}
-      </ol>
+                </SpotlightCard>
+              </Reveal>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }

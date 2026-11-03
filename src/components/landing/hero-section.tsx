@@ -1,86 +1,118 @@
-"use client";
-
+import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRight, BookOpen } from "lucide-react";
-import { APP_DOCS_URL } from "@/lib/app-version";
+import { ArrowRight, BookOpen, ChevronRight } from "lucide-react";
+
+import { Link } from "@/i18n/navigation";
+import { APP_DOCS_URL, APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { RippleLinkButton } from "@/components/landing/ripple-button";
+import { StatusLed } from "@/components/ui/status-led";
+
 import styles from "./landing.module.css";
+import { HeroBackdrop } from "./effects/hero-backdrop";
+import { LiveConsole } from "./live-console/live-console";
 
-const CHAPTERS = ["routing", "balancing", "quota", "billing", "keys", "failover"] as const;
+const step = (i: number) => ({ "--i": i }) as CSSProperties;
 
-/** 海报式首屏：固定文案与共享路由雕塑的首个停靠槽。 */
 export function HeroSection() {
-  const t = useTranslations("hero");
+  const t = useTranslations("landing.hero");
+
   return (
-    <section className={`${styles.container} ${styles.hero}`} data-scene-step="hero">
-      <div className={styles.copy} data-scene-panel>
-        <span className={`${styles.badge} font-mono`}>{t("badge")}</span>
-        <h1 className={`${styles.headline} font-display`}>
-          <span className={styles.textBacking}>
-            {t.rich("headline", {
-              hi: (chunks) => (
-                <span className={styles.highlight}>
-                  <span className={styles.textBacking}>{chunks}</span>
-                </span>
-              ),
-            })}
+    <section id="live" className="relative isolate pt-28 sm:pt-40">
+      <HeroBackdrop />
+
+      <div className="mx-auto flex max-w-6xl flex-col items-center px-4 text-center sm:px-6 lg:px-8">
+        <a
+          href={`${APP_REPOSITORY_URL}/releases`}
+          target="_blank"
+          rel="noreferrer noopener"
+          style={step(0)}
+          className={cn(
+            styles.fadeUp,
+            "group inline-flex items-center gap-2 rounded-full border border-border/70 bg-surface-200/60 py-1 pl-3 pr-2 text-xs text-muted-foreground backdrop-blur transition-colors duration-300 hover:border-amber-500/50 hover:text-foreground"
+          )}
+        >
+          <StatusLed tone="ok" pulse />
+          <span>{t("eyebrow")}</span>
+          <span className="hidden h-3 w-px bg-border sm:inline" aria-hidden="true" />
+          <span className="hidden font-mono text-amber-600 dark:text-amber-500 sm:inline">
+            {t("release", { version: APP_VERSION_TAG })}
+          </span>
+          <ChevronRight
+            className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </a>
+
+        <h1 className="mt-7 font-display text-[clamp(2.75rem,7.4vw,6rem)] font-semibold leading-[1.04] tracking-[-0.025em] text-foreground">
+          <span className={cn(styles.line, "[text-wrap:balance]")} style={step(0)}>
+            {t("line1")}
+          </span>
+          <span
+            className={cn(styles.line, styles.shimmer, "pb-[0.08em] [text-wrap:balance]")}
+            style={step(1)}
+          >
+            {t("line2")}
           </span>
         </h1>
-        <p className={styles.description}>
-          <span className={styles.textBacking}>{t("subheadline")}</span>
+
+        <p
+          className={cn(
+            styles.fadeUp,
+            "mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
+          )}
+          style={step(2)}
+        >
+          {t("description")}
         </p>
-        <div className={styles.actions}>
-          <RippleLinkButton href="/login" className={styles.primary}>
-            {t("ctaPrimary")}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </RippleLinkButton>
-          <Button asChild variant="outline" size="lg">
-            <a
-              href={APP_DOCS_URL}
-              target="_blank"
-              rel="noreferrer noopener"
-              className={styles.secondary}
-            >
-              <BookOpen className="h-4 w-4" aria-hidden="true" />
-              {t("ctaSecondary")}
+
+        <div
+          className={cn(styles.fadeUp, "mt-9 flex flex-wrap justify-center gap-3")}
+          style={step(3)}
+        >
+          <Button
+            asChild
+            size="lg"
+            className="group shadow-[0_0_0_1px_var(--vr-accent-line),0_10px_34px_-8px_color-mix(in_srgb,var(--vr-accent-500)_65%,transparent)]"
+          >
+            <Link href="/login">
+              {t("primary")}
+              <ArrowRight
+                className="transition-transform duration-300 group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" className="bg-surface-200/50 backdrop-blur">
+            <a href={APP_DOCS_URL} target="_blank" rel="noreferrer noopener">
+              <BookOpen aria-hidden="true" />
+              {t("secondary")}
             </a>
           </Button>
         </div>
+
+        <p
+          className={cn(
+            styles.fadeUp,
+            "mt-14 max-w-xl text-xs leading-relaxed text-muted-foreground sm:mt-16"
+          )}
+          style={step(4)}
+        >
+          {t("demoHint")}
+        </p>
       </div>
-      <div className={styles.heroDock}>
-        <div className={`${styles.heroLegend} font-mono`} data-scene-panel>
-          <span>{t("bookends.eyebrow")}</span>
-          <span>API / GATEWAY</span>
-        </div>
-        <div className={styles.heroAnchor} data-scene-anchor="hero">
-          <div
-            className={`${styles.flowRail} font-mono`}
-            role="group"
-            aria-label={t("scene.caption")}
-          >
-            <span>{t("flowLabels.hero.input")}</span>
-            <span>{t("flowLabels.hero.operation")}</span>
-            <span>{t("flowLabels.hero.output")}</span>
+
+      <div className="mx-auto mt-6 w-full max-w-6xl px-3 pb-8 sm:px-6 lg:px-8">
+        <div className={styles.stage}>
+          <div className={styles.halo} aria-hidden="true" />
+          <div className={styles.tilt}>
+            <div className={cn(styles.consoleIn, "relative")}>
+              <span className={styles.horizon} aria-hidden="true" />
+              <LiveConsole />
+            </div>
           </div>
         </div>
-        <div className={`${styles.protocolLegend} font-mono`} data-scene-panel>
-          <span>{t("bookends.protocols")}</span>
-          <span>OpenAI</span>
-          <span>Anthropic</span>
-        </div>
-        <p className={`${styles.caption} font-mono`}>{t("scene.caption")}</p>
-        <p className="sr-only">{t("scene.description")}</p>
       </div>
-      <nav className={styles.heroIndex} aria-label={t("features.title")} data-scene-panel>
-        {CHAPTERS.map((key, index) => (
-          <a key={key} href={`#capability-${key}`}>
-            <span className="font-mono">{String(index + 1).padStart(2, "0")}</span>
-            <span>{t(`features.${key}.title`)}</span>
-            <ArrowRight size={14} aria-hidden="true" />
-          </a>
-        ))}
-      </nav>
     </section>
   );
 }
