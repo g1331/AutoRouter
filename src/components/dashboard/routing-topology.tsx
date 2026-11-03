@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useSyncExternalStore } from "react";
+import { useId } from "react";
 import { useTranslations } from "next-intl";
 import { Network } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { useLivePulse } from "@/hooks/use-live-pulse";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { useUpstreamHealth, useUpstreams } from "@/hooks/use-upstreams";
 import { cn } from "@/lib/utils";
 import type { UpstreamResponse } from "@/types/api";
@@ -55,34 +56,6 @@ const EDGE_STROKE_CLASSES: Record<TopologyNodeState, string> = {
   bad: "stroke-status-error/30",
   inactive: "stroke-border",
 };
-
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
-function subscribeToReducedMotion(callback: () => void) {
-  const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY);
-  mediaQuery.addEventListener("change", callback);
-  return () => mediaQuery.removeEventListener("change", callback);
-}
-
-function getReducedMotionSnapshot() {
-  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
-}
-
-function getReducedMotionServerSnapshot() {
-  return false;
-}
-
-/**
- * SMIL 动画不受 CSS media query 控制，reduced-motion 必须在 JS 里判定，
- * 为真时直接不渲染 animateMotion 子树（design.md D8）。
- */
-function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(
-    subscribeToReducedMotion,
-    getReducedMotionSnapshot,
-    getReducedMotionServerSnapshot
-  );
-}
 
 function resolveNodeState(upstream: UpstreamResponse, healthy: boolean): TopologyNodeState {
   if (!upstream.is_active) return "inactive";
